@@ -1,3 +1,5 @@
+# Minor and patch updates come grouped. A major update gets a pull request of its own, because it
+# usually needs code changes.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -7,6 +9,7 @@ updates:
     groups:
       actions:
         patterns: ['*']
+        update-types: [minor, patch]
   - package-ecosystem: cargo
     directory: /
     schedule:
@@ -14,6 +17,7 @@ updates:
     groups:
       crates:
         patterns: ['*']
+        update-types: [minor, patch]
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -21,3 +25,4 @@ updates:
     groups:
       packages:
         patterns: ['*']
+        update-types: [minor, patch]
