@@ -165,15 +165,25 @@ pub async fn reminders(
         return Err(ApiError::bad("until must not be earlier than after."));
     }
     const PAGE: usize = 200;
-    const SELECT: &str = "SELECT id, title, due_at, due_tz, remind_utc, repeat_rule FROM items";
+    macro_rules! select {
+        () => {
+            "SELECT id, title, due_at, due_tz, remind_utc, repeat_rule FROM items"
+        };
+    }
     // Written as literals so SQLite matches the partial index items_remind.
-    const OPEN: &str =
-        "status <> 'done' AND trashed = 0 AND archived = 0 AND (? OR hidden_from_agents = 0)";
+    macro_rules! open {
+        () => {
+            "status <> 'done' AND trashed = 0 AND archived = 0 AND (? OR hidden_from_agents = 0)"
+        };
+    }
     let human = identity.is_human();
     // One snapshot for all reads of this request.
     let mut tx = state.db.begin().await?;
-    let mut rows = sqlx::query_as::<_, Reminder>(&format!(
-        "{SELECT} WHERE remind_utc > ? AND remind_utc <= ? AND {OPEN} ORDER BY remind_utc, id LIMIT ?"
+    let mut rows = sqlx::query_as::<_, Reminder>(concat!(
+        select!(),
+        " WHERE remind_utc > ? AND remind_utc <= ? AND ",
+        open!(),
+        " ORDER BY remind_utc, id LIMIT ?"
     ))
     .bind(&after)
     .bind(&until)
@@ -187,8 +197,11 @@ pub async fn reminders(
     let (until, has_more) = if rows.len() > PAGE {
         rows.truncate(PAGE);
         let (cut, last_id) = (rows[PAGE - 1].remind_utc.clone(), rows[PAGE - 1].id);
-        let rest = sqlx::query_as::<_, Reminder>(&format!(
-            "{SELECT} WHERE remind_utc = ? AND id > ? AND {OPEN} ORDER BY id"
+        let rest = sqlx::query_as::<_, Reminder>(concat!(
+            select!(),
+            " WHERE remind_utc = ? AND id > ? AND ",
+            open!(),
+            " ORDER BY id"
         ))
         .bind(&cut)
         .bind(last_id)
@@ -196,8 +209,10 @@ pub async fn reminders(
         .fetch_all(&mut *tx)
         .await?;
         rows.extend(rest);
-        let has_more: bool = sqlx::query_scalar(&format!(
-            "SELECT EXISTS(SELECT 1 FROM items WHERE remind_utc > ? AND remind_utc <= ? AND {OPEN})"
+        let has_more: bool = sqlx::query_scalar(concat!(
+            "SELECT EXISTS(SELECT 1 FROM items WHERE remind_utc > ? AND remind_utc <= ? AND ",
+            open!(),
+            ")"
         ))
         .bind(&cut)
         .bind(&until)

@@ -2,7 +2,7 @@ use crate::{
     AppState,
     auth::Identity,
     error::{ApiError, Result},
-    items::{About, NOW, Written, item_id, next_seq, record, visible_item},
+    items::{About, Written, item_id, next_seq, record, visible_item},
     model::{ImageRef, Item},
 };
 use axum::{
@@ -13,7 +13,6 @@ use axum::{
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
 use sqlx::SqliteConnection;
 
 // What one request may carry. The app sends about half a megabyte per image.
@@ -81,7 +80,7 @@ pub(crate) fn prepare(mut fields: Map<String, Value>) -> Result<Upload> {
         mime: found,
         width: width as i64,
         height: height as i64,
-        sha256: format!("{:x}", Sha256::digest(&data)),
+        sha256: crate::auth::sha256_hex(&data),
         data,
     })
 }
@@ -104,9 +103,11 @@ async fn store_list(
     images: &[ImageRef],
 ) -> Result<Item> {
     let seq = next_seq(conn).await?;
-    let item = sqlx::query_as::<_, Item>(&format!(
+    let item = sqlx::query_as::<_, Item>(concat!(
         "UPDATE items SET images = ?, version = version + 1, seq = ?, updated_by = ?, \
-         updated_at = {NOW} WHERE id = ? RETURNING *"
+         updated_at = ",
+        now!(),
+        " WHERE id = ? RETURNING *"
     ))
     .bind(json!(images).to_string())
     .bind(seq)
