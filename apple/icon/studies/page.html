@@ -1,0 +1,168 @@
+<title>Pendenz Icon Studies</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one column. Three directions side by side at the top, then one row per
+   direction with its six appearances, then the icons at the sizes they ship in. */
+:root {
+  --bg: #f5f5f3; --surface: #ffffff; --fg: #141414; --muted: #63635f; --line: #dcdcd7; --focus: #141414;
+  --tint: #3b82f6; --tint-hi: #9cc4ff;
+  --wall: linear-gradient(135deg, #e58a5a 0%, #8a5fd0 52%, #1f6f8f 100%);
+  --wall-dark: linear-gradient(135deg, #3a2030 0%, #2a2360 52%, #0b3344 100%);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0d0d0e; --surface: #18181a; --fg: #f2f2f0; --muted: #a0a09b; --line: #2d2d30; --focus: #f2f2f0; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #0d0d0e; --surface: #18181a; --fg: #f2f2f0; --muted: #a0a09b; --line: #2d2d30; --focus: #f2f2f0; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font: 16px/1.5 var(--sans); }
+.page { max-width: 1040px; margin: 0 auto; padding-block: 48px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 56px; }
+h1 { font-size: 32px; line-height: 1.15; letter-spacing: -0.02em; font-weight: 700; margin: 0; text-wrap: balance; }
+h2 { font-size: 20px; line-height: 1.25; letter-spacing: -0.01em; font-weight: 650; margin: 0; }
+h3 { font-size: 16px; line-height: 1.3; font-weight: 650; margin: 0; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 62ch; }
+.head { display: flex; flex-direction: column; gap: 12px; }
+.sec { display: flex; flex-direction: column; gap: 24px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; }
+.sec-head p { color: var(--muted); max-width: 56ch; font-size: 14px; }
+
+.tile { display: block; width: var(--s); height: var(--s); border-radius: 22.5%; overflow: hidden; flex: none; position: relative;
+  box-shadow: 0 0 0 0.5px rgba(0,0,0,.14), 0 calc(var(--s) * .03) calc(var(--s) * .1) rgba(0,0,0,.16); }
+.tile::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), inset 0 1.5px 0 rgba(255,255,255,.35); pointer-events: none; }
+.tile svg { display: block; width: 100%; height: 100%; }
+.m-default { background: linear-gradient(#fbfbf9, #dadad6); }
+.m-dark { background: linear-gradient(#2c2c2f, #070708); }
+.m-clearLight { background: rgba(255,255,255,.3); -webkit-backdrop-filter: blur(12px) saturate(1.5); backdrop-filter: blur(12px) saturate(1.5); }
+.m-clearDark { background: rgba(12,12,14,.5); -webkit-backdrop-filter: blur(12px) saturate(1.5); backdrop-filter: blur(12px) saturate(1.5); }
+.m-tintLight { background: linear-gradient(var(--tint-hi), var(--tint)); }
+.m-tintDark { background: linear-gradient(#232326, #050506); }
+
+.hero { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.hero figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+.hero .tile { --s: clamp(88px, 24vw, 200px); }
+.hero figcaption { font-weight: 650; }
+
+.study { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 24px 32px; padding-top: 24px; border-top: 1px solid var(--line); }
+.study-text { display: flex; flex-direction: column; gap: 8px; }
+.study-text p { color: var(--muted); font-size: 14px; }
+.study-text .weak { color: var(--fg); }
+.strip { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
+.group { display: flex; gap: 16px; padding: 16px; border-radius: 20px; }
+.group.plain { background: var(--surface); border: 1px solid var(--line); }
+.group.wall { background: var(--wall); flex-wrap: wrap; }
+.cell { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.cell .tile { --s: 96px; }
+.cap { font-size: 12px; line-height: 1.3; color: var(--muted); white-space: nowrap; }
+.wall .cap, .screen .cap { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.45); }
+
+.tints { display: flex; align-items: center; gap: 8px; }
+.tints span { font-size: 14px; color: var(--muted); margin-right: 4px; }
+.tints button { width: 44px; height: 44px; border-radius: 50%; border: 0; padding: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+.tints button i { width: 26px; height: 26px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1px var(--line); }
+.tints button[aria-pressed="true"] i { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg); }
+.tints button:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+
+.screens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.screen { border-radius: 24px; padding: 24px 16px 16px; display: flex; flex-direction: column; gap: 24px; align-items: center; background: var(--wall); }
+.screen.night { background: var(--wall-dark); }
+.home { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
+.home .tile { --s: 60px; }
+.dock { display: flex; gap: 12px; padding: 10px 12px; border-radius: 24px; background: rgba(255,255,255,.28); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); }
+.night .dock { background: rgba(20,20,24,.42); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+.dock .tile { --s: 56px; }
+.screen > .cap { align-self: flex-start; }
+
+.sizes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.sizecard { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.sizerow { display: flex; align-items: end; gap: 16px; }
+.sizerow .cell { gap: 6px; }
+.sizerow .cap { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 760px) {
+  .page { padding-block: 32px 56px; gap: 40px; }
+  h1 { font-size: 26px; }
+  .hero { gap: 12px; }
+  .study { grid-template-columns: minmax(0, 1fr); }
+  .screens, .sizes { grid-template-columns: minmax(0, 1fr); }
+  .cell .tile { --s: 72px; }
+  .group { gap: 12px; padding: 12px; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><!--DEFS--></defs></svg>
+
+<main class="page">
+  <header class="head">
+    <h1>Pendenz app icon</h1>
+    <p class="lede">Three directions, drawn as layered vectors and shown in the six appearances that iOS 27 and macOS 27 ask for. The glass on this page is a browser approximation. Icon Composer renders the real material from the same layers.</p>
+  </header>
+
+  <section class="hero" id="hero" aria-label="The three directions"></section>
+
+  <section class="sec" aria-labelledby="h-app">
+    <div class="sec-head">
+      <div>
+        <h2 id="h-app">Appearances</h2>
+        <p>Default and dark keep the red mark. Clear and tinted drop every color, so the shape has to work without it.</p>
+      </div>
+      <div class="tints" id="tints" role="group" aria-label="Tint color"><span>Tint</span></div>
+    </div>
+    <div id="studies" class="sec"></div>
+  </section>
+
+  <section class="sec" aria-labelledby="h-real">
+    <div class="sec-head">
+      <div>
+        <h2 id="h-real">At real size</h2>
+        <p>Home Screen icons at 60 pt, the Dock at 56 pt, and the small sizes the Mac uses in Finder and Spotlight.</p>
+      </div>
+    </div>
+    <div class="screens" id="screens"></div>
+    <div class="sizes" id="sizes"></div>
+  </section>
+</main>
+
+<script>
+/*GLYPHS*/
+const STUDIES = [
+  { id: 'spike', name: 'Zettelspiess', idea: 'The desk spike that open slips get pushed onto. Each slip is its own glass layer, and the top one carries the single red mark.', weak: 'Weak spot: it is the busiest of the three. At 16 px only the spike and the top slip survive.' },
+  { id: 'check', name: 'Unfinished check', idea: 'The short stroke is drawn. The long one is still clear glass, waiting to be filled in.', weak: 'Weak spot: the clear stroke fades at small sizes, so the icon can read as a single slash.' },
+  { id: 'brackets', name: 'Empty brackets', idea: 'An open task the way Markdown writes it, with a glass pane where the x would go.', weak: 'Weak spot: it is the flattest of the three and leans on type more than on glass.' },
+];
+const tile = (id, mode, cls) => `<span class="tile m-${mode} ${cls || ''}" role="img" aria-label="${STUDIES.find(s => s.id === id).name}, ${MODES[mode].label}">${glyphSvg(id, mode, 1024)}</span>`;
+const cell = (id, mode, cap) => `<div class="cell">${tile(id, mode)}<span class="cap">${cap || MODES[mode].label}</span></div>`;
+
+document.getElementById('hero').innerHTML = STUDIES.map(s => `<figure>${tile(s.id, 'default')}<figcaption>${s.name}</figcaption></figure>`).join('');
+
+document.getElementById('studies').innerHTML = STUDIES.map(s => `
+  <article class="study">
+    <div class="study-text"><h3>${s.name}</h3><p>${s.idea}</p><p class="weak">${s.weak}</p></div>
+    <div class="strip">
+      <div class="group plain">${cell(s.id, 'default')}${cell(s.id, 'dark')}</div>
+      <div class="group wall">${['clearLight', 'clearDark', 'tintLight', 'tintDark'].map(m => cell(s.id, m)).join('')}</div>
+    </div>
+  </article>`).join('');
+
+document.getElementById('screens').innerHTML = [['', 'default', 'Light'], ['night', 'dark', 'Dark']].map(([cls, mode, cap]) => `
+  <div class="screen ${cls}">
+    <span class="cap">${cap}</span>
+    <div class="home">${STUDIES.map(s => cell(s.id, mode, s.name)).join('')}</div>
+    <div class="dock">${STUDIES.map(s => tile(s.id, mode)).join('')}</div>
+  </div>`).join('');
+
+document.getElementById('sizes').innerHTML = STUDIES.map(s => `
+  <div class="sizecard"><h3>${s.name}</h3>
+    ${['default', 'dark'].map(mode => `<div class="sizerow">${[64, 32, 16].map(px => `<div class="cell"><span class="tile m-${mode}" style="--s:${px}px" role="img" aria-label="${s.name} at ${px} pixels, ${MODES[mode].label}">${glyphSvg(s.id, mode, 1024)}</span><span class="cap">${px}</span></div>`).join('')}</div>`).join('')}
+  </div>`).join('');
+
+const TINTS = [['Blue', '#3b82f6', '#9cc4ff'], ['Orange', '#f08a24', '#ffc98a'], ['Green', '#2fa866', '#93e0b5'], ['Pink', '#e0457b', '#ffa3c2'], ['Graphite', '#8e8e93', '#e2e2e6']];
+const tints = document.getElementById('tints');
+tints.insertAdjacentHTML('beforeend', TINTS.map(([n, c], i) => `<button type="button" id="tint-${i}" aria-label="${n}" aria-pressed="${i === 0}" style="--c:${c}"><i></i></button>`).join(''));
+tints.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const i = +b.id.split('-')[1];
+  document.documentElement.style.setProperty('--tint', TINTS[i][1]);
+  document.documentElement.style.setProperty('--tint-hi', TINTS[i][2]);
+  tints.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+});
+</script>

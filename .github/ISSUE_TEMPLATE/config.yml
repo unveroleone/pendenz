@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ideas and feature requests
+    url: https://github.com/unveroleone/pendenz/discussions/categories/ideas
+    about: New features start as a discussion, so they can be agreed on before anyone builds them.
+  - name: Questions and help with self-hosting
+    url: https://github.com/unveroleone/pendenz/discussions/categories/q-a
+    about: Ask how something works or get help setting up your server.
+  - name: Security problem
+    url: https://github.com/unveroleone/pendenz/security/advisories/new
+    about: Report it privately, never in a public issue.

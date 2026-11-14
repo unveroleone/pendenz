@@ -1,0 +1,9 @@
+[Unit]
+Description=Pendenz failure alert for %i
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/srv/pendenz/alert.env
+ExecStart=/srv/pendenz/alert.sh %i

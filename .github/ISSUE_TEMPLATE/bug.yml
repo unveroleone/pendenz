@@ -1,0 +1,54 @@
+name: Bug report
+description: Something does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a security problem, do not open an issue. Report it privately as SECURITY.md describes.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+        3. See ...
+    validations:
+      required: true
+  - type: dropdown
+    id: part
+    attributes:
+      label: Where
+      multiple: true
+      options:
+        - iPhone app
+        - iPad app
+        - Mac app
+        - Widget, Siri or Shortcuts
+        - Server
+        - MCP server or CLI
+        - Push relay
+        - Self-hosting setup
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: The OS version, and the commit the app and the server were built from.
+      placeholder: iOS 27.1, app abc1234, server abc1234
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Server logs, a screenshot or a recording. Remove tokens and private text first.

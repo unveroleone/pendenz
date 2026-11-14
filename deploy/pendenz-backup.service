@@ -1,0 +1,11 @@
+[Unit]
+Description=Pendenz database backup
+Requires=docker.service
+After=docker.service
+OnFailure=pendenz-alert@%n.service
+
+[Service]
+Type=oneshot
+# docker compose reads COMPOSE_FILE from .env, and its paths start from the working directory.
+WorkingDirectory=/srv/pendenz
+ExecStart=/usr/bin/docker compose --project-directory /srv/pendenz --profile backup run --rm backup

@@ -1,0 +1,10 @@
+# Caddy in front of compose.yaml on the same host. Caddy gets a certificate for the hostname by
+# itself, which the app needs: it only talks to a server over HTTPS.
+pendenz.example.com {
+	handle /mcp {
+		reverse_proxy 127.0.0.1:8090
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8080
+	}
+}

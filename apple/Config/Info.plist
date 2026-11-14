@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.unveroleone.pendenz.item</string>
+			<key>UTTypeDescription</key>
+			<string>Pendenz item</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>ch.roadtofinal.pendenz</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>pendenz</string>
+			</array>
+		</dict>
+	</array>
+	<key>PendenzAppGroup</key>
+	<string>$(PENDENZ_APP_GROUP)</string>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>newItem</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>New Item</string>
+			<key>UIApplicationShortcutItemSymbolName</key>
+			<string>plus</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>newNote</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>New Note</string>
+			<key>UIApplicationShortcutItemSymbolName</key>
+			<string>square.and.pencil</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>reminders</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Reminders</string>
+			<key>UIApplicationShortcutItemSymbolName</key>
+			<string>bell</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>search</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Search</string>
+			<key>UIApplicationShortcutItemSymbolName</key>
+			<string>magnifyingglass</string>
+		</dict>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

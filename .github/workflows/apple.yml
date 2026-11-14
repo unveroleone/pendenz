@@ -1,0 +1,71 @@
+name: Apple app
+
+on:
+  push:
+    branches: [main]
+    paths: ['apple/**', '.swiftformat', '.github/workflows/apple.yml']
+  pull_request:
+    paths: ['apple/**', '.swiftformat', '.github/workflows/apple.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SWIFTFORMAT_VERSION: 0.64.7
+  SWIFTFORMAT_SHA256: 819aea026e1c630f46b234ed84481e56d9eb3cfe7024cd51b1af55169c8e13bb
+
+jobs:
+  format:
+    name: SwiftFormat
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install SwiftFormat
+        run: |
+          curl -sSL -o "$RUNNER_TEMP/swiftformat.zip" \
+            "https://github.com/nicklockwood/SwiftFormat/releases/download/$SWIFTFORMAT_VERSION/swiftformat_linux.zip"
+          echo "$SWIFTFORMAT_SHA256  $RUNNER_TEMP/swiftformat.zip" | sha256sum --check
+          unzip -o -q "$RUNNER_TEMP/swiftformat.zip" -d "$RUNNER_TEMP/swiftformat"
+          chmod +x "$RUNNER_TEMP/swiftformat/swiftformat_linux"
+      - name: SwiftFormat
+        run: '"$RUNNER_TEMP/swiftformat/swiftformat_linux" --lint . --reporter github-actions-log'
+
+  build:
+    name: Build for ${{ matrix.name }}
+    runs-on: xcode-27
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: iOS
+            destination: platform=iOS Simulator,name=iPhone 18 Pro
+          - name: macOS
+            destination: platform=macOS
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build
+        run: |
+          xcodebuild -version
+          xcodebuild \
+            -project apple/Pendenz.xcodeproj \
+            -scheme Pendenz \
+            -destination '${{ matrix.destination }}' \
+            -configuration Debug \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build

@@ -1,0 +1,21 @@
+node_modules/
+target/
+.env
+.env.*
+*.env
+!.env.example
+.dev.vars
+.wrangler/
+data/
+*.db
+*.db-shm
+*.db-wal
+.DS_Store
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+
+# Icon renders and preview pages, rebuilt by the scripts in apple/icon
+apple/icon/out/

@@ -1,0 +1,30 @@
+// The push relay as a Cloudflare Worker. docs/operations.md says how it is deployed.
+// The APNs key, its ID and the team ID are secrets and never in this file:
+//   wrangler secret put APNS_KEY        (the text of the .p8 file)
+//   wrangler secret put APNS_KEY_ID
+//   wrangler secret put APNS_TEAM_ID
+// A key that is limited to the sandbox goes into APNS_SANDBOX_KEY and APNS_SANDBOX_KEY_ID.
+// RELAY_SECRET closes the relay to every server that does not send it as a bearer token.
+{
+  "name": "pendenz-push",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "observability": { "enabled": true },
+  "vars": {
+    // The app this relay sends to. A push to a device token of another app is refused by APNs.
+    "APNS_TOPIC": "ch.roadtofinal.pendenz",
+  },
+  // Counted per Cloudflare location and approximate, which is enough to stop a flood.
+  "ratelimits": [
+    {
+      "name": "DEVICE_LIMIT",
+      "namespace_id": "4101",
+      "simple": { "limit": 6, "period": 60 },
+    },
+    {
+      "name": "CALLER_LIMIT",
+      "namespace_id": "4102",
+      "simple": { "limit": 120, "period": 60 },
+    },
+  ],
+}

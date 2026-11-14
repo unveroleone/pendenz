@@ -1,0 +1,28 @@
+# SwiftFormat for the app. CI runs `swiftformat --lint .`; run `swiftformat .` before a commit.
+
+--swift-version 6.2
+--indent 4
+--ifdef no-indent
+--linebreaks lf
+--max-width 120
+--trim-whitespace always
+--wrap-arguments before-first
+--wrap-parameters before-first
+--wrap-collections before-first
+--strip-unused-args always
+--semicolons inline
+--self remove
+--exclude apple/Pendenz.xcodeproj,apple/icon,build,DerivedData,node_modules,target
+
+--enable unusedPrivateDeclarations
+--enable emptyExtensions
+--enable isEmpty
+--enable preferFinalClasses
+--enable redundantAsync
+--enable redundantEquatable
+--enable redundantMemberwiseInit
+--enable redundantVariable
+--enable redundantThrows
+
+# The code explains itself with plain // comments and keeps a short body on one line.
+--disable docComments,wrapIfStatementBodies,wrapPropertyBodies,wrapIfExpressionBodies,wrapLoopBodies,wrapFunctionBodies,hoistPatternLet

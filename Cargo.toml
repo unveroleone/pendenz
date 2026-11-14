@@ -1,0 +1,7 @@
+[workspace]
+members = ["server"]
+resolver = "2"
+
+# Keep compiler-loaded macros intact on macOS 27 (rust-lang/rust#157750).
+[profile.release.build-override]
+strip = "none"

@@ -1,0 +1,23 @@
+name: Planned work
+description: A piece of work that was agreed on in a discussion or is on the roadmap.
+labels: [planned]
+body:
+  - type: input
+    id: discussion
+    attributes:
+      label: Discussion or roadmap entry
+      description: The link to where this was agreed on.
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: What it should do
+      description: The behavior from the user's side, and what is out of scope.
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Approach
+      description: The parts it touches (server, app, MCP, relay) and the decisions already made.

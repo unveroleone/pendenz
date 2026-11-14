@@ -1,0 +1,70 @@
+# Pendenz on one container host: the API and the hosted MCP endpoint.
+# Put this file in its own folder (for example /srv/pendenz) next to .env and update.sh.
+# docs/self-hosting.md describes the first setup and updates.
+#
+# Both services listen on the loopback address of the host only. Put a reverse proxy with HTTPS
+# in front (deploy/Caddyfile.example), or add deploy/compose.tunnel.yaml for a Cloudflare Tunnel.
+# Route one hostname like this:
+#   <hostname>/mcp  ->  127.0.0.1:8090
+#   <hostname>      ->  127.0.0.1:8080
+# Every /api route needs a bearer token.
+name: pendenz
+services:
+  api:
+    image: ${PENDENZ_API_IMAGE:?Set the API image with its @sha256 digest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: sqlite:///data/pendenz.db
+      PENDENZ_AUTH_MODE: token
+      PENDENZ_BIND: 0.0.0.0:8080
+      PENDENZ_TIMEZONE: ${PENDENZ_TIMEZONE:-Europe/Zurich}
+      # The push relay and its key. Without the relay the server sends no pushes.
+      PENDENZ_PUSH_RELAY: ${PENDENZ_PUSH_RELAY:-}
+      PENDENZ_PUSH_RELAY_KEY: ${PENDENZ_PUSH_RELAY_KEY:-}
+    ports:
+      - 127.0.0.1:${PENDENZ_API_PORT:-8080}:8080
+    # The folder must be writable by the user 10001 inside the container.
+    volumes:
+      - ./data:/data
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8080/readyz]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  mcp:
+    image: ${PENDENZ_MCP_IMAGE:?Set the MCP image with its @sha256 digest}
+    restart: unless-stopped
+    environment:
+      PENDENZ_INTERNAL_API_URL: http://api:8080
+      PENDENZ_ORIGIN: ${PENDENZ_ORIGIN:?Set the public HTTPS origin}
+    ports:
+      - 127.0.0.1:${PENDENZ_MCP_PORT:-8090}:8090
+    depends_on:
+      api:
+        condition: service_healthy
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:8090/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  # Run by update.sh before every update and by pendenz-backup.timer every night.
+  backup:
+    image: ${PENDENZ_API_IMAGE:?Set the API image with its @sha256 digest}
+    profiles: [backup]
+    entrypoint: [pendenz-backup]
+    env_file: backup.env
+    volumes:
+      - ./data:/data:ro
+      - ./backups:/backups
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
