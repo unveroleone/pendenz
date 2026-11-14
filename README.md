@@ -16,12 +16,10 @@
 
 <p align="center">
   <a href="https://github.com/unveroleone/pendenz/actions/workflows/build.yml"><img src="https://github.com/unveroleone/pendenz/actions/workflows/build.yml/badge.svg" alt="Server checks"></a>
-  <a href="https://github.com/unveroleone/pendenz/actions/workflows/apple.yml"><img src="https://github.com/unveroleone/pendenz/actions/workflows/apple.yml/badge.svg" alt="App checks"></a>
   <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-black" alt="License: FSL-1.1-ALv2"></a>
   <img src="https://img.shields.io/badge/iOS%20%C2%B7%20iPadOS%20%C2%B7%20macOS-27-black?logo=apple" alt="iOS, iPadOS and macOS 27">
   <img src="https://img.shields.io/badge/Swift-6-black?logo=swift" alt="Swift 6">
-  <img src="https://img.shields.io/badge/Rust-1.96-black?logo=rust" alt="Rust 1.96">
-  <img src="https://img.shields.io/badge/MCP-server-black" alt="MCP server">
+  <img src="https://img.shields.io/badge/Rust-1.100-black?logo=rust" alt="Rust 1.100">
 </p>
 
 <p align="center">
@@ -121,7 +119,7 @@ The tools carry their own instructions for the agent: how to name items, set dat
 
 ## Development
 
-Needs Rust 1.96, Node 24, pnpm 12 and, for the app, Xcode 27.
+Needs Rust 1.100 (rustup picks it up from `rust-toolchain.toml`), Node 24, pnpm 12 and, for the app, Xcode 27.
 
 ```sh
 pnpm install

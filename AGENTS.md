@@ -11,7 +11,7 @@ Tasks, reminders and notes for one person, with a server that agents can work fr
 
 ## Stack
 
-- Server: Rust 1.96 (edition 2024), Axum, SQLite through sqlx, in `server/`.
+- Server: Rust 1.100 (edition 2024, pinned in `rust-toolchain.toml`), Axum, SQLite through sqlx, in `server/`.
 - CLI and MCP adapters: Node 24, pnpm 12, in `agent/`.
 - Apps: `apple/Pendenz.xcodeproj`, one SwiftUI target for iPhone, iPad and native Mac and one widget extension inside it, Xcode 27, Swift 6 with the main actor as the default. Check Liquid Glass and other new API names against the current SDK before using them.
 - Push relay: a Cloudflare Worker in plain JavaScript, in `relay/`.
