@@ -14,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use sqlx::{FromRow, QueryBuilder, Sqlite, SqliteConnection, SqliteExecutor};
 
-const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 const BODY_LIMIT: usize = 100_000;
 
 #[derive(Serialize, Clone, FromRow)]
@@ -328,11 +327,9 @@ pub(crate) async fn update(
         _ => "updated",
     };
     let seq = next_seq(conn).await?;
-    let note = sqlx::query_as::<_, Note>(&format!(
-        "UPDATE notes SET body = ?, project_id = ?, pinned = ?, hidden_from_agents = ?, locked = ?, \
-         trashed = ?, version = version + 1, seq = ?, updated_by = ?, updated_at = {NOW} \
-         WHERE id = ? AND version = ? RETURNING *"
-    ))
+    let note = sqlx::query_as::<_, Note>(concat!("UPDATE notes SET body = ?, project_id = ?, pinned = ?, hidden_from_agents = ?, locked = ?, \
+         trashed = ?, version = version + 1, seq = ?, updated_by = ?, updated_at = ", now!(), " \
+         WHERE id = ? AND version = ? RETURNING *"))
     .bind(&input.body)
     .bind(&input.project_id)
     .bind(input.pinned)

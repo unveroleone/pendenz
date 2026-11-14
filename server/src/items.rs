@@ -21,8 +21,6 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use sqlx::{QueryBuilder, Sqlite, SqliteConnection, SqliteExecutor};
 
-pub(crate) const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
-
 pub async fn bootstrap(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
@@ -404,13 +402,15 @@ async fn create_item(
     }
     settle_project(conn, &mut input.project_id).await?;
     let seq = next_seq(conn).await?;
-    let item = sqlx::query_as::<_, Item>(&format!(
+    let item = sqlx::query_as::<_, Item>(concat!(
         "INSERT INTO items(title, description, status, project_id, priority, position, tags, \
          checklist, due_at, due_tz, due_utc, remind_at, remind_utc, repeat_rule, agent_stage, \
          hidden_from_agents, created_via, source_url, archived, trashed, completed_at, seq, \
          created_by, updated_by) \
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
-         CASE WHEN ? = 'done' THEN {NOW} END, ?, ?, ?) RETURNING *"
+         CASE WHEN ? = 'done' THEN ",
+        now!(),
+        " END, ?, ?, ?) RETURNING *"
     ))
     .bind(&input.title)
     .bind(&input.description)
@@ -522,15 +522,13 @@ async fn update_item(
         "updated"
     };
     let seq = next_seq(conn).await?;
-    let item = sqlx::query_as::<_, Item>(&format!(
-        "UPDATE items SET title = ?, description = ?, status = ?, project_id = ?, priority = ?, \
+    let item = sqlx::query_as::<_, Item>(concat!("UPDATE items SET title = ?, description = ?, status = ?, project_id = ?, priority = ?, \
          position = ?, tags = ?, checklist = ?, due_at = ?, due_tz = ?, due_utc = ?, remind_at = ?, \
          remind_utc = ?, repeat_rule = ?, hidden_from_agents = ?, source_url = ?, archived = ?, \
          trashed = ?, \
-         completed_at = CASE WHEN ? <> 'done' THEN NULL WHEN status = 'done' THEN completed_at ELSE {NOW} END, \
-         version = version + 1, seq = ?, updated_by = ?, updated_at = {NOW} \
-         WHERE id = ? AND version = ? RETURNING *"
-    ))
+         completed_at = CASE WHEN ? <> 'done' THEN NULL WHEN status = 'done' THEN completed_at ELSE ", now!(), " END, \
+         version = version + 1, seq = ?, updated_by = ?, updated_at = ", now!(), " \
+         WHERE id = ? AND version = ? RETURNING *"))
     .bind(&input.title)
     .bind(&input.description)
     .bind(&input.status)
@@ -891,9 +889,11 @@ async fn delete_project(
             .await?;
     for item in &items {
         let seq = next_seq(conn).await?;
-        sqlx::query(&format!(
+        sqlx::query(concat!(
             "UPDATE items SET project_id = NULL, version = version + 1, seq = ?, updated_by = ?, \
-             updated_at = {NOW} WHERE id = ?"
+             updated_at = ",
+            now!(),
+            " WHERE id = ?"
         ))
         .bind(seq)
         .bind(actor)

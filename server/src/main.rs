@@ -1,3 +1,11 @@
+// The current time as SQLite writes it. A macro rather than a constant, so a query can take it
+// in concat! and stay a string known at compile time, which is what sqlx accepts.
+macro_rules! now {
+    () => {
+        "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
+    };
+}
+
 mod auth;
 mod changes;
 mod devices;

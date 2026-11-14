@@ -21,8 +21,12 @@ pub const TOKEN_PREFIX: &str = "pdz_";
 // The one person a server belongs to. Paired devices and the command line act as this actor;
 // every other actor is an agent. Migration 0006 renamed the ID from "leo".
 pub const OWNER: &str = "owner";
-const STALE: &str =
-    "(last_used_at IS NULL OR last_used_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-5 minutes'))";
+// A token whose last use is older than five minutes, so the usage time is written at most that often.
+macro_rules! stale {
+    () => {
+        "(last_used_at IS NULL OR last_used_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-5 minutes'))"
+    };
+}
 
 #[derive(Clone, Serialize, FromRow)]
 pub struct Actor {
@@ -52,8 +56,16 @@ impl Identity {
     }
 }
 
+// The SHA-256 of some bytes in lowercase hex, the form of every hash the database stores.
+pub fn sha256_hex(data: &[u8]) -> String {
+    Sha256::digest(data)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 pub fn hash(value: &str) -> String {
-    format!("{:x}", Sha256::digest(value.as_bytes()))
+    sha256_hex(value.as_bytes())
 }
 
 pub fn new_token() -> String {
@@ -87,8 +99,10 @@ async fn lookup(state: &AppState, token: &str) -> Result<Identity> {
     if !well_formed(token) {
         return Err(ApiError::unauthorized());
     }
-    let row = sqlx::query_as::<_, TokenRow>(&format!(
-        "SELECT t.id AS token_id, t.scopes, t.device_id, a.id, a.name, a.kind, {STALE} AS stale \
+    let row = sqlx::query_as::<_, TokenRow>(concat!(
+        "SELECT t.id AS token_id, t.scopes, t.device_id, a.id, a.name, a.kind, ",
+        stale!(),
+        " AS stale \
          FROM tokens t JOIN actors a ON a.id = t.actor_id \
          WHERE t.token_hash = ? AND t.revoked = 0 \
          AND (t.expires_at IS NULL OR t.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
@@ -100,9 +114,7 @@ async fn lookup(state: &AppState, token: &str) -> Result<Identity> {
     if row.stale {
         // Best effort: a busy database must not fail the request over a usage timestamp. The
         // condition is repeated so two requests at once write it only once.
-        let _ = sqlx::query(&format!(
-            "UPDATE tokens SET last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND {STALE}"
-        ))
+        let _ = sqlx::query(concat!("UPDATE tokens SET last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND ", stale!()))
         .bind(&row.token_id)
         .execute(&state.db)
         .await;

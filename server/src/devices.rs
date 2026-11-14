@@ -13,7 +13,6 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sqlx::{FromRow, SqliteConnection};
 
-const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 // Letters and digits that are not mistaken for each other when read off a screen and typed.
 const CODE_ALPHABET: &[u8; 30] = b"ABCDEFGHJKMNPQRSTVWXYZ23456789";
 // 30^10 codes, about 49 bits. A code lives for ten minutes, so guessing one is out of reach
@@ -64,8 +63,9 @@ pub async fn new_pairing_code(
     conn: &mut SqliteConnection,
     created_by: Option<&str>,
 ) -> sqlx::Result<(String, String)> {
-    sqlx::query(&format!(
-        "DELETE FROM pairing_codes WHERE expires_at <= {NOW}"
+    sqlx::query(concat!(
+        "DELETE FROM pairing_codes WHERE expires_at <= ",
+        now!()
     ))
     .execute(&mut *conn)
     .await?;
@@ -133,10 +133,12 @@ pub struct Device {
 
 // The paired devices whose token still works, oldest first.
 pub async fn paired_devices(conn: &mut SqliteConnection) -> sqlx::Result<Vec<Device>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(concat!(
         "SELECT d.id, d.name, d.created_at, t.last_used_at FROM devices d \
          JOIN tokens t ON t.device_id = d.id \
-         WHERE t.revoked = 0 AND (t.expires_at IS NULL OR t.expires_at > {NOW}) \
+         WHERE t.revoked = 0 AND (t.expires_at IS NULL OR t.expires_at > ",
+        now!(),
+        ") \
          ORDER BY d.created_at, d.id"
     ))
     .fetch_all(conn)
@@ -226,8 +228,10 @@ pub async fn pair(
     }
     let code_hash = hash(&normalize(&request.code).ok_or_else(invalid_code)?);
     // Looked up without the write lock first, so guesses cannot hold up the writers.
-    let known: bool = sqlx::query_scalar(&format!(
-        "SELECT EXISTS(SELECT 1 FROM pairing_codes WHERE code_hash = ? AND expires_at > {NOW})"
+    let known: bool = sqlx::query_scalar(concat!(
+        "SELECT EXISTS(SELECT 1 FROM pairing_codes WHERE code_hash = ? AND expires_at > ",
+        now!(),
+        ")"
     ))
     .bind(&code_hash)
     .fetch_one(&state.db)
@@ -238,8 +242,10 @@ pub async fn pair(
     let _guard = state.writer.lock().await;
     let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
     // The device that showed the code, or NULL for one from the command line.
-    let used: Option<(Option<String>,)> = sqlx::query_as(&format!(
-        "DELETE FROM pairing_codes WHERE code_hash = ? AND expires_at > {NOW} RETURNING created_by"
+    let used: Option<(Option<String>,)> = sqlx::query_as(concat!(
+        "DELETE FROM pairing_codes WHERE code_hash = ? AND expires_at > ",
+        now!(),
+        " RETURNING created_by"
     ))
     .bind(&code_hash)
     .fetch_optional(&mut *tx)
