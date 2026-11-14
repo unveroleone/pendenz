@@ -33,6 +33,13 @@
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/reminders.png" width="200" alt="Reminders: overdue, today, tomorrow and later items, each with its date, repeat and project">
+  <img src="docs/screenshots/tasks.png" width="200" alt="Tasks: the inbox and the projects Home, Travel and Work">
+  <img src="docs/screenshots/detail.png" width="200" alt="An item with its description and a checklist of steps">
+  <img src="docs/screenshots/notes.png" width="200" alt="Notes, one of them locked">
+</p>
+
 ---
 
 Pendenz is a private app for the things you still have to do. You write an item down on the iPhone or the Mac, and it syncs to a small server you host yourself. An agent with its own token reads and writes the same list through an MCP server or a CLI, so it can add what it finds, report on what it did and take work off the list.
