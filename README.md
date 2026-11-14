@@ -149,7 +149,7 @@ docs/     design and self-hosting
 
 ## Contributing and security
 
-Small, focused pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first; larger features start as a discussion. Report security issues privately as described in [SECURITY.md](SECURITY.md).
+Small, focused pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first; larger features start as a discussion. Report security issues privately as described in [SECURITY.md](SECURITY.md). Everyone who takes part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

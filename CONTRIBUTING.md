@@ -43,4 +43,4 @@ Pendenz is licensed under [FSL-1.1-ALv2](LICENSE.md). By opening a pull request 
 
 ## Conduct
 
-Be kind and specific, in issues, discussions and reviews. Criticize code and decisions, not people. The maintainer may lock threads or block accounts that make the project worse for others.
+Everyone who takes part follows the [code of conduct](CODE_OF_CONDUCT.md). Be kind and specific, in issues, discussions and reviews, and criticize code and decisions, not people. Report a problem to info@unveroleone.com.
