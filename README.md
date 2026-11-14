@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/unveroleone/pendenz/actions/workflows/build.yml"><img src="https://github.com/unveroleone/pendenz/actions/workflows/build.yml/badge.svg" alt="Server checks"></a>
+  <a href="https://github.com/unveroleone/pendenz/actions/workflows/build.yml"><img src="https://github.com/unveroleone/pendenz/actions/workflows/build.yml/badge.svg?branch=main&event=push" alt="Server checks"></a>
   <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-black" alt="License: FSL-1.1-ALv2"></a>
   <img src="https://img.shields.io/badge/iOS%20%C2%B7%20iPadOS%20%C2%B7%20macOS-27-black?logo=apple" alt="iOS, iPadOS and macOS 27">
   <img src="https://img.shields.io/badge/Swift-6-black?logo=swift" alt="Swift 6">
