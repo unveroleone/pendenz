@@ -84,7 +84,50 @@ Pendenz is in daily use by its author and young as a public project. Expect the 
 
 ### Host the server
 
-The server is one container behind HTTPS. It serves the API and the hosted MCP endpoint at `/mcp`. [docs/self-hosting.md](docs/self-hosting.md) walks through the setup with a reverse proxy or a Cloudflare Tunnel, pairing the first device, tokens for agents, updates and backups.
+The server is one container, and the app only talks to it over HTTPS. The quickest way is the compose file in [`deploy/quickstart`](deploy/quickstart/compose.yaml), which runs the server next to Caddy, and Caddy gets a certificate for your hostname by itself. You need a Linux host with Docker (`amd64` or `arm64`, a Raspberry Pi 4 or 5 works), a hostname whose DNS points at it, and ports 80 and 443 open.
+
+```sh
+mkdir pendenz && cd pendenz
+curl -fsSLO https://raw.githubusercontent.com/unveroleone/pendenz/main/deploy/quickstart/compose.yaml
+echo "PENDENZ_HOST=pendenz.example.com" > .env
+echo "PENDENZ_TIMEZONE=Europe/Zurich" >> .env
+docker compose up -d
+docker compose exec api pendenz pairing-code
+```
+
+Open the app, enter `https://pendenz.example.com` and the code, which works once for ten minutes. Then tell the server your name, which agents see:
+
+```sh
+docker compose exec api pendenz set-owner-name --name "Ada"
+```
+
+To update, take a copy of the database first, because a new version can migrate it and an older one does not start on it again:
+
+```sh
+docker compose exec api sqlite3 /data/pendenz.db ".backup /data/before-update.db"
+docker compose pull && docker compose up -d
+```
+
+For a host without open ports, nightly backups and updates that roll back by themselves, use the full setup in [docs/self-hosting.md](docs/self-hosting.md). It covers a reverse proxy of your own or a Cloudflare Tunnel, tokens for agents and restoring a backup.
+
+#### Or let an agent set it up
+
+Start a coding agent such as Claude Code or Codex on the server itself, or on a machine that can reach it over SSH, and give it this prompt:
+
+```text
+Set up a Pendenz server on this host by following
+https://github.com/unveroleone/pendenz/blob/main/docs/self-hosting.md.
+
+Before you change anything, ask me for the hostname, the time zone, and whether the host
+can open ports 80 and 443 or needs a Cloudflare Tunnel. Check that Docker and the Compose
+plugin are installed, and tell me what you would install if they are not.
+
+Use deploy/quickstart/compose.yaml when the ports can be opened, and the full setup with
+update.sh otherwise. Do not open any other port and do not turn off the firewall.
+
+When the server answers on https://<hostname>/healthz, give me a pairing code for the app.
+Never print or store a token where I did not ask for it.
+```
 
 ### Build the app
 

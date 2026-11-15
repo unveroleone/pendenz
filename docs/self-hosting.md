@@ -2,6 +2,8 @@
 
 This guide sets up the Pendenz server on a Linux host with Docker, pairs the first device and connects an agent. [design.md](design.md) explains how the parts work together.
 
+To try Pendenz on a host with open ports 80 and 443, the quickstart in the [README](../README.md#host-the-server) is shorter: one compose file with Caddy for HTTPS. This guide adds backups, updates that roll back by themselves, and the setup for a host without open ports.
+
 ## What runs where
 
 | Part | Where | What it is |
