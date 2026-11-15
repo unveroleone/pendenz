@@ -100,6 +100,10 @@ final class Push {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_: Notification) {
         Push.shared.launched()
+        #if SPARKLE
+        // Made here, so the updater starts and checks on its own schedule.
+        _ = Updater.shared
+        #endif
     }
 
     func application(_: NSApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
