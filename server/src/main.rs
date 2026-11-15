@@ -314,10 +314,16 @@ async fn revoke_device(db: &SqlitePool, id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-// Private data: no proxy or client may keep a copy of an answer, or guess its type.
-async fn no_store(request: Request, next: Next) -> Response {
+// Private data: no proxy or client may keep a copy of an answer, or guess its type. Every
+// answer also names the server's version, so an app that is newer than its server can tell
+// a change this server does not know yet from one it refuses for good.
+async fn response_headers(request: Request, next: Next) -> Response {
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
+    headers.insert(
+        "pendenz-version",
+        HeaderValue::from_static(env!("CARGO_PKG_VERSION")),
+    );
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     headers.insert(
         header::X_CONTENT_TYPE_OPTIONS,
@@ -497,7 +503,7 @@ async fn main() -> anyhow::Result<()> {
             )
         })
         .layer(DefaultBodyLimit::max(1024 * 1024))
-        .layer(middleware::from_fn(no_store))
+        .layer(middleware::from_fn(response_headers))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(bind).await?;

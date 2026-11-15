@@ -95,7 +95,7 @@ Tasks, reminders and notes for one person, with a server that agents can work fr
 - Use `url.path(percentEncoded: false)` for `FileManager` calls. `url.path()` encodes the space in "Application Support", and the file then looks missing.
 - An image waits for its upload as a JPEG in `Application Support/WaitingImages`, written before its outbox entry and deleted only after the entry is gone from disk (`finish`). Copies of the server's images lie in `Caches/Images` under their SHA-256. Screens get both through `store.imageFile`.
 - The pairing lives in `Session`, which owns the `Store`: no pairing, no store, and the app shows `PairingView`. The token is in the Keychain (`Keychain.swift`), never in UserDefaults or on disk. Only `Session` and `SettingsView` talk to the device routes.
-- Deploy a server before an app build that needs a new route: a request the old server does not know stays in the outbox and holds back every change behind it.
+- Raise `ServerVersion.minimum` (`Model/ServerVersion.swift`) to the server release that has it whenever the app starts to send a new route, method or field. A change that an older server refuses then waits in the outbox, with the changes that depend on it, and the app says that the server needs an update; without the raise the change is dropped as refused. Every server answer names its version in the `Pendenz-Version` header (`response_headers` in `server/src/main.rs`).
 
 ### Reminders, notifications and push
 

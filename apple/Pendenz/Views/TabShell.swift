@@ -263,6 +263,7 @@ struct TasksView: View {
 
     var body: some View {
         List {
+            OutdatedServerSection()
             PlaceLink(place: .inbox)
             Section("Projects") {
                 ForEach(store.orderedProjects) { project in

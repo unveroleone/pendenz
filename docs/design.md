@@ -250,13 +250,22 @@ A sync sends the outbox first, then pages through `GET /api/changes`. A row only
 
 Answers are handled like this:
 
+- **400, 404 or 405 with the API's own error text from a server older than the app needs**: the change waits for the server's update (see below).
 - **409**: the app reads the row again and sends the same change on top of it with a new key, up to three times in one sync. After that the change waits for the next sync.
-- **400 or 403 with the API's own error text**: the change is refused for good, dropped and named in a message.
 - **404**: dropped without a message; the row is gone.
+- **Any other 4xx with the API's own error text** (400, 403, ...): the change is refused for good, dropped and named in a message.
 - **401**: the device was revoked. The app drops the token and shows the pairing screen.
-- A 403 or 404 without the API's error text came from something in between (a proxy, a wrong address) and leaves the change in the outbox.
+- A 4xx without the API's error text came from something in between (a proxy, a wrong address) and leaves the change in the outbox.
 
-The outbox sends in order, so a request that the server does not know (an older server and a newer app) stays at the front and holds back every change behind it. Update the server before an app build that needs a new route.
+### An app newer than its server
+
+The Mac app updates itself, so an app can be newer than the server it is paired with. Every answer of the server names its version in the header `Pendenz-Version`; a server from before the header counts as 0.1.0. The app knows the oldest server it works with (`ServerVersion.minimum`), raised whenever the app starts to send a route, a method or a field that an older server does not know. Versions are ordered as in semantic versioning, so a release candidate comes before its release.
+
+An older server answers what it does not know with 404 (a route), 405 (a method) or 400 (a field). From a server below the minimum such an answer to a write does not count as a refusal: the change is marked held (`heldFor`, kept on disk) and the outbox goes on with the changes that do not depend on it. Depending means the same item or note, a new or moved item or note filed into a project whose change waits, and any change to a project, because project names are unique across projects. A held change keeps its key, its place and its image file.
+
+When a sync sees a server at or above the minimum, the marks are cleared and the waiting changes go out in their old order in one more pass of the same sync. One that is refused then is handled like any other refusal. Until then the Tasks list and Settings say which version the server runs, which one the app needs and how many changes wait. Nothing in the app is hidden, and a proxy in front of the server has to pass the header on.
+
+The decision rests on the refusing answer's own header, not on a version seen earlier, because a server can be restored or rolled back. Agents and the CLI have no outbox and see the server's refusal as it is.
 
 ### Local IDs
 

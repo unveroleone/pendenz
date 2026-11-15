@@ -32,10 +32,15 @@ nonisolated enum Change: Sendable, Decodable {
 
 nonisolated enum APIError: LocalizedError {
     case status(Int, String?)
+    // A change refused by a server older than `ServerVersion.minimum`. Most likely it does not
+    // know the route, the method or a field yet, so the refusal does not count until the
+    // server is updated.
+    case outdated(ServerVersion, String)
 
     var errorDescription: String? {
         switch self {
         case .status(let code, let message): message ?? "The server answered with status \(code)."
+        case .outdated(_, let message): message
         }
     }
 }
@@ -145,13 +150,15 @@ nonisolated struct APIClient: Sendable {
     }()
 
     // Fetches and decodes off the main actor, so a large first sync does not block scrolling.
+    // Also answers with the version of the server.
     @concurrent
-    func changes(after cursor: Int) async throws -> ChangePage {
+    func changes(after cursor: Int) async throws -> (ChangePage, ServerVersion) {
         let url = baseURL.appending(path: "api/changes").appending(queryItems: [
             URLQueryItem(name: "cursor", value: String(cursor)),
             URLQueryItem(name: "limit", value: "500"),
         ])
-        return try await send(URLRequest(url: url))
+        let (data, version) = try await exchange(URLRequest(url: url))
+        return try (Self.decoder.decode(ChangePage.self, from: data), version)
     }
 
     private func write(_ method: String, _ path: String, key: String, body: some Encodable) throws -> URLRequest {
@@ -292,16 +299,31 @@ nonisolated struct APIClient: Sendable {
 
     // The body of a successful answer. Anything else is thrown with the API's own message.
     private func load(_ request: URLRequest) async throws -> Data {
+        try await exchange(request).0
+    }
+
+    private func exchange(_ request: URLRequest) async throws -> (Data, ServerVersion) {
         var request = request
         if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         let (data, response) = try await Self.session.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let http = response as? HTTPURLResponse
+        let status = http?.statusCode ?? 0
+        let version = ServerVersion(header: http?.value(forHTTPHeaderField: "Pendenz-Version"))
         guard status == 200 else {
-            throw APIError.status(status, (try? Self.decoder.decode(Failure.self, from: data))?.error)
+            let message = (try? Self.decoder.decode(Failure.self, from: data))?.error
+            // An older server answers a route it does not know with 404, a method with 405 and
+            // a field with 400. Only writes count: they are what waits in the outbox. An answer
+            // without the API's own message did not come from the API.
+            if let message, (request.httpMethod ?? "GET") != "GET", [400, 404, 405].contains(status),
+               version < .minimum
+            {
+                throw APIError.outdated(version, message)
+            }
+            throw APIError.status(status, message)
         }
-        return data
+        return (data, version)
     }
 
     private static var decoder: JSONDecoder {

@@ -307,6 +307,30 @@ nonisolated enum PendingWrite: Sendable, Codable {
     case removeImage(itemID: Int, imageID: Int)
 }
 
+extension PendingWrite {
+    // What a change is about, for keeping the changes to one row in order.
+    nonisolated struct Rows {
+        var items: Set<Int> = []
+        var notes: Set<Int> = []
+        // The project a change to a project is about.
+        var project: String?
+        // The project a new or moved item or note is filed into.
+        var filedInto: String?
+    }
+
+    var rows: Rows {
+        switch self {
+        case .create(let localID, let item): Rows(items: [localID], filedInto: item.projectId)
+        case .update(let id, let patch): Rows(items: [id], filedInto: patch.projectId?.value)
+        case .createNote(let localID, let note): Rows(notes: [localID], filedInto: note.projectId)
+        case .updateNote(let id, let patch): Rows(notes: [id], filedInto: patch.projectId?.value)
+        case .createProject(let project): Rows(project: project.id)
+        case .updateProject(let id, _), .deleteProject(let id): Rows(project: id)
+        case .addImage(let id, _), .removeImage(let id, _): Rows(items: [id])
+        }
+    }
+}
+
 nonisolated struct PendingEntry: Sendable {
     // The idempotency key. It stays the same for every retry of this request.
     var key: String
@@ -314,4 +338,7 @@ nonisolated struct PendingEntry: Sendable {
     // A completion waits a moment before it is sent, so a second tap can take it back.
     var sendAfter: Date
     var write: PendingWrite
+    // The version of a server that refused this change for being older than this build needs.
+    // The change then waits until the server is updated.
+    var heldFor: String?
 }

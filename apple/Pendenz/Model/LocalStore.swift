@@ -49,12 +49,15 @@ final class StoredWrite {
     var order: Int
     var sendAfter: Date
     var payload: Data
+    // See `PendingEntry.heldFor`. Nil for the rows from before it, which is what they were.
+    var heldFor: String?
 
-    init(key: String, order: Int, sendAfter: Date, payload: Data) {
+    init(key: String, order: Int, sendAfter: Date, payload: Data, heldFor: String?) {
         self.key = key
         self.order = order
         self.sendAfter = sendAfter
         self.payload = payload
+        self.heldFor = heldFor
     }
 }
 
@@ -164,6 +167,7 @@ final class LocalStore {
                     order: row.order,
                     sendAfter: row.sendAfter,
                     write: write,
+                    heldFor: row.heldFor,
                 ))
             } else {
                 context.delete(row)
@@ -245,7 +249,9 @@ final class LocalStore {
 
     func put(_ entry: PendingEntry) {
         guard !isClosed, let payload = try? JSONEncoder().encode(entry.write) else { return }
-        context.insert(StoredWrite(key: entry.key, order: entry.order, sendAfter: entry.sendAfter, payload: payload))
+        context.insert(StoredWrite(
+            key: entry.key, order: entry.order, sendAfter: entry.sendAfter, payload: payload, heldFor: entry.heldFor,
+        ))
     }
 
     func remove(key: String) {
