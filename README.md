@@ -76,7 +76,8 @@ Pendenz is in daily use by its author and young as a public project. Expect the 
 - [x] **The app for iPhone, iPad and Mac.** Pairing, capture, the lists, reminders, notes, projects, images and sync, built from Xcode.
 - [x] **Sync by push**, through a relay that holds the APNs keys.
 - [x] **Widget, icon menu, Siri, Shortcuts, Spotlight and the New Item control.**
-- [ ] **The App Store.** Until then the app is built from source.
+- [x] **The Mac app as a download**, signed with Developer ID, notarized and updating itself.
+- [ ] **The App Store.** Until then the app for iPhone and iPad is built from source.
 
 [ROADMAP.md](ROADMAP.md) has the rest.
 
@@ -129,9 +130,13 @@ When the server answers on https://<hostname>/healthz, give me a pairing code fo
 Never print or store a token where I did not ask for it.
 ```
 
+### Install the Mac app
+
+Download `Pendenz-<version>.dmg` from the [latest release](https://github.com/unveroleone/pendenz/releases/latest), open it and drag Pendenz into Applications. It needs macOS 27 and updates itself. It asks for the address of your server and a pairing code from it.
+
 ### Build the app
 
-Open `apple/Pendenz.xcodeproj` in Xcode 27 and run the `Pendenz` scheme on a simulator or on the Mac. The app runs on iOS 27, iPadOS 27 and macOS 27. It asks for the address of your server and a pairing code from it.
+The iPhone and iPad app, and any change to the code, are built from source. Open `apple/Pendenz.xcodeproj` in Xcode 27 and run the `Pendenz` scheme on a simulator or on the Mac. The app runs on iOS 27, iPadOS 27 and macOS 27. It asks for the address of your server and a pairing code from it.
 
 For your own device, build with your team and a bundle ID of your own. The project derives the widget's ID and the app group from `PENDENZ_BUNDLE_ID`:
 
