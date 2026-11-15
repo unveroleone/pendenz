@@ -33,6 +33,11 @@ Tasks, reminders and notes for one person, with a server that agents can work fr
 - Queries that should use the partial indexes for open items have to repeat `status <> 'done' AND trashed = 0 AND archived = 0` as SQL literals.
 - The telegram scope belongs to the agent ID `telegram-bridge` alone, which gets no other scope.
 
+## Releases
+
+- CI builds the server image for `linux/amd64` and `linux/arm64` with Docker's reusable workflow (`docker/github-builder`, `.github/workflows/build.yml`), for every push to `main` and every tag `v*`. `update.sh` checks the labels `org.opencontainers.image.source` and `org.opencontainers.image.revision` that it sets; keep `set-meta-labels`.
+- To release, raise `version` in `server/Cargo.toml` on `main`, then tag that commit `v<version>` and push the tag. CI refuses a tag that does not match the version, publishes the tags `<version>`, `<major>.<minor>` and `latest`, and creates the GitHub release. A version with a hyphen (`1.3.0-rc.1`) becomes a pre-release and moves neither `latest` nor `<major>.<minor>`.
+
 ## Migrations
 
 - A committed migration is never edited: every schema change is a new file in `server/migrations/`. sqlx compares each file's SHA-384 with the one in `_sqlx_migrations`, and a server with an edited migration does not start on any database made before the edit.

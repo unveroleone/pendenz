@@ -1,6 +1,9 @@
 #!/bin/sh
-# Move the running Pendenz to the images of one commit. Run it on the host, from anywhere:
-#   /srv/pendenz/update.sh <full commit sha>
+# Move the running Pendenz to a release or to the images of one commit. Run it on the host, from
+# anywhere:
+#   /srv/pendenz/update.sh 1.2.0              a release (v1.2.0 works too)
+#   /srv/pendenz/update.sh latest             the newest release
+#   /srv/pendenz/update.sh <full commit sha>  any commit on main
 # It pulls the image, backs up, switches .env to the new digest and restarts. If the new
 # containers do not become healthy it puts the previous images back. The database is never
 # restored automatically, and an older image does not start on a database that a newer one has
@@ -15,11 +18,22 @@
 set -eu
 umask 077
 
-revision=${1:-}
-case "$revision" in
-*[!a-f0-9]* | "") echo "Usage: update.sh <full commit sha>" >&2 && exit 1 ;;
+usage="Usage: update.sh <version> | latest | <full commit sha>"
+wanted=${1:-}
+wanted=${wanted#v}
+case "$wanted" in
+"") echo "$usage" >&2 && exit 1 ;;
+latest) ;;
+*[!a-f0-9]*)
+    # A version such as 1.2.0 or 1.3.0-rc.1.
+    case "$wanted" in
+    [0-9]*.[0-9]*.[0-9]*) ;;
+    *) echo "$usage" >&2 && exit 1 ;;
+    esac
+    case "$wanted" in *[!0-9A-Za-z.-]*) echo "$usage" >&2 && exit 1 ;; esac
+    ;;
+*) [ ${#wanted} -eq 40 ] || { echo "Use the full 40-character commit sha." >&2; exit 1; } ;;
 esac
-[ ${#revision} -eq 40 ] || { echo "Use the full 40-character commit sha." >&2; exit 1; }
 
 live=${PENDENZ_HOME:-$(cd "$(dirname "$0")" && pwd)}
 cd "$live"
@@ -35,12 +49,18 @@ source_url=${source_url:-https://github.com/unveroleone/pendenz}
 compose() { docker compose --project-directory "$live" "$@"; }
 
 for service in api; do
-    image="$prefix-$service:$revision"
+    image="$prefix-$service:$wanted"
     docker pull --quiet "$image" >/dev/null
     label() { docker image inspect --format "{{ index .Config.Labels \"$1\" }}" "$image"; }
-    [ "$(label org.opencontainers.image.revision)" = "$revision" ] &&
-        [ "$(label org.opencontainers.image.source)" = "$source_url" ] ||
-        { echo "The $service image does not carry this revision and source." >&2; exit 1; }
+    [ "$(label org.opencontainers.image.source)" = "$source_url" ] ||
+        { echo "The $service image was not built from $source_url." >&2; exit 1; }
+    # A commit sha has to match the image's label; a version or latest takes the commit from it.
+    revision=$(label org.opencontainers.image.revision)
+    case "$revision" in
+    *[!a-f0-9]* | "") echo "The $service image carries no commit." >&2 && exit 1 ;;
+    esac
+    [ ${#wanted} -ne 40 ] || [ "$revision" = "$wanted" ] ||
+        { echo "The $service image does not carry this commit." >&2; exit 1; }
     pinned=$(docker image inspect --format '{{ index .RepoDigests 0 }}' "$image")
     eval "${service}_image=\$pinned"
 done
@@ -68,7 +88,9 @@ healthy() {
 if healthy; then
     echo "$revision" >last-deployed-sha
     rm -f .env.previous
-    echo "Pendenz now runs $revision."
+    version=$(label org.opencontainers.image.version)
+    [ "$version" != "$revision" ] || version=
+    echo "Pendenz now runs ${version:+$version, }$revision."
 else
     echo "The new containers are not healthy. Putting the previous images back." >&2
     mv .env.previous .env

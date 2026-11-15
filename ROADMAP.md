@@ -6,7 +6,6 @@ What is planned and not built yet, roughly in order. Each entry gets a GitHub is
 
 - **An open push relay.** Today the public relay only accepts its maintainer's server. Before it opens to every server it needs its own hostname, a total budget against floods, and possibly a grant per installation that can be taken back.
 - **Version negotiation.** The App Store updates the app by itself, while each server is updated by its owner. The server will say what it can do, and the app will hide the rest and say that the server needs an update. Today a request the server does not know waits in the outbox and holds back the changes behind it.
-- **Releases with version tags** and images for `linux/arm64`, next to the images per commit.
 - **The App Store**, with a demo server for App Review, a privacy policy and TestFlight before that.
 
 ## The app as it is
