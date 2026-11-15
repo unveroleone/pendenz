@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# Builds the Mac app signed with Developer ID, puts it in a notarized DMG, publishes the DMG as
-# the GitHub release mac-v<version> and adds it to the Sparkle feed apple/appcast.xml on main.
+# Builds the Mac app signed with Developer ID, puts it in a notarized DMG, attaches the DMG to
+# the GitHub release v<version> and adds it to the Sparkle feed apple/appcast.xml on main.
 #
-#   apple/release-mac.sh <version> <release notes.md>
+#   apple/release-mac.sh <release notes.md>
+#
+# The server and the app share one version, the one in server/Cargo.toml, and one release.
+# Raise the version, tag the commit v<version> and push the tag as for the server; CI makes
+# the release with the server image. Then run this on that commit: it adds the DMG and the
+# notes under "Mac app". A pre-release (a version with a hyphen) gets no Mac build.
 #
 # Runs on the Mac that holds the Developer ID certificate and the Sparkle key, never in CI.
 # It reads the team and the App Store Connect API key from the environment:
@@ -25,7 +30,7 @@
 set -euo pipefail
 
 usage() {
-    echo "usage: apple/release-mac.sh <version> <release notes.md>" >&2
+    echo "usage: apple/release-mac.sh <release notes.md>" >&2
     exit 64
 }
 
@@ -34,12 +39,9 @@ fail() {
     exit 1
 }
 
-[[ $# -eq 2 ]] || usage
-version=$1
-notes=$2
-tag="mac-v$version"
+[[ $# -eq 1 ]] || usage
+notes=$1
 
-[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "the version must look like 1.2.3"
 [[ -s $notes ]] || fail "no release notes at $notes"
 [[ $notes == *.md ]] || fail "the release notes must be a .md file"
 
@@ -59,12 +61,19 @@ notes=$(cd "$(dirname "$notes")" && pwd)/$(basename "$notes")
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$(git rev-parse --show-toplevel)"
 
-# The release is built from main as it is on GitHub, so the tag names the code that was built.
+version=$(sed -n 's/^version = "\(.*\)"$/\1/p' server/Cargo.toml | head -1)
+tag="v$version"
+[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+    || fail "the version in server/Cargo.toml is $version; only a full release gets a Mac build"
+
+# The app is built from main as it is on GitHub, at the commit the release's tag names.
 [[ $(git rev-parse --abbrev-ref HEAD) == main ]] || fail "check out main first"
 [[ -z $(git status --porcelain) ]] || fail "the working tree has changes"
 git fetch --quiet origin main --tags
 [[ $(git rev-parse HEAD) == $(git rev-parse origin/main) ]] || fail "main is not the same as origin/main"
-! git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null || fail "the tag $tag exists already"
+git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null \
+    || fail "there is no tag $tag: raise the version, tag the commit and push the tag first"
+[[ $(git rev-parse "$tag^{commit}") == $(git rev-parse HEAD) ]] || fail "$tag is not the commit checked out"
 
 repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 commit=$(git rev-parse HEAD)
@@ -211,28 +220,35 @@ git fetch --quiet origin main --tags
 [[ $(git rev-parse origin/main) == "$commit" ]] || fail "origin/main moved during the build; nothing was published"
 [[ $(git rev-parse HEAD) == "$commit" ]] || fail "HEAD moved during the build; nothing was published"
 [[ -z $(git status --porcelain) ]] || fail "the working tree changed during the build; nothing was published"
-[[ -z $(git ls-remote --tags origin "refs/tags/$tag") ]] || fail "the tag $tag exists on GitHub already"
+
+# CI makes the release a few minutes after the tag is pushed.
+for _ in {1..40}; do
+    gh release view "$tag" --repo "$repo" >/dev/null 2>&1 && break
+    echo "Waiting for CI to create the release $tag"
+    sleep 30
+done
+gh release view "$tag" --repo "$repo" --json body --jq .body >"$work/release-notes.md" \
+    || fail "CI has not created the release $tag; nothing was published"
+! grep -q '^## Mac app$' "$work/release-notes.md" || fail "the release $tag has a Mac app already"
+printf '\n\n## Mac app\n\n' >>"$work/release-notes.md"
+cat "$notes" >>"$work/release-notes.md"
 
 echo
 echo "Ready to publish Pendenz for Mac $version (build $build) from $commit:"
-echo "  - the GitHub release $tag in $repo, with $(basename "$dmg")"
+echo "  - $(basename "$dmg") and the notes under \"Mac app\" on the release $tag in $repo"
 echo "  - the feed $feed, committed and pushed to main"
 read -r -p "Publish? [y/N] " answer
 [[ $answer == [yY] ]] || fail "nothing was published; the build is in $work"
 
 # The DMG goes up before the feed names it, so no copy of the app looks for a missing file.
-gh release create "$tag" "$dmg" \
-    --repo "$repo" \
-    --target "$commit" \
-    --title "Pendenz for Mac $version" \
-    --notes-file "$notes" \
-    --latest=false
+gh release upload "$tag" "$dmg" --repo "$repo"
+gh release edit "$tag" --repo "$repo" --notes-file "$work/release-notes.md"
 
 cp "$work/updates/appcast.xml" "$feed"
 git add "$feed"
-git commit --quiet -m "chore: publish Pendenz for Mac $version"
+git commit --quiet -m "chore: add Pendenz $version to the Mac update feed"
 git push --quiet origin main \
-    || fail "the release $tag is public, but the feed did not reach main: run git pull --rebase origin main && git push origin main"
+    || fail "the DMG is on $tag, but the feed did not reach main: run git pull --rebase origin main && git push origin main"
 
 echo "Published https://github.com/$repo/releases/tag/$tag"
 echo "Keep $work/Pendenz.xcarchive for its symbols, then delete $work."
