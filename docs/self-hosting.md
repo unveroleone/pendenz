@@ -6,19 +6,18 @@ This guide sets up the Pendenz server on a Linux host with Docker, pairs the fir
 
 | Part | Where | What it is |
 |---|---|---|
-| API | Container `api` | The Rust server with one SQLite database in `./data` |
-| Hosted MCP | Container `mcp` | `agent/http.mjs`, a stateless MCP endpoint that calls the API with the caller's own token |
+| API and hosted MCP | Container `api` | The Rust server with one SQLite database in `./data`. It also serves `/mcp`, a stateless MCP endpoint that works with the caller's own token |
 | Backup | Container `backup`, run by `update.sh` and a nightly timer | SQLite snapshot, integrity check, optional upload with restic |
 | HTTPS | Your reverse proxy, or the optional Cloudflare Tunnel | The app only talks to a server over HTTPS |
-| CLI and stdio MCP | On the machine of each agent | `agent/cli.mjs` and `agent/mcp.mjs` from a checkout of this repo |
+| CLI and stdio MCP | On the machine of each agent | The same `pendenz` binary: `pendenz mcp` and commands such as `pendenz list` |
 
-The API has no login page. Every `/api` route needs a bearer token, apart from `POST /api/pair`, which takes a one-time code.
+The API has no login page. Every `/api` route and `/mcp` need a bearer token, apart from `POST /api/pair`, which takes a one-time code.
 
 ## Requirements
 
 - A Linux host with Docker and the Compose plugin.
 - A hostname with HTTPS, reached through a reverse proxy on the host or a Cloudflare Tunnel.
-- The published images are for `linux/amd64`. On another architecture, build the images yourself (see "Images").
+- The published image is for `linux/amd64`. On another architecture, build the image yourself (see "Images").
 
 ## Install
 
@@ -46,15 +45,15 @@ Then `chmod 600 /srv/pendenz/.env /srv/pendenz/backup.env` and fill in `.env`:
 |---|---|
 | `PENDENZ_ORIGIN` | The public origin, `https://<hostname>`, exactly as clients call it. The hosted MCP rejects requests for any other host |
 | `PENDENZ_TIMEZONE` | Your IANA zone, such as `Europe/Zurich`. Due dates that name no zone are in this one |
-| `PENDENZ_API_IMAGE`, `PENDENZ_MCP_IMAGE` | Leave empty. `update.sh` writes them |
-| `PENDENZ_API_PORT`, `PENDENZ_MCP_PORT` | The loopback ports for your reverse proxy, `8080` and `8090` by default |
+| `PENDENZ_API_IMAGE` | Leave empty. `update.sh` writes it |
+| `PENDENZ_API_PORT` | The loopback port for your reverse proxy, `8080` by default |
 | `PENDENZ_PUSH_RELAY`, `PENDENZ_PUSH_RELAY_KEY` | Leave empty for now, see "Push" below |
 
 The CLI settings at the end of `.env.example` are for agents and can be deleted on the server.
 
 ### HTTPS with a reverse proxy
 
-`compose.yaml` publishes the API on `127.0.0.1:8080` and the MCP endpoint on `127.0.0.1:8090`. Route one hostname to both, with the path `/mcp` going to the MCP endpoint. [`deploy/Caddyfile.example`](../deploy/Caddyfile.example) does that with Caddy, which also gets the certificate. Any other proxy works the same way.
+`compose.yaml` publishes the API on `127.0.0.1:8080`. Route the whole hostname there; `/mcp` is a path of the same server. [`deploy/Caddyfile.example`](../deploy/Caddyfile.example) does that with Caddy, which also gets the certificate. Any other proxy works the same way.
 
 ### HTTPS with a Cloudflare Tunnel
 
@@ -66,11 +65,11 @@ CLOUDFLARED_IMAGE=cloudflare/cloudflared@sha256:<digest>
 CLOUDFLARE_TUNNEL_TOKEN=<token of a tunnel made for Pendenz>
 ```
 
-In the Cloudflare dashboard, give the tunnel one public hostname with two routes, the path route first: `<hostname>/mcp` to `http://mcp:8090` and `<hostname>` to `http://api:8080`. Do not put Cloudflare Access in front of it: the apps and the agents authenticate with their Pendenz token only.
+In the Cloudflare dashboard, give the tunnel one public hostname that goes to `http://api:8080`. Do not put Cloudflare Access in front of it: the apps and the agents authenticate with their Pendenz token only.
 
 The paths in `COMPOSE_FILE` start from the working directory, so run `docker compose` from `/srv/pendenz`. `update.sh` does that by itself.
 
-To take the loopback ports away again when the tunnel is the only way in, add a `compose.override.yaml` with `ports: !reset []` for `api` and `mcp`, and add it to `COMPOSE_FILE`.
+To take the loopback ports away again when the tunnel is the only way in, add a `compose.override.yaml` with `ports: !reset []` for `api`, and add it to `COMPOSE_FILE`.
 
 ### Start
 
@@ -146,7 +145,7 @@ The hosted endpoint is `https://<hostname>/mcp`, a stateless POST endpoint that 
 claude mcp add --transport http pendenz https://<hostname>/mcp --header "Authorization: Bearer pdz_..."
 ```
 
-The stdio server is `node agent/mcp.mjs` with `PENDENZ_API_URL` and `PENDENZ_API_TOKEN` in its environment. It also offers `add_item_image`, which reads a file next to the agent. Both servers offer only the tools the token's scopes allow.
+The stdio server is `pendenz mcp` with `PENDENZ_API_URL` and `PENDENZ_API_TOKEN` in its environment. It also offers `add_item_image`, which reads a file next to the agent. Both servers offer only the tools the token's scopes allow. Install the binary on the agent's machine from a checkout with `cargo install --path server`; it needs no database there. `pendenz --help` lists the CLI commands, which take the same environment.
 
 ## Updates
 
@@ -156,19 +155,31 @@ The stdio server is `node agent/mcp.mjs` with `PENDENZ_API_URL` and `PENDENZ_API
 
 The script:
 
-1. Pulls both images for that commit and checks that their labels name this commit and the expected repo.
+1. Pulls the image for that commit and checks that its labels name this commit and the expected repo.
 2. Runs the backup, unless there is no database yet. Without `backup.env` it stops.
-3. Writes the two image references with their digests into `.env`.
-4. Starts the services of the compose files and waits until they are healthy. It then checks that `/readyz` answers and that `/api/items` without a token answers 401.
+3. Writes the image reference with its digest into `.env`.
+4. Starts the services of the compose files, removes containers of services they no longer have, and waits until they are healthy. It then checks that `/readyz` answers and that `/api/items` without a token answers 401.
 5. Writes the commit to `last-deployed-sha`.
 
 If the new containers do not become healthy, it puts the previous `.env` back and starts the previous images. It never restores the database. A new version applies its migrations when it starts, and an older image refuses a database with a migration it does not know. To go back past a migration, restore the backup the script made before the update (see "A real restore").
 
 Changes to `compose.yaml` or `update.sh` reach the host only when you copy the files again. The commit history of `deploy/` says when that is needed.
 
+### From two containers to one
+
+Before the MCP endpoint moved into the API, it ran in a container of its own, `mcp`, on port 8090. To update a server from that time:
+
+1. Keep the old `compose.yaml`, `update.sh` and any `compose.tunnel.yaml` or `compose.override.yaml` in a folder of their own, such as `/srv/pendenz/before-one-container/`.
+2. Copy the new `compose.yaml`, `update.sh` and, if you use it, `compose.tunnel.yaml`. Take `mcp` out of a `compose.override.yaml`.
+3. Run `update.sh` with the new commit. It removes the `mcp` container. If it reports that the new container is not healthy, its rollback starts the previous API image with the new compose files, which have no `mcp` service: copy the old files back and run `docker compose up -d` to get both containers again.
+4. Route `/mcp` to the API: drop the `/mcp` rule from the reverse proxy or the tunnel, so the whole hostname goes to `127.0.0.1:8080` or `http://api:8080`.
+5. Delete `PENDENZ_MCP_IMAGE` and `PENDENZ_MCP_PORT` from `.env`. They do nothing anymore.
+
+MCP clients keep their address, `https://<hostname>/mcp`, and their tokens.
+
 ### Images
 
-CI publishes `ghcr.io/unveroleone/pendenz-api:<commit>` and `ghcr.io/unveroleone/pendenz-mcp:<commit>` for every commit on `main`. Each image carries the commit and the repo URL as labels, which `update.sh` checks.
+CI publishes `ghcr.io/unveroleone/pendenz-api:<commit>` for every commit on `main`. The image carries the commit and the repo URL as labels, which `update.sh` checks.
 
 A fork that publishes its own images sets the prefix and the repo in `.env`:
 
@@ -177,14 +188,13 @@ PENDENZ_IMAGE_PREFIX=ghcr.io/<you>/<repo>
 PENDENZ_SOURCE_URL=https://github.com/<you>/<repo>
 ```
 
-To build the images yourself, from the repo root:
+To build the image yourself, from the repo root:
 
 ```sh
 docker build -f deploy/api.Dockerfile -t pendenz-api:local .
-docker build -f deploy/mcp.Dockerfile -t pendenz-mcp:local .
 ```
 
-Then set `PENDENZ_API_IMAGE` and `PENDENZ_MCP_IMAGE` in `.env` by hand and run `docker compose up -d --wait` from `/srv/pendenz`. `update.sh` only works with images from a registry.
+Then set `PENDENZ_API_IMAGE` in `.env` by hand and run `docker compose up -d --wait` from `/srv/pendenz`. `update.sh` only works with images from a registry.
 
 ## Backups
 

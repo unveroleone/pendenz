@@ -1,0 +1,1392 @@
+[
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "actor": {
+          "id": "bot",
+          "kind": "agent",
+          "name": "bot"
+        },
+        "actors": [
+          {
+            "id": "owner",
+            "kind": "human",
+            "name": "Owner"
+          },
+          {
+            "id": "bot",
+            "kind": "agent",
+            "name": "bot"
+          }
+        ],
+        "options": {
+          "agent_stages": [
+            "new",
+            "none",
+            "gathering",
+            "needs_answer",
+            "ready",
+            "running",
+            "review",
+            "declined"
+          ],
+          "created_via": [
+            "telegram",
+            "mcp"
+          ],
+          "priorities": [
+            {
+              "label": "None",
+              "value": 0
+            },
+            {
+              "label": "Low",
+              "value": 1
+            },
+            {
+              "label": "Medium",
+              "value": 2
+            },
+            {
+              "label": "High",
+              "value": 3
+            },
+            {
+              "label": "Urgent",
+              "value": 4
+            }
+          ],
+          "repeat_rule": {
+            "examples": [
+              "FREQ=DAILY",
+              "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH",
+              "FREQ=MONTHLY;BYMONTHDAY=31"
+            ],
+            "syntax": "FREQ=DAILY, WEEKLY, MONTHLY or YEARLY, then optional parts separated by semicolons: INTERVAL=1 to 999, BYDAY=MO,TU,WE,TH,FR,SA,SU (weekly only), BYMONTHDAY=1 to 31 (monthly only). The item needs a due_at."
+          },
+          "statuses": [
+            "todo",
+            "doing",
+            "done"
+          ]
+        },
+        "projects": [],
+        "scopes": [
+          "read",
+          "write"
+        ],
+        "timezone": "Europe/Zurich"
+      }
+    },
+    "step": "workspace"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "created_at": "<time>",
+        "deleted": false,
+        "icon": "server.rack",
+        "id": "home-lab",
+        "name": "Home Lab",
+        "seq": 1
+      }
+    },
+    "step": "project"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "created_at": "<time>",
+        "deleted": false,
+        "icon": "server.rack",
+        "id": "home-lab",
+        "name": "Home Lab",
+        "seq": 1
+      }
+    },
+    "step": "project again"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "400: Use a project name between 1 and 80 characters.",
+      "stdout": ""
+    },
+    "step": "project without name"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "created_at": "<time>",
+        "deleted": false,
+        "icon": "server.rack",
+        "id": "home-lab",
+        "name": "Homelab",
+        "seq": 2
+      }
+    },
+    "step": "project-update"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "400: Send a name, an icon or both.",
+      "stdout": ""
+    },
+    "step": "project-update nothing"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Use a project ID from workspace, such as home-lab.",
+      "stdout": ""
+    },
+    "step": "project-update bad id"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "agent_stage": "none",
+        "archived": false,
+        "checklist": [],
+        "completed_at": null,
+        "created_at": "<time>",
+        "created_by": "bot",
+        "created_via": "mcp",
+        "description": "",
+        "due_at": "2030-01-15T09:00:00+01:00",
+        "due_tz": "Europe/Zurich",
+        "hidden_from_agents": false,
+        "id": 1,
+        "images": [],
+        "position": 3,
+        "priority": 0,
+        "project_id": "home-lab",
+        "remind_at": null,
+        "repeat_rule": null,
+        "seq": 3,
+        "source_url": null,
+        "status": "todo",
+        "tags": [],
+        "title": "Call the dentist",
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 1
+      }
+    },
+    "step": "create"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "agent_stage": "none",
+        "archived": false,
+        "checklist": [],
+        "completed_at": null,
+        "created_at": "<time>",
+        "created_by": "bot",
+        "created_via": "mcp",
+        "description": "",
+        "due_at": "2030-01-15T09:00:00+01:00",
+        "due_tz": "Europe/Zurich",
+        "hidden_from_agents": false,
+        "id": 1,
+        "images": [],
+        "position": 3,
+        "priority": 0,
+        "project_id": "home-lab",
+        "remind_at": null,
+        "repeat_rule": null,
+        "seq": 3,
+        "source_url": null,
+        "status": "todo",
+        "tags": [],
+        "title": "Call the dentist",
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 1
+      }
+    },
+    "step": "create again"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "agent_stage": "none",
+        "archived": false,
+        "checklist": [],
+        "completed_at": null,
+        "created_at": "<time>",
+        "created_by": "bot",
+        "created_via": "mcp",
+        "description": "",
+        "due_at": "2030-01-10T18:00:00+01:00",
+        "due_tz": "Europe/Zurich",
+        "hidden_from_agents": false,
+        "id": 2,
+        "images": [],
+        "position": 4,
+        "priority": 0,
+        "project_id": null,
+        "remind_at": null,
+        "repeat_rule": null,
+        "seq": 4,
+        "source_url": null,
+        "status": "todo",
+        "tags": [
+          "errand"
+        ],
+        "title": "Buy milk",
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 1
+      }
+    },
+    "step": "create second"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Pass --json with a JSON object.",
+      "stdout": ""
+    },
+    "step": "create bad json"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Pass --json with a JSON object.",
+      "stdout": ""
+    },
+    "step": "create json array"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Pass --json with a JSON object.",
+      "stdout": ""
+    },
+    "step": "create without json"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "400: Use a title between 1 and 240 characters.",
+      "stdout": ""
+    },
+    "step": "create invalid item"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "has_more": false,
+        "items": [
+          {
+            "agent_stage": "none",
+            "archived": false,
+            "checklist": [],
+            "completed_at": null,
+            "created_at": "<time>",
+            "created_by": "bot",
+            "created_via": "mcp",
+            "description": "",
+            "due_at": "2030-01-10T18:00:00+01:00",
+            "due_tz": "Europe/Zurich",
+            "hidden_from_agents": false,
+            "id": 2,
+            "images": [],
+            "position": 4,
+            "priority": 0,
+            "project_id": null,
+            "remind_at": null,
+            "repeat_rule": null,
+            "seq": 4,
+            "source_url": null,
+            "status": "todo",
+            "tags": [
+              "errand"
+            ],
+            "title": "Buy milk",
+            "trashed": false,
+            "updated_at": "<time>",
+            "updated_by": "bot",
+            "version": 1
+          },
+          {
+            "agent_stage": "none",
+            "archived": false,
+            "checklist": [],
+            "completed_at": null,
+            "created_at": "<time>",
+            "created_by": "bot",
+            "created_via": "mcp",
+            "description": "",
+            "due_at": "2030-01-15T09:00:00+01:00",
+            "due_tz": "Europe/Zurich",
+            "hidden_from_agents": false,
+            "id": 1,
+            "images": [],
+            "position": 3,
+            "priority": 0,
+            "project_id": "home-lab",
+            "remind_at": null,
+            "repeat_rule": null,
+            "seq": 3,
+            "source_url": null,
+            "status": "todo",
+            "tags": [],
+            "title": "Call the dentist",
+            "trashed": false,
+            "updated_at": "<time>",
+            "updated_by": "bot",
+            "version": 1
+          }
+        ]
+      }
+    },
+    "step": "list"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "has_more": false,
+        "items": [
+          {
+            "agent_stage": "none",
+            "archived": false,
+            "checklist": [],
+            "completed_at": null,
+            "created_at": "<time>",
+            "created_by": "bot",
+            "created_via": "mcp",
+            "description": "",
+            "due_at": "2030-01-15T09:00:00+01:00",
+            "due_tz": "Europe/Zurich",
+            "hidden_from_agents": false,
+            "id": 1,
+            "images": [],
+            "position": 3,
+            "priority": 0,
+            "project_id": "home-lab",
+            "remind_at": null,
+            "repeat_rule": null,
+            "seq": 3,
+            "source_url": null,
+            "status": "todo",
+            "tags": [],
+            "title": "Call the dentist",
+            "trashed": false,
+            "updated_at": "<time>",
+            "updated_by": "bot",
+            "version": 1
+          }
+        ]
+      }
+    },
+    "step": "list filtered"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "has_more": false,
+        "items": [
+          {
+            "agent_stage": "none",
+            "archived": false,
+            "checklist": [],
+            "completed_at": null,
+            "created_at": "<time>",
+            "created_by": "bot",
+            "created_via": "mcp",
+            "description": "",
+            "due_at": "2030-01-10T18:00:00+01:00",
+            "due_tz": "Europe/Zurich",
+            "hidden_from_agents": false,
+            "id": 2,
+            "images": [],
+            "position": 4,
+            "priority": 0,
+            "project_id": null,
+            "remind_at": null,
+            "repeat_rule": null,
+            "seq": 4,
+            "source_url": null,
+            "status": "todo",
+            "tags": [
+              "errand"
+            ],
+            "title": "Buy milk",
+            "trashed": false,
+            "updated_at": "<time>",
+            "updated_by": "bot",
+            "version": 1
+          }
+        ]
+      }
+    },
+    "step": "list by tag"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "400: Failed to deserialize query string: colour: unknown field `colour`, expected one of `project`, `status`, `stage`, `tag`, `priority`, `q`, `due_before`, `due_after`, `sort`, `limit`, `offset`, `archived`, `trashed`",
+      "stdout": ""
+    },
+    "step": "list unknown option"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Expected --option value pairs.",
+      "stdout": ""
+    },
+    "step": "list odd options"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Expected --option value pairs.",
+      "stdout": ""
+    },
+    "step": "list not an option"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "activity": [
+          {
+            "action": "created",
+            "actor_id": "bot",
+            "created_at": "<time>",
+            "detail": {
+              "created_via": "mcp"
+            },
+            "id": 5
+          }
+        ],
+        "activity_has_more": false,
+        "comments": [],
+        "item": {
+          "agent_stage": "none",
+          "archived": false,
+          "checklist": [],
+          "completed_at": null,
+          "created_at": "<time>",
+          "created_by": "bot",
+          "created_via": "mcp",
+          "description": "",
+          "due_at": "2030-01-15T09:00:00+01:00",
+          "due_tz": "Europe/Zurich",
+          "hidden_from_agents": false,
+          "id": 1,
+          "images": [],
+          "position": 3,
+          "priority": 0,
+          "project_id": "home-lab",
+          "remind_at": null,
+          "repeat_rule": null,
+          "seq": 3,
+          "source_url": null,
+          "status": "todo",
+          "tags": [],
+          "title": "Call the dentist",
+          "trashed": false,
+          "updated_at": "<time>",
+          "updated_by": "bot",
+          "version": 1
+        }
+      }
+    },
+    "step": "get"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "activity": [],
+        "activity_has_more": true,
+        "comments": [],
+        "item": {
+          "agent_stage": "none",
+          "archived": false,
+          "checklist": [],
+          "completed_at": null,
+          "created_at": "<time>",
+          "created_by": "bot",
+          "created_via": "mcp",
+          "description": "",
+          "due_at": "2030-01-15T09:00:00+01:00",
+          "due_tz": "Europe/Zurich",
+          "hidden_from_agents": false,
+          "id": 1,
+          "images": [],
+          "position": 3,
+          "priority": 0,
+          "project_id": "home-lab",
+          "remind_at": null,
+          "repeat_rule": null,
+          "seq": 3,
+          "source_url": null,
+          "status": "todo",
+          "tags": [],
+          "title": "Call the dentist",
+          "trashed": false,
+          "updated_at": "<time>",
+          "updated_by": "bot",
+          "version": 1
+        }
+      }
+    },
+    "step": "get with activity"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Use an item ID like P-12 or 12.",
+      "stdout": ""
+    },
+    "step": "get bad id"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Use an item ID like P-12 or 12.",
+      "stdout": ""
+    },
+    "step": "get no id"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "404: Not found.",
+      "stdout": ""
+    },
+    "step": "get missing"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "agent_stage": "none",
+        "archived": false,
+        "checklist": [],
+        "completed_at": null,
+        "created_at": "<time>",
+        "created_by": "bot",
+        "created_via": "mcp",
+        "description": "",
+        "due_at": "2030-01-15T09:00:00+01:00",
+        "due_tz": "Europe/Zurich",
+        "hidden_from_agents": false,
+        "id": 1,
+        "images": [],
+        "position": 3,
+        "priority": 0,
+        "project_id": "home-lab",
+        "remind_at": null,
+        "repeat_rule": null,
+        "seq": 5,
+        "source_url": null,
+        "status": "doing",
+        "tags": [],
+        "title": "Call the dentist",
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 2
+      }
+    },
+    "step": "update"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "409: This item changed. Read it again before saving.",
+      "stdout": ""
+    },
+    "step": "update old version"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "author_id": "bot",
+        "body": "Called, no answer.",
+        "created_at": "<time>",
+        "id": 1,
+        "item_id": 1,
+        "seq": 6
+      }
+    },
+    "step": "comment"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "400: Write a comment between 1 and 10,000 characters.",
+      "stdout": ""
+    },
+    "step": "comment empty"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "agent_stage": "none",
+        "archived": false,
+        "checklist": [],
+        "completed_at": null,
+        "created_at": "<time>",
+        "created_by": "bot",
+        "created_via": "mcp",
+        "description": "",
+        "due_at": "2030-01-15T09:00:00+01:00",
+        "due_tz": "Europe/Zurich",
+        "hidden_from_agents": false,
+        "id": 1,
+        "images": [
+          {
+            "bytes": 67,
+            "height": 1,
+            "id": 1,
+            "mime": "image/png",
+            "sha256": "2b1da20a14b97d8f01f0a809d9f7d53eeefc59df6312eaa5a0c8b5c1228d1d7f",
+            "width": 1
+          }
+        ],
+        "position": 3,
+        "priority": 0,
+        "project_id": "home-lab",
+        "remind_at": null,
+        "repeat_rule": null,
+        "seq": 7,
+        "source_url": null,
+        "status": "doing",
+        "tags": [],
+        "title": "Call the dentist",
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 3
+      }
+    },
+    "step": "add-image"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "404: Not found.",
+      "stdout": ""
+    },
+    "step": "add-image missing item"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "bytes": 67,
+        "file": "<dir>/out.png",
+        "mime": "image/png"
+      }
+    },
+    "step": "get-image"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Pass --out with the file to write.",
+      "stdout": ""
+    },
+    "step": "get-image without out"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Use an image ID from the item's images list.",
+      "stdout": ""
+    },
+    "step": "get-image bad image id"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "404: Not found.",
+      "stdout": ""
+    },
+    "step": "get-image missing"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "agent_stage": "none",
+        "archived": false,
+        "checklist": [],
+        "completed_at": null,
+        "created_at": "<time>",
+        "created_by": "bot",
+        "created_via": "mcp",
+        "description": "",
+        "due_at": "2030-01-15T09:00:00+01:00",
+        "due_tz": "Europe/Zurich",
+        "hidden_from_agents": false,
+        "id": 1,
+        "images": [],
+        "position": 3,
+        "priority": 0,
+        "project_id": "home-lab",
+        "remind_at": null,
+        "repeat_rule": null,
+        "seq": 8,
+        "source_url": null,
+        "status": "doing",
+        "tags": [],
+        "title": "Call the dentist",
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 4
+      }
+    },
+    "step": "remove-image"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "404: Not found.",
+      "stdout": ""
+    },
+    "step": "remove-image again"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "body": "Wifi\n\nPassword on the router",
+        "created_at": "<time>",
+        "created_by": "bot",
+        "hidden_from_agents": false,
+        "id": 1,
+        "locked": false,
+        "pinned": false,
+        "project_id": null,
+        "seq": 9,
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 1
+      }
+    },
+    "step": "note-create"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "body": "Bank\n\nPIN 1234",
+        "created_at": "<time>",
+        "created_by": "bot",
+        "hidden_from_agents": false,
+        "id": 2,
+        "locked": true,
+        "pinned": false,
+        "project_id": null,
+        "seq": 10,
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 1
+      }
+    },
+    "step": "note-create locked"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "has_more": false,
+        "notes": [
+          {
+            "body": "Bank\n\nPIN 1234",
+            "created_at": "<time>",
+            "created_by": "bot",
+            "hidden_from_agents": false,
+            "id": 2,
+            "locked": true,
+            "pinned": false,
+            "project_id": null,
+            "seq": 10,
+            "trashed": false,
+            "updated_at": "<time>",
+            "updated_by": "bot",
+            "version": 1
+          },
+          {
+            "body": "Wifi\n\nPassword on the router",
+            "created_at": "<time>",
+            "created_by": "bot",
+            "hidden_from_agents": false,
+            "id": 1,
+            "locked": false,
+            "pinned": false,
+            "project_id": null,
+            "seq": 9,
+            "trashed": false,
+            "updated_at": "<time>",
+            "updated_by": "bot",
+            "version": 1
+          }
+        ]
+      }
+    },
+    "step": "notes"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "has_more": false,
+        "notes": [
+          {
+            "body": "Wifi\n\nPassword on the router",
+            "created_at": "<time>",
+            "created_by": "bot",
+            "hidden_from_agents": false,
+            "id": 1,
+            "locked": false,
+            "pinned": false,
+            "project_id": null,
+            "seq": 9,
+            "trashed": false,
+            "updated_at": "<time>",
+            "updated_by": "bot",
+            "version": 1
+          }
+        ]
+      }
+    },
+    "step": "notes filtered"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "activity": [],
+        "activity_has_more": true,
+        "note": {
+          "body": "Wifi\n\nPassword on the router",
+          "created_at": "<time>",
+          "created_by": "bot",
+          "hidden_from_agents": false,
+          "id": 1,
+          "locked": false,
+          "pinned": false,
+          "project_id": null,
+          "seq": 9,
+          "trashed": false,
+          "updated_at": "<time>",
+          "updated_by": "bot",
+          "version": 1
+        }
+      }
+    },
+    "step": "note"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "activity": [],
+        "activity_has_more": true,
+        "note": {
+          "body": "Bank\n\nPIN 1234",
+          "created_at": "<time>",
+          "created_by": "bot",
+          "hidden_from_agents": false,
+          "id": 2,
+          "locked": true,
+          "pinned": false,
+          "project_id": null,
+          "seq": 10,
+          "trashed": false,
+          "updated_at": "<time>",
+          "updated_by": "bot",
+          "version": 1
+        }
+      }
+    },
+    "step": "note locked"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Use a note ID like 12.",
+      "stdout": ""
+    },
+    "step": "note bad id"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "body": "Wifi\n\nPassword on the router",
+        "created_at": "<time>",
+        "created_by": "bot",
+        "hidden_from_agents": false,
+        "id": 1,
+        "locked": false,
+        "pinned": true,
+        "project_id": null,
+        "seq": 11,
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 2
+      }
+    },
+    "step": "note-update"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "body": "Wifi\n\nPassword on the router\nGuest: guest",
+        "created_at": "<time>",
+        "created_by": "bot",
+        "hidden_from_agents": false,
+        "id": 1,
+        "locked": false,
+        "pinned": true,
+        "project_id": null,
+        "seq": 12,
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 3
+      }
+    },
+    "step": "note-append"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "400: Send the text to append.",
+      "stdout": ""
+    },
+    "step": "note-append empty"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "changes": [
+          {
+            "data": {
+              "created_at": "<time>",
+              "deleted": false,
+              "icon": "server.rack",
+              "id": "home-lab",
+              "name": "Homelab",
+              "seq": 2
+            },
+            "seq": 2,
+            "type": "project"
+          },
+          {
+            "data": {
+              "agent_stage": "none",
+              "archived": false,
+              "checklist": [],
+              "completed_at": null,
+              "created_at": "<time>",
+              "created_by": "bot",
+              "created_via": "mcp",
+              "description": "",
+              "due_at": "2030-01-10T18:00:00+01:00",
+              "due_tz": "Europe/Zurich",
+              "hidden_from_agents": false,
+              "id": 2,
+              "images": [],
+              "position": 4,
+              "priority": 0,
+              "project_id": null,
+              "remind_at": null,
+              "repeat_rule": null,
+              "seq": 4,
+              "source_url": null,
+              "status": "todo",
+              "tags": [
+                "errand"
+              ],
+              "title": "Buy milk",
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "bot",
+              "version": 1
+            },
+            "seq": 4,
+            "type": "item"
+          },
+          {
+            "data": {
+              "author_id": "bot",
+              "body": "Called, no answer.",
+              "created_at": "<time>",
+              "id": 1,
+              "item_id": 1,
+              "seq": 6
+            },
+            "seq": 6,
+            "type": "comment"
+          },
+          {
+            "data": {
+              "agent_stage": "none",
+              "archived": false,
+              "checklist": [],
+              "completed_at": null,
+              "created_at": "<time>",
+              "created_by": "bot",
+              "created_via": "mcp",
+              "description": "",
+              "due_at": "2030-01-15T09:00:00+01:00",
+              "due_tz": "Europe/Zurich",
+              "hidden_from_agents": false,
+              "id": 1,
+              "images": [],
+              "position": 3,
+              "priority": 0,
+              "project_id": "home-lab",
+              "remind_at": null,
+              "repeat_rule": null,
+              "seq": 8,
+              "source_url": null,
+              "status": "doing",
+              "tags": [],
+              "title": "Call the dentist",
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "bot",
+              "version": 4
+            },
+            "seq": 8,
+            "type": "item"
+          },
+          {
+            "data": {
+              "body": "Bank\n\nPIN 1234",
+              "created_at": "<time>",
+              "created_by": "bot",
+              "hidden_from_agents": false,
+              "id": 2,
+              "locked": true,
+              "pinned": false,
+              "project_id": null,
+              "seq": 10,
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "bot",
+              "version": 1
+            },
+            "seq": 10,
+            "type": "note"
+          },
+          {
+            "data": {
+              "body": "Wifi\n\nPassword on the router\nGuest: guest",
+              "created_at": "<time>",
+              "created_by": "bot",
+              "hidden_from_agents": false,
+              "id": 1,
+              "locked": false,
+              "pinned": true,
+              "project_id": null,
+              "seq": 12,
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "bot",
+              "version": 3
+            },
+            "seq": 12,
+            "type": "note"
+          }
+        ],
+        "cursor": 12,
+        "has_more": false,
+        "reset": false
+      }
+    },
+    "step": "changes"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "changes": [
+          {
+            "data": {
+              "agent_stage": "none",
+              "archived": false,
+              "checklist": [],
+              "completed_at": null,
+              "created_at": "<time>",
+              "created_by": "bot",
+              "created_via": "mcp",
+              "description": "",
+              "due_at": "2030-01-10T18:00:00+01:00",
+              "due_tz": "Europe/Zurich",
+              "hidden_from_agents": false,
+              "id": 2,
+              "images": [],
+              "position": 4,
+              "priority": 0,
+              "project_id": null,
+              "remind_at": null,
+              "repeat_rule": null,
+              "seq": 4,
+              "source_url": null,
+              "status": "todo",
+              "tags": [
+                "errand"
+              ],
+              "title": "Buy milk",
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "bot",
+              "version": 1
+            },
+            "seq": 4,
+            "type": "item"
+          },
+          {
+            "data": {
+              "author_id": "bot",
+              "body": "Called, no answer.",
+              "created_at": "<time>",
+              "id": 1,
+              "item_id": 1,
+              "seq": 6
+            },
+            "seq": 6,
+            "type": "comment"
+          }
+        ],
+        "cursor": 6,
+        "has_more": true,
+        "reset": false
+      }
+    },
+    "step": "changes page"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "after": "<time>",
+        "has_more": false,
+        "reminders": [],
+        "until": "<time>"
+      }
+    },
+    "step": "reminders"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "after": "<time>",
+        "has_more": false,
+        "reminders": [
+          {
+            "due_at": "2030-01-10T18:00:00+01:00",
+            "due_tz": "Europe/Zurich",
+            "id": 2,
+            "remind_at": "2030-01-10T18:00:00+01:00",
+            "repeat_rule": null,
+            "title": "Buy milk"
+          }
+        ],
+        "until": "<time>"
+      }
+    },
+    "step": "reminders until"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "400: Send after, the time of your last check.",
+      "stdout": ""
+    },
+    "step": "reminders without after"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "created_at": "<time>",
+        "deleted": true,
+        "icon": "server.rack",
+        "id": "home-lab",
+        "name": "Homelab",
+        "seq": 14
+      }
+    },
+    "step": "project-delete"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Use a project ID from workspace, such as home-lab.",
+      "stdout": ""
+    },
+    "step": "project-delete bad id"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Unknown command. Run with --help.",
+      "stdout": ""
+    },
+    "step": "unknown command"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Use HTTPS when sending a token to a remote API.",
+      "stdout": ""
+    },
+    "step": "plain http remote"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Set PENDENZ_API_TOKEN to your Pendenz token.",
+      "stdout": ""
+    },
+    "step": "no token"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "agent_stage": "none",
+        "archived": false,
+        "checklist": [],
+        "completed_at": null,
+        "created_at": "<time>",
+        "created_by": "bot",
+        "created_via": "mcp",
+        "description": "",
+        "due_at": null,
+        "due_tz": null,
+        "hidden_from_agents": false,
+        "id": 3,
+        "images": [],
+        "position": 15,
+        "priority": 0,
+        "project_id": null,
+        "remind_at": null,
+        "repeat_rule": null,
+        "seq": 15,
+        "source_url": null,
+        "status": "todo",
+        "tags": [],
+        "title": "Empty key",
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 1
+      }
+    },
+    "step": "empty key"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "agent_stage": "none",
+        "archived": false,
+        "checklist": [],
+        "completed_at": null,
+        "created_at": "<time>",
+        "created_by": "bot",
+        "created_via": "telegram",
+        "description": "",
+        "due_at": null,
+        "due_tz": null,
+        "hidden_from_agents": false,
+        "id": 4,
+        "images": [],
+        "position": 16,
+        "priority": 0,
+        "project_id": null,
+        "remind_at": null,
+        "repeat_rule": null,
+        "seq": 16,
+        "source_url": null,
+        "status": "todo",
+        "tags": [],
+        "title": "From chat",
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 1
+      }
+    },
+    "step": "created_via from the environment"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "The API answered 200 without JSON. Check PENDENZ_API_URL.",
+      "stdout": ""
+    },
+    "step": "not json"
+  }
+]

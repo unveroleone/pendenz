@@ -6,6 +6,7 @@ macro_rules! now {
     };
 }
 
+mod agent;
 mod auth;
 mod changes;
 mod devices;
@@ -23,7 +24,7 @@ use axum::{
     http::{HeaderValue, StatusCode, header},
     middleware::{self, Next},
     response::Response,
-    routing::{delete, get, patch, post, put},
+    routing::{any, delete, get, patch, post, put},
 };
 use clap::{Parser, Subcommand};
 use serde_json::json;
@@ -47,7 +48,7 @@ pub struct AppState {
 }
 
 #[derive(Parser)]
-#[command(about = "Pendenz server")]
+#[command(about = "Pendenz server, its admin commands, and the MCP server and command line for agents", after_help = agent::cli::NOTES)]
 struct Args {
     #[arg(long, env = "DATABASE_URL", default_value = "sqlite://data/pendenz.db")]
     database_url: String,
@@ -94,6 +95,15 @@ enum Command {
     RevokeDevice {
         id: String,
     },
+    /// Run the MCP server over stdio for an agent on this machine, with PENDENZ_API_URL and
+    /// PENDENZ_API_TOKEN.
+    Mcp,
+    #[command(flatten)]
+    Agent(agent::cli::Command),
+    // Anything else, answered as the agent command line always did.
+    #[command(external_subcommand)]
+    #[allow(dead_code)]
+    Unknown(Vec<String>),
 }
 
 fn valid_name(name: &str) -> anyhow::Result<&str> {
@@ -304,12 +314,15 @@ async fn revoke_device(db: &SqlitePool, id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-// Private data: no proxy or client may keep a copy of an API answer.
+// Private data: no proxy or client may keep a copy of an answer, or guess its type.
 async fn no_store(request: Request, next: Next) -> Response {
     let mut response = next.run(request).await;
-    response
-        .headers_mut()
-        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    let headers = response.headers_mut();
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
     response
 }
 
@@ -329,13 +342,24 @@ async fn shutdown() {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+    // The agent commands run on the agent's machine. They talk to an API and need no database
+    // and no log on stdout, which is theirs.
+    match args.command {
+        Some(Command::Mcp) => return agent::stdio::run().await,
+        Some(Command::Agent(command)) => std::process::exit(agent::cli::run(command).await),
+        Some(Command::Unknown(_)) => {
+            eprintln!("Unknown command. Run with --help.");
+            std::process::exit(1);
+        }
+        _ => {}
+    }
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "pendenz=info,tower_http=info".into()),
         )
         .init();
-    let args = Args::parse();
     let options = SqliteConnectOptions::from_str(&args.database_url)?
         .create_if_missing(true)
         .journal_mode(SqliteJournalMode::Wal)
@@ -366,6 +390,7 @@ async fn main() -> anyhow::Result<()> {
         Command::ListDevices => return list_devices(&db).await,
         Command::RevokeDevice { id } => return revoke_device(&db, &id).await,
         Command::Serve => {}
+        Command::Mcp | Command::Agent(_) | Command::Unknown(_) => unreachable!(),
     }
     let mode = std::env::var("PENDENZ_AUTH_MODE").unwrap_or_else(|_| "token".into());
     anyhow::ensure!(
@@ -437,10 +462,22 @@ async fn main() -> anyhow::Result<()> {
             auth::authenticate,
         ))
         // Added after the layer above: a device that pairs has no token yet.
-        .route("/pair", post(devices::pair))
-        .layer(middleware::from_fn(no_store));
+        .route("/pair", post(devices::pair));
+    // What clients call this server, for the hosted MCP endpoint's host check.
+    let origin = std::env::var("PENDENZ_ORIGIN")
+        .ok()
+        .filter(|origin| !origin.is_empty())
+        .unwrap_or_else(|| format!("http://{bind}"));
+    let hosted = Arc::new(agent::hosted::Hosted::new(
+        state.clone(),
+        Router::new()
+            .nest("/api", api.clone())
+            .with_state(state.clone()),
+        &origin,
+    )?);
     let app = Router::new()
         .nest("/api", api)
+        .route("/mcp", any(agent::hosted::handle).with_state(hosted))
         .route("/healthz", get(|| async { Json(json!({"status": "ok"})) }))
         .route(
             "/readyz",
@@ -460,12 +497,16 @@ async fn main() -> anyhow::Result<()> {
             )
         })
         .layer(DefaultBodyLimit::max(1024 * 1024))
+        .layer(middleware::from_fn(no_store))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(bind).await?;
     tracing::info!(%bind, mode, %tz, push = state_push, "Pendenz API listening");
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown())
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown())
+    .await?;
     Ok(())
 }

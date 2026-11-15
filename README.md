@@ -87,7 +87,7 @@ Pendenz is in daily use by its author and young as a public project. Expect the 
 
 ### Host the server
 
-The server runs as two containers, the API and the hosted MCP endpoint, behind HTTPS. [docs/self-hosting.md](docs/self-hosting.md) walks through the setup with a reverse proxy or a Cloudflare Tunnel, pairing the first device, tokens for agents, updates and backups.
+The server is one container behind HTTPS. It serves the API and the hosted MCP endpoint at `/mcp`. [docs/self-hosting.md](docs/self-hosting.md) walks through the setup with a reverse proxy or a Cloudflare Tunnel, pairing the first device, tokens for agents, updates and backups.
 
 ### Build the app
 
@@ -114,19 +114,19 @@ docker compose exec api pendenz add-agent --id my-agent --name "My agent"
 docker compose exec api pendenz issue-token --actor my-agent --label laptop --scopes read,write
 ```
 
-Point any MCP client at `https://<your server>/mcp` with the header `Authorization: Bearer <token>`. For an agent on the same machine as a checkout of this repo there is a stdio server and a CLI:
+Point any MCP client at `https://<your server>/mcp` with the header `Authorization: Bearer <token>`. The `pendenz` binary is also a stdio MCP server and a CLI for an agent on its own machine. Install it from a checkout with `cargo install --path server`:
 
 ```sh
 export PENDENZ_API_URL=https://<your server> PENDENZ_API_TOKEN=pdz_...
-pnpm mcp               # stdio MCP server
-pnpm pendenz list      # CLI, JSON output
+pendenz mcp            # stdio MCP server
+pendenz list           # CLI, JSON output
 ```
 
 The tools carry their own instructions for the agent: how to name items, set dates, append to notes, and what a hidden item or a locked note means.
 
 ## Development
 
-Needs Rust 1.100 (rustup picks it up from `rust-toolchain.toml`), Node 24, pnpm 12 and, for the app, Xcode 27.
+Needs Rust 1.100 (rustup picks it up from `rust-toolchain.toml`), Node 24 and pnpm 12 for Prettier and the push relay, and Xcode 27 for the app.
 
 ```sh
 pnpm install
@@ -143,11 +143,10 @@ curl -X POST http://127.0.0.1:8080/api/items \
 
 Run the app against it with the launch argument `-apiURL http://127.0.0.1:8080`, which skips pairing, or pair with `http://127.0.0.1:8080` and a code from `cargo run --bin pendenz -- pairing-code`.
 
-`pnpm check` runs clippy and the format checks for the server and the agent tools, and `pnpm check:swift` runs SwiftFormat on the app, as CI does. CI also builds the app for the iOS Simulator and the Mac. `apple/uitest.sh` runs the UI tests of the app in the Simulator against two servers it starts itself.
+`pnpm check` runs clippy and the format checks, `pnpm test` runs the server's tests, and `pnpm check:swift` runs SwiftFormat on the app, as CI does. The tests include regression tests of the MCP tools and the CLI, which compare every answer with a recorded fixture. CI also builds the app for the iOS Simulator and the Mac. `apple/uitest.sh` runs the UI tests of the app in the Simulator against two servers it starts itself.
 
 ```
-server/   Rust API and migrations
-agent/    CLI and MCP adapters
+server/   Rust API, MCP server, agent CLI and migrations
 apple/    the Xcode project for iPhone, iPad and Mac
 relay/    the push relay, a Cloudflare Worker
 deploy/   Dockerfiles, compose files, update and backup scripts

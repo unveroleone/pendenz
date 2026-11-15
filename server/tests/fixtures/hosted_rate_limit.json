@@ -1,0 +1,21 @@
+[
+  {
+    "answer": true,
+    "step": "first 180"
+  },
+  {
+    "answer": {
+      "body": {
+        "error": "Too many requests. Retry shortly."
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json",
+        "retry-after": "60",
+        "x-content-type-options": "nosniff"
+      },
+      "status": 429
+    },
+    "step": "181st"
+  }
+]

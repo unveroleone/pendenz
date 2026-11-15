@@ -20,7 +20,7 @@ Check [ROADMAP.md](ROADMAP.md) and the open issues before you start, so two peop
   - `pnpm check`: clippy, `cargo fmt` and Prettier. `pnpm format` fixes the formatting.
   - `pnpm check:swift`: SwiftFormat on the app, with the rules in `.swiftformat`. `pnpm format:swift` fixes it.
   - The app has to build for the iOS Simulator and for the Mac without warnings.
-- **Update the docs** in the same pull request when behavior changes: `docs/design.md`, `docs/self-hosting.md`, the README or the tool descriptions in `agent/mcp-tools.mjs`.
+- **Update the docs** in the same pull request when behavior changes: `docs/design.md`, `docs/self-hosting.md`, the README or the tool descriptions in `server/src/agent/tools.json`.
 
 ## Rules of the code base
 

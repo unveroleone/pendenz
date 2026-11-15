@@ -12,14 +12,15 @@ Tasks, reminders and notes for one person, with a server that agents can work fr
 ## Stack
 
 - Server: Rust 1.100 (edition 2024, pinned in `rust-toolchain.toml`), Axum, SQLite through sqlx, in `server/`.
-- CLI and MCP adapters: Node 24, pnpm 12, in `agent/`.
+- MCP server and agent CLI: Rust, in the same binary, in `server/src/agent/`.
+- Tooling: Node 24 and pnpm 12 for Prettier, the push relay and the icon scripts.
 - Apps: `apple/Pendenz.xcodeproj`, one SwiftUI target for iPhone, iPad and native Mac and one widget extension inside it, Xcode 27, Swift 6 with the main actor as the default. Check Liquid Glass and other new API names against the current SDK before using them.
 - Push relay: a Cloudflare Worker in plain JavaScript, in `relay/`.
 - Hosting: two containers with Docker Compose, in `deploy/`.
 
 ## Working on the server
 
-- Run it locally with `pnpm dev:api` (loopback only; a request without a token acts as the owner). `pnpm check` runs clippy and the format checks, and CI runs the same on every push.
+- Run it locally with `pnpm dev:api` (loopback only; a request without a token acts as the owner). `pnpm check` runs clippy and the format checks and `pnpm test` the tests, and CI runs the same on every push.
 - A server belongs to one person, the owner, whose actor ID is `owner` (`auth::OWNER`; the first migration called it `leo`, and `0006` renamed it). Use the constant in code, and write "the owner" in texts for people and agents, never a name. `pendenz set-owner-name` sets the name that `workspace.actors` shows.
 - Every write to an item, comment, project or note goes through `write` in `server/src/items.rs`: one writer, one `BEGIN IMMEDIATE` transaction, an idempotency key. Every read or write of an item or note goes through the hidden filter (`visible_item`, `visible_note` or the same SQL condition). Keep both when adding routes.
 - The device routes in `server/src/devices.rs` are the exception: they take the writer lock and `BEGIN IMMEDIATE` themselves and use no idempotency key. `POST /api/pair` is the only API route without a token; it is added to the router after the auth layer on purpose. The device routes need a human token with the approve scope (`require_owner`).
@@ -40,8 +41,11 @@ Tasks, reminders and notes for one person, with a server that agents can work fr
 
 ## Agent tools
 
-- A new MCP tool goes into `agent/mcp-tools.mjs` with the same call in `agent/cli.mjs`. The tool descriptions and the server instructions are what an agent reads, so keep them short, exact and free of names.
-- To try the tools, start a scratch server in token mode on its own database, make an agent with `add-agent` and `issue-token`, and call `createMcpServer` through the SDK's `InMemoryTransport`.
+- A new MCP tool goes into `server/src/agent/tools.json` (name, description, input schema, annotations) and `tools.rs` (what it does), with the same call in `cli.rs`. A tool with `readOnlyHint` needs the read scope, any other the write scope. The tool descriptions and `instructions.txt` are what an agent reads, so keep them short, exact and free of names.
+- `schema.rs` checks the arguments against the input schemas. It knows the keywords and the patterns that `tools.json` uses; a new pattern needs its check there, or the tool list refuses to load.
+- The protocol is rmcp's (`server.rs`): do not answer MCP methods by hand. `hosted.rs` guards the door before rmcp and hands the caller to it in the request's extensions.
+- The hosted endpoint calls the API router in process with the caller's token (`Client::local`). Keep it that way: a tool that reads the database itself would skip the scope checks and the hidden filter.
+- `server/tests/agent.rs` runs every tool, the hosted endpoint's HTTP rules, the stdio server and the CLI against a scratch server and compares each answer with `server/tests/fixtures/`. Add steps for a new tool. When what an agent should see changes on purpose, record again with `PENDENZ_RECORD_FIXTURES=1 cargo test --test agent` and read the fixture diff before committing it.
 - No agent token may approve or pair a device, and no agent sees a hidden row. Keep it that way in every new tool.
 
 ## The push relay

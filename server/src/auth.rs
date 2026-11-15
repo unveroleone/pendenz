@@ -95,7 +95,7 @@ struct TokenRow {
     actor: Actor,
 }
 
-async fn lookup(state: &AppState, token: &str) -> Result<Identity> {
+pub async fn lookup(state: &AppState, token: &str) -> Result<Identity> {
     if !well_formed(token) {
         return Err(ApiError::unauthorized());
     }

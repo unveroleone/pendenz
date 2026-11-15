@@ -8,7 +8,7 @@ Pendenz has four parts:
 
 - **The server** ([`server/`](../server)): Rust with Axum, and one SQLite database through sqlx. It holds every item, note and project, and it is the only place that decides who may see what.
 - **The apps** ([`apple/`](../apple)): one SwiftUI project for iPhone, iPad and a native Mac app (not Catalyst), plus a widget extension. They keep a local copy of the data and work without a connection.
-- **The agent adapters** ([`agent/`](../agent)): Node. A CLI, an MCP server over stdio, and a hosted MCP endpoint over HTTP. All three call the same API with the agent's own token.
+- **The agent tools** ([`server/src/agent/`](../server/src/agent)): part of the same Rust binary. A hosted MCP endpoint at `/mcp`, an MCP server over stdio (`pendenz mcp`) and a CLI. All three reach the data only through the API, with the agent's own token.
 - **The push relay** ([`relay/`](../relay)): a Cloudflare Worker that holds the APNs key and can send one thing, a silent "sync now" push.
 
 ```
@@ -303,7 +303,11 @@ The relay for the published app is not open to other servers yet. Until it is, a
 
 ### MCP tools
 
-The tools are defined once in [`mcp-tools.mjs`](../agent/mcp-tools.mjs) and served two ways: over stdio ([`mcp.mjs`](../agent/mcp.mjs)), running next to the agent, and as a hosted stateless endpoint (`POST /mcp` in [`http.mjs`](../agent/http.mjs)) that takes the caller's own Pendenz token. A token only gets the tools its scopes allow.
+The tools are defined once, with their descriptions and input schemas in [`tools.json`](../server/src/agent/tools.json) and the server instructions in [`instructions.txt`](../server/src/agent/instructions.txt), and carried out in [`tools.rs`](../server/src/agent/tools.rs). They are served two ways: over stdio (`pendenz mcp`, [`stdio.rs`](../server/src/agent/stdio.rs)), running next to the agent, and as a hosted stateless endpoint (`POST /mcp`, [`hosted.rs`](../server/src/agent/hosted.rs)) that takes the caller's own Pendenz token. A token only gets the tools its scopes allow.
+
+The hosted endpoint runs in the API's process, but it does not touch the database for the tools. Each call goes through the API router in process, with the caller's token, so it passes the same authentication, scope checks, hidden filter and idempotency as a request from outside. Only the token check at the door reads the token store directly. The stdio server and the CLI call the API over HTTPS. This keeps one place that decides what a token may see.
+
+The protocol is the official Rust SDK's, [rmcp](https://crates.io/crates/rmcp) ([`server.rs`](../server/src/agent/server.rs)). It handles the `initialize` handshake of the versions up to `2025-11-25` and the per-request flow of `2026-07-28` (no handshake, `server/discover`, the method in a header), stdio framing and stateless Streamable HTTP with JSON answers. Pendenz keeps three things of its own in front of and behind it: the door of the hosted endpoint (host, origin, rate and concurrency limits, the token check and the body size, in `hosted.rs`), the tool definitions in `tools.json`, which are served as they are written, and the argument checks in `schema.rs`, which fill in defaults and trim text before a tool runs. The first version of the tools ran on Node with the official TypeScript SDK; the regression tests in `server/tests/` were recorded from it and hold every tool to the same answers.
 
 | Tool | Does | Scope |
 |---|---|---|
@@ -326,11 +330,11 @@ Some choices in them:
 - A locked note comes from `get_note` with a `notice` next to the text, and from the list tools with its title and no preview, as in the app.
 - Every write tool takes an optional `key`. An agent that retries after a timeout sends the same key and arguments, and the write cannot apply twice. Without one the adapter makes a fresh key per call.
 
-The server instructions in the same file tell the agent how to write titles, dates and notes, how to handle versions and conflicts, and what a locked or hidden row means. They are part of the design: the lock rule for agents is an instruction, not a barrier.
+The server instructions tell the agent how to write titles, dates and notes, how to handle versions and conflicts, and what a locked or hidden row means. They are part of the design: the lock rule for agents is an instruction, not a barrier.
 
 ### CLI
 
-[`cli.mjs`](../agent/cli.mjs) has the same calls as the tools (`list`, `get`, `create`, `update`, `comment`, `add-image`, `notes`, `note-append`, `project-delete`, `changes` and so on) plus `reminders` for scripts. It reads `PENDENZ_API_URL` and `PENDENZ_API_TOKEN` and prints JSON. A new tool goes into `mcp-tools.mjs` with the same call in `cli.mjs`.
+The `pendenz` binary has the same calls as the tools ([`cli.rs`](../server/src/agent/cli.rs): `list`, `get`, `create`, `update`, `comment`, `add-image`, `notes`, `note-append`, `project-delete`, `changes` and so on) plus `reminders` for scripts. It reads `PENDENZ_API_URL` and `PENDENZ_API_TOKEN`, prints JSON and needs no database. A new tool goes into `tools.json` and `tools.rs`, with the same call in `cli.rs` and steps in `server/tests/agent.rs`.
 
 ## App architecture
 

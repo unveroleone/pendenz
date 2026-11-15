@@ -1,0 +1,1049 @@
+[
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Who you are, your scopes, the time zone for dates, all projects with their IDs and icons, and the allowed values. Call it once before your first write.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "name": "workspace"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List items as compact rows (long descriptions are cut; use get_item for one item in full). Shows open items by default. Returns at most limit rows; when has_more is true, call again with a higher offset.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "archived": {
+          "description": "True lists the archive.",
+          "type": "boolean"
+        },
+        "due_after": {
+          "description": "Day or local time, inclusive. With due_before: a date range.",
+          "type": "string"
+        },
+        "due_before": {
+          "description": "Day or local time, exclusive. For \"due today or overdue\" send tomorrow's date here.",
+          "type": "string"
+        },
+        "limit": {
+          "default": 30,
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "priority": {
+          "maximum": 4,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project": {
+          "description": "A project ID, or \"inbox\" for items without a project.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "q": {
+          "description": "Text that the title or description contains.",
+          "type": "string"
+        },
+        "sort": {
+          "default": "newest",
+          "description": "due = soonest first, undated last. manual = the order the owner set by hand in the inbox or a project; use it with project, and each row then carries its position.",
+          "enum": [
+            "newest",
+            "oldest",
+            "edited",
+            "due",
+            "priority",
+            "title",
+            "manual"
+          ],
+          "type": "string"
+        },
+        "status": {
+          "default": "open",
+          "description": "open = todo and doing.",
+          "enum": ["open", "todo", "doing", "done", "all"],
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        },
+        "trashed": {
+          "description": "True lists the trash.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_items"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "One item in full: every field, its current version, all comments, and the latest changes (who changed which field from what to what).",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "activity": {
+          "default": 10,
+          "description": "How many of the latest changes to include.",
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "pattern": "^([Pp]-)?[1-9]\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Item ID, as P-12 or 12."
+        }
+      },
+      "required": ["id"],
+      "type": "object"
+    },
+    "name": "get_item"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Add an item. Only the title is required; it lands in the inbox unless project_id is set. Check list_items first so you do not add a duplicate. Returns the new item as a compact row with its id and version.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "item": {
+          "additionalProperties": false,
+          "properties": {
+            "checklist": {
+              "description": "Ordered steps inside the item. Replaces the whole list, so send every line you want to keep.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "done": {
+                    "type": "boolean"
+                  },
+                  "id": {
+                    "description": "Keep the id of an existing line. Leave out for a new line.",
+                    "maxLength": 36,
+                    "type": "string"
+                  },
+                  "text": {
+                    "maxLength": 500,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": ["text"],
+                "type": "object"
+              },
+              "maxItems": 100,
+              "type": "array"
+            },
+            "description": {
+              "description": "Markdown. Details, context and links.",
+              "maxLength": 20000,
+              "type": "string"
+            },
+            "due_at": {
+              "description": "A day (2026-11-13) or a local time (2026-11-13T09:00). Null clears it.",
+              "type": ["string", "null"]
+            },
+            "due_tz": {
+              "description": "IANA zone for due_at, such as Europe/Zurich. Leave out to use the zone from workspace.",
+              "type": ["string", "null"]
+            },
+            "position": {
+              "description": "Place in the manual order of its list, highest first. A number between the positions of the two neighbours it should sit between; read them with list_items and sort manual.",
+              "type": "number"
+            },
+            "priority": {
+              "description": "0 = none, 1 = low, 2 = medium, 3 = high, 4 = urgent.",
+              "maximum": 4,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "project_id": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Project ID from workspace.projects. Null means the inbox."
+            },
+            "remind_at": {
+              "description": "Local time of the reminder (2026-11-12T18:00) when it differs from due_at. Null clears it.",
+              "type": ["string", "null"]
+            },
+            "repeat_rule": {
+              "description": "FREQ=DAILY, WEEKLY, MONTHLY or YEARLY, optionally ;INTERVAL=2, ;BYDAY=MO,TH (weekly), ;BYMONTHDAY=31 (monthly). Needs due_at. Null stops the repeat.",
+              "type": ["string", "null"]
+            },
+            "source_url": {
+              "anyOf": [
+                {
+                  "format": "uri",
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The page or message the item came from. Do not invent one."
+            },
+            "status": {
+              "description": "todo = not started, doing = in progress, done = finished.",
+              "enum": ["todo", "doing", "done"],
+              "type": "string"
+            },
+            "tags": {
+              "description": "Lowercase words without spaces. Replaces the whole list.",
+              "items": {
+                "maxLength": 40,
+                "minLength": 1,
+                "pattern": "^\\S+$",
+                "type": "string"
+              },
+              "maxItems": 12,
+              "type": "array"
+            },
+            "title": {
+              "maxLength": 240,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": ["title"],
+          "type": "object"
+        },
+        "key": {
+          "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["item"],
+      "type": "object"
+    },
+    "name": "create_item"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Change an item. Send its current version and only the fields that change. status done finishes it (a repeating item moves to its next date instead, stays open and gets its checklist unticked). archived or trashed move it out of the lists; false brings it back. Returns the item as a compact row with its new version.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": false,
+          "properties": {
+            "archived": {
+              "type": "boolean"
+            },
+            "checklist": {
+              "description": "Ordered steps inside the item. Replaces the whole list, so send every line you want to keep.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "done": {
+                    "type": "boolean"
+                  },
+                  "id": {
+                    "description": "Keep the id of an existing line. Leave out for a new line.",
+                    "maxLength": 36,
+                    "type": "string"
+                  },
+                  "text": {
+                    "maxLength": 500,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": ["text"],
+                "type": "object"
+              },
+              "maxItems": 100,
+              "type": "array"
+            },
+            "description": {
+              "description": "Markdown. Details, context and links.",
+              "maxLength": 20000,
+              "type": "string"
+            },
+            "due_at": {
+              "description": "A day (2026-11-13) or a local time (2026-11-13T09:00). Null clears it.",
+              "type": ["string", "null"]
+            },
+            "due_tz": {
+              "description": "IANA zone for due_at, such as Europe/Zurich. Leave out to use the zone from workspace.",
+              "type": ["string", "null"]
+            },
+            "position": {
+              "description": "Place in the manual order of its list, highest first. A number between the positions of the two neighbours it should sit between; read them with list_items and sort manual.",
+              "type": "number"
+            },
+            "priority": {
+              "description": "0 = none, 1 = low, 2 = medium, 3 = high, 4 = urgent.",
+              "maximum": 4,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "project_id": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Project ID from workspace.projects. Null means the inbox."
+            },
+            "remind_at": {
+              "description": "Local time of the reminder (2026-11-12T18:00) when it differs from due_at. Null clears it.",
+              "type": ["string", "null"]
+            },
+            "repeat_rule": {
+              "description": "FREQ=DAILY, WEEKLY, MONTHLY or YEARLY, optionally ;INTERVAL=2, ;BYDAY=MO,TH (weekly), ;BYMONTHDAY=31 (monthly). Needs due_at. Null stops the repeat.",
+              "type": ["string", "null"]
+            },
+            "source_url": {
+              "anyOf": [
+                {
+                  "format": "uri",
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The page or message the item came from. Do not invent one."
+            },
+            "status": {
+              "description": "todo = not started, doing = in progress, done = finished.",
+              "enum": ["todo", "doing", "done"],
+              "type": "string"
+            },
+            "tags": {
+              "description": "Lowercase words without spaces. Replaces the whole list.",
+              "items": {
+                "maxLength": 40,
+                "minLength": 1,
+                "pattern": "^\\S+$",
+                "type": "string"
+              },
+              "maxItems": 12,
+              "type": "array"
+            },
+            "title": {
+              "maxLength": 240,
+              "minLength": 1,
+              "type": "string"
+            },
+            "trashed": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "pattern": "^([Pp]-)?[1-9]\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Item ID, as P-12 or 12."
+        },
+        "key": {
+          "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "description": "The version from your last read of this item.",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": ["id", "version", "changes"],
+      "type": "object"
+    },
+    "name": "update_item"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Add a note to an item: progress, a result, a decision. Comments cannot be edited or removed.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 10000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "pattern": "^([Pp]-)?[1-9]\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Item ID, as P-12 or 12."
+        },
+        "key": {
+          "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["id", "body"],
+      "type": "object"
+    },
+    "name": "add_comment"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Look at one image of an item. get_item lists the images of an item with their ids, sizes and types. Returns the image itself.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "pattern": "^([Pp]-)?[1-9]\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Item ID, as P-12 or 12."
+        },
+        "image": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[1-9]\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Image ID from the item's images list in get_item."
+        }
+      },
+      "required": ["id", "image"],
+      "type": "object"
+    },
+    "name": "get_item_image"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Attach an image file from this machine to an item: a JPEG or PNG of at most 5 MB and 40 million pixels. An item holds at most 20 images. Returns the item as a compact row with its new version.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "pattern": "^([Pp]-)?[1-9]\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Item ID, as P-12 or 12."
+        },
+        "key": {
+          "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "path": {
+          "description": "Absolute path of the image file on this machine.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["id", "path"],
+      "type": "object"
+    },
+    "name": "add_item_image"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Remove one image from an item, only when the owner asks for it. This cannot be undone. Returns the item as a compact row with its new version.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "pattern": "^([Pp]-)?[1-9]\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Item ID, as P-12 or 12."
+        },
+        "image": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[1-9]\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Image ID from the item's images list in get_item."
+        },
+        "key": {
+          "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["id", "image"],
+      "type": "object"
+    },
+    "name": "remove_item_image"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Create a project, only when the owner asks for one. Check workspace.projects first. An icon that fits the name helps the owner find it. Returns the project with the ID to use as project_id.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "icon": {
+          "description": "The symbol the app draws next to the project. \"number\" is the plain # every project starts with.",
+          "enum": [
+            "number",
+            "house",
+            "briefcase",
+            "cart",
+            "book",
+            "graduationcap",
+            "heart",
+            "star",
+            "flag",
+            "bolt",
+            "leaf",
+            "pawprint",
+            "hammer",
+            "wrench.and.screwdriver",
+            "server.rack",
+            "desktopcomputer",
+            "chevron.left.forwardslash.chevron.right",
+            "banknote",
+            "car",
+            "airplane",
+            "fork.knife",
+            "dumbbell",
+            "music.note",
+            "lightbulb"
+          ],
+          "type": "string"
+        },
+        "key": {
+          "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["name"],
+      "type": "object"
+    },
+    "name": "create_project"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Rename a project, change its icon, or both, only when the owner asks for it. The ID stays, so its items and notes keep their project. Returns the project.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "icon": {
+          "description": "The symbol the app draws next to the project. \"number\" is the plain # every project starts with.",
+          "enum": [
+            "number",
+            "house",
+            "briefcase",
+            "cart",
+            "book",
+            "graduationcap",
+            "heart",
+            "star",
+            "flag",
+            "bolt",
+            "leaf",
+            "pawprint",
+            "hammer",
+            "wrench.and.screwdriver",
+            "server.rack",
+            "desktopcomputer",
+            "chevron.left.forwardslash.chevron.right",
+            "banknote",
+            "car",
+            "airplane",
+            "fork.knife",
+            "dumbbell",
+            "music.note",
+            "lightbulb"
+          ],
+          "type": "string"
+        },
+        "id": {
+          "description": "Project ID from workspace.projects.",
+          "type": "string"
+        },
+        "key": {
+          "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["id"],
+      "type": "object"
+    },
+    "name": "update_project"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Delete a project, only when the owner asks for this project to be deleted. Its items and notes stay and lose the project: the items are in the inbox afterwards. This cannot be undone, the project does not come back and its ID is not given out again. Returns the project with deleted: true.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Project ID from workspace.projects.",
+          "type": "string"
+        },
+        "key": {
+          "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["id"],
+      "type": "object"
+    },
+    "name": "delete_project"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List notes as compact rows: the first line as the title and the start of the rest (get_note for the full text). A locked note has locked: true and no preview. Pinned notes first, then the last edited. With q only notes whose text contains it. Returns at most limit rows; when has_more is true, call again with a higher offset.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "default": 30,
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project": {
+          "description": "A project ID, or \"none\" for notes without a project.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "q": {
+          "description": "Text that the note contains.",
+          "type": "string"
+        },
+        "trashed": {
+          "description": "True lists the trash.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "search_notes"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "One note in full, with its current version. A locked note comes with a notice on how its text may be used.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[1-9]\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Note ID from search_notes."
+        }
+      },
+      "required": ["id"],
+      "type": "object"
+    },
+    "name": "get_note"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Add a note. Check search_notes first for a note that already covers the subject, and append to that one instead. Keep it very short and in plain text: a title line, then only the facts the owner needs. Returns the note as a compact row with its id and version.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "note": {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "description": "Markdown. The first line is the title.",
+              "maxLength": 100000,
+              "minLength": 1,
+              "type": "string"
+            },
+            "locked": {
+              "const": true,
+              "description": "Locks the note: the app asks the owner for Face ID or Touch ID before it shows the text. For private text. Only the owner can remove a lock.",
+              "type": "boolean"
+            },
+            "pinned": {
+              "description": "Pinned notes are listed first.",
+              "type": "boolean"
+            },
+            "project_id": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Project ID from workspace.projects. Null means no project."
+            }
+          },
+          "required": ["body"],
+          "type": "object"
+        }
+      },
+      "required": ["note"],
+      "type": "object"
+    },
+    "name": "create_note"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Change a note. Send its current version and only the fields that change. A body replaces the whole text, so read the note with get_note first; to add text use append_note. trashed moves it to the trash; false brings it back. locked: true locks it. Returns the note as a compact row with its new version.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "description": "Markdown. The first line is the title.",
+              "maxLength": 100000,
+              "minLength": 1,
+              "type": "string"
+            },
+            "locked": {
+              "const": true,
+              "description": "Locks the note: the app asks the owner for Face ID or Touch ID before it shows the text. For private text. Only the owner can remove a lock.",
+              "type": "boolean"
+            },
+            "pinned": {
+              "description": "Pinned notes are listed first.",
+              "type": "boolean"
+            },
+            "project_id": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Project ID from workspace.projects. Null means no project."
+            },
+            "trashed": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[1-9]\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Note ID from search_notes."
+        },
+        "key": {
+          "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "description": "The version from your last read of this note.",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": ["id", "version", "changes"],
+      "type": "object"
+    },
+    "name": "update_note"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Add text at the end of a note, on a new line. Needs no version: the text goes after whatever the note holds at that moment, so nothing the owner wrote meanwhile is lost. Returns the note as a compact row with its new version.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[1-9]\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Note ID from search_notes."
+        },
+        "key": {
+          "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "text": {
+          "description": "Markdown. Start it with an empty line to set it apart from the text before.",
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["id", "text"],
+      "type": "object"
+    },
+    "name": "append_note"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Everything that changed since a cursor: items, comments and projects in their current state, oldest change first. Notes are left out; find them with search_notes. A project with deleted: true is gone, and its items are in the inbox. Store the returned cursor and send it next time. When reset is true, your cursor is no longer valid: start again from 0.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "limit": {
+          "default": 50,
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "changes"
+  }
+]

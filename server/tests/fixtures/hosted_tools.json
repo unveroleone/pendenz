@@ -1,0 +1,4231 @@
+[
+  {
+    "answer": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "capabilities": {
+          "tools": {}
+        },
+        "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nImages: an item can carry images, listed under images in get_item with an id each. Look at one with get_item_image when it matters for the task. Remove one only when the owner asks for it; a removed image does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
+        "protocolVersion": "2025-06-18",
+        "serverInfo": {
+          "name": "pendenz",
+          "version": "0.1.0"
+        }
+      }
+    },
+    "step": "initialize"
+  },
+  {
+    "answer": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "capabilities": {
+          "tools": {}
+        },
+        "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nImages: an item can carry images, listed under images in get_item with an id each. Look at one with get_item_image when it matters for the task. Remove one only when the owner asks for it; a removed image does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
+        "protocolVersion": "2025-11-25",
+        "serverInfo": {
+          "name": "pendenz",
+          "version": "0.1.0"
+        }
+      }
+    },
+    "step": "initialize unknown version"
+  },
+  {
+    "answer": "2025-03-26",
+    "step": "initialize 2025-03-26"
+  },
+  {
+    "answer": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {}
+    },
+    "step": "ping"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32601,
+        "message": "foo/bar"
+      },
+      "id": 1,
+      "jsonrpc": "2.0"
+    },
+    "step": "unknown method"
+  },
+  {
+    "answer": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "resources": []
+      }
+    },
+    "step": "resources/list"
+  },
+  {
+    "answer": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "prompts": []
+      }
+    },
+    "step": "prompts/list"
+  },
+  {
+    "answer": [
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Who you are, your scopes, the time zone for dates, all projects with their IDs and icons, and the allowed values. Call it once before your first write.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "name": "workspace"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "List items as compact rows (long descriptions are cut; use get_item for one item in full). Shows open items by default. Returns at most limit rows; when has_more is true, call again with a higher offset.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "archived": {
+              "description": "True lists the archive.",
+              "type": "boolean"
+            },
+            "due_after": {
+              "description": "Day or local time, inclusive. With due_before: a date range.",
+              "type": "string"
+            },
+            "due_before": {
+              "description": "Day or local time, exclusive. For \"due today or overdue\" send tomorrow's date here.",
+              "type": "string"
+            },
+            "limit": {
+              "default": 30,
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "offset": {
+              "default": 0,
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "priority": {
+              "maximum": 4,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "project": {
+              "description": "A project ID, or \"inbox\" for items without a project.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "q": {
+              "description": "Text that the title or description contains.",
+              "type": "string"
+            },
+            "sort": {
+              "default": "newest",
+              "description": "due = soonest first, undated last. manual = the order the owner set by hand in the inbox or a project; use it with project, and each row then carries its position.",
+              "enum": [
+                "newest",
+                "oldest",
+                "edited",
+                "due",
+                "priority",
+                "title",
+                "manual"
+              ],
+              "type": "string"
+            },
+            "status": {
+              "default": "open",
+              "description": "open = todo and doing.",
+              "enum": [
+                "open",
+                "todo",
+                "doing",
+                "done",
+                "all"
+              ],
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "trashed": {
+              "description": "True lists the trash.",
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "name": "list_items"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "One item in full: every field, its current version, all comments, and the latest changes (who changed which field from what to what).",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "activity": {
+              "default": 10,
+              "description": "How many of the latest changes to include.",
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "id": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^([Pp]-)?[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Item ID, as P-12 or 12."
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        "name": "get_item"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Add an item. Only the title is required; it lands in the inbox unless project_id is set. Check list_items first so you do not add a duplicate. Returns the new item as a compact row with its id and version.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "item": {
+              "additionalProperties": false,
+              "properties": {
+                "checklist": {
+                  "description": "Ordered steps inside the item. Replaces the whole list, so send every line you want to keep.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "done": {
+                        "type": "boolean"
+                      },
+                      "id": {
+                        "description": "Keep the id of an existing line. Leave out for a new line.",
+                        "maxLength": 36,
+                        "type": "string"
+                      },
+                      "text": {
+                        "maxLength": 500,
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                },
+                "description": {
+                  "description": "Markdown. Details, context and links.",
+                  "maxLength": 20000,
+                  "type": "string"
+                },
+                "due_at": {
+                  "description": "A day (2026-11-13) or a local time (2026-11-13T09:00). Null clears it.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "due_tz": {
+                  "description": "IANA zone for due_at, such as Europe/Zurich. Leave out to use the zone from workspace.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "position": {
+                  "description": "Place in the manual order of its list, highest first. A number between the positions of the two neighbours it should sit between; read them with list_items and sort manual.",
+                  "type": "number"
+                },
+                "priority": {
+                  "description": "0 = none, 1 = low, 2 = medium, 3 = high, 4 = urgent.",
+                  "maximum": 4,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "project_id": {
+                  "anyOf": [
+                    {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Project ID from workspace.projects. Null means the inbox."
+                },
+                "remind_at": {
+                  "description": "Local time of the reminder (2026-11-12T18:00) when it differs from due_at. Null clears it.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "repeat_rule": {
+                  "description": "FREQ=DAILY, WEEKLY, MONTHLY or YEARLY, optionally ;INTERVAL=2, ;BYDAY=MO,TH (weekly), ;BYMONTHDAY=31 (monthly). Needs due_at. Null stops the repeat.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source_url": {
+                  "anyOf": [
+                    {
+                      "format": "uri",
+                      "maxLength": 2000,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The page or message the item came from. Do not invent one."
+                },
+                "status": {
+                  "description": "todo = not started, doing = in progress, done = finished.",
+                  "enum": [
+                    "todo",
+                    "doing",
+                    "done"
+                  ],
+                  "type": "string"
+                },
+                "tags": {
+                  "description": "Lowercase words without spaces. Replaces the whole list.",
+                  "items": {
+                    "maxLength": 40,
+                    "minLength": 1,
+                    "pattern": "^\\S+$",
+                    "type": "string"
+                  },
+                  "maxItems": 12,
+                  "type": "array"
+                },
+                "title": {
+                  "maxLength": 240,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ],
+              "type": "object"
+            },
+            "key": {
+              "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "item"
+          ],
+          "type": "object"
+        },
+        "name": "create_item"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Change an item. Send its current version and only the fields that change. status done finishes it (a repeating item moves to its next date instead, stays open and gets its checklist unticked). archived or trashed move it out of the lists; false brings it back. Returns the item as a compact row with its new version.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "changes": {
+              "additionalProperties": false,
+              "properties": {
+                "archived": {
+                  "type": "boolean"
+                },
+                "checklist": {
+                  "description": "Ordered steps inside the item. Replaces the whole list, so send every line you want to keep.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "done": {
+                        "type": "boolean"
+                      },
+                      "id": {
+                        "description": "Keep the id of an existing line. Leave out for a new line.",
+                        "maxLength": 36,
+                        "type": "string"
+                      },
+                      "text": {
+                        "maxLength": 500,
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                },
+                "description": {
+                  "description": "Markdown. Details, context and links.",
+                  "maxLength": 20000,
+                  "type": "string"
+                },
+                "due_at": {
+                  "description": "A day (2026-11-13) or a local time (2026-11-13T09:00). Null clears it.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "due_tz": {
+                  "description": "IANA zone for due_at, such as Europe/Zurich. Leave out to use the zone from workspace.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "position": {
+                  "description": "Place in the manual order of its list, highest first. A number between the positions of the two neighbours it should sit between; read them with list_items and sort manual.",
+                  "type": "number"
+                },
+                "priority": {
+                  "description": "0 = none, 1 = low, 2 = medium, 3 = high, 4 = urgent.",
+                  "maximum": 4,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "project_id": {
+                  "anyOf": [
+                    {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Project ID from workspace.projects. Null means the inbox."
+                },
+                "remind_at": {
+                  "description": "Local time of the reminder (2026-11-12T18:00) when it differs from due_at. Null clears it.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "repeat_rule": {
+                  "description": "FREQ=DAILY, WEEKLY, MONTHLY or YEARLY, optionally ;INTERVAL=2, ;BYDAY=MO,TH (weekly), ;BYMONTHDAY=31 (monthly). Needs due_at. Null stops the repeat.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source_url": {
+                  "anyOf": [
+                    {
+                      "format": "uri",
+                      "maxLength": 2000,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The page or message the item came from. Do not invent one."
+                },
+                "status": {
+                  "description": "todo = not started, doing = in progress, done = finished.",
+                  "enum": [
+                    "todo",
+                    "doing",
+                    "done"
+                  ],
+                  "type": "string"
+                },
+                "tags": {
+                  "description": "Lowercase words without spaces. Replaces the whole list.",
+                  "items": {
+                    "maxLength": 40,
+                    "minLength": 1,
+                    "pattern": "^\\S+$",
+                    "type": "string"
+                  },
+                  "maxItems": 12,
+                  "type": "array"
+                },
+                "title": {
+                  "maxLength": 240,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "trashed": {
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            },
+            "id": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^([Pp]-)?[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Item ID, as P-12 or 12."
+            },
+            "key": {
+              "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "version": {
+              "description": "The version from your last read of this item.",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "changes"
+          ],
+          "type": "object"
+        },
+        "name": "update_item"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Add a note to an item: progress, a result, a decision. Comments cannot be edited or removed.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "maxLength": 10000,
+              "minLength": 1,
+              "type": "string"
+            },
+            "id": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^([Pp]-)?[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Item ID, as P-12 or 12."
+            },
+            "key": {
+              "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "body"
+          ],
+          "type": "object"
+        },
+        "name": "add_comment"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Look at one image of an item. get_item lists the images of an item with their ids, sizes and types. Returns the image itself.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^([Pp]-)?[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Item ID, as P-12 or 12."
+            },
+            "image": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Image ID from the item's images list in get_item."
+            }
+          },
+          "required": [
+            "id",
+            "image"
+          ],
+          "type": "object"
+        },
+        "name": "get_item_image"
+      },
+      {
+        "annotations": {
+          "destructiveHint": true,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Remove one image from an item, only when the owner asks for it. This cannot be undone. Returns the item as a compact row with its new version.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^([Pp]-)?[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Item ID, as P-12 or 12."
+            },
+            "image": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Image ID from the item's images list in get_item."
+            },
+            "key": {
+              "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "image"
+          ],
+          "type": "object"
+        },
+        "name": "remove_item_image"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Create a project, only when the owner asks for one. Check workspace.projects first. An icon that fits the name helps the owner find it. Returns the project with the ID to use as project_id.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "icon": {
+              "description": "The symbol the app draws next to the project. \"number\" is the plain # every project starts with.",
+              "enum": [
+                "number",
+                "house",
+                "briefcase",
+                "cart",
+                "book",
+                "graduationcap",
+                "heart",
+                "star",
+                "flag",
+                "bolt",
+                "leaf",
+                "pawprint",
+                "hammer",
+                "wrench.and.screwdriver",
+                "server.rack",
+                "desktopcomputer",
+                "chevron.left.forwardslash.chevron.right",
+                "banknote",
+                "car",
+                "airplane",
+                "fork.knife",
+                "dumbbell",
+                "music.note",
+                "lightbulb"
+              ],
+              "type": "string"
+            },
+            "key": {
+              "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "name": {
+              "maxLength": 80,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        "name": "create_project"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Rename a project, change its icon, or both, only when the owner asks for it. The ID stays, so its items and notes keep their project. Returns the project.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "icon": {
+              "description": "The symbol the app draws next to the project. \"number\" is the plain # every project starts with.",
+              "enum": [
+                "number",
+                "house",
+                "briefcase",
+                "cart",
+                "book",
+                "graduationcap",
+                "heart",
+                "star",
+                "flag",
+                "bolt",
+                "leaf",
+                "pawprint",
+                "hammer",
+                "wrench.and.screwdriver",
+                "server.rack",
+                "desktopcomputer",
+                "chevron.left.forwardslash.chevron.right",
+                "banknote",
+                "car",
+                "airplane",
+                "fork.knife",
+                "dumbbell",
+                "music.note",
+                "lightbulb"
+              ],
+              "type": "string"
+            },
+            "id": {
+              "description": "Project ID from workspace.projects.",
+              "type": "string"
+            },
+            "key": {
+              "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "name": {
+              "maxLength": 80,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        "name": "update_project"
+      },
+      {
+        "annotations": {
+          "destructiveHint": true,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Delete a project, only when the owner asks for this project to be deleted. Its items and notes stay and lose the project: the items are in the inbox afterwards. This cannot be undone, the project does not come back and its ID is not given out again. Returns the project with deleted: true.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "description": "Project ID from workspace.projects.",
+              "type": "string"
+            },
+            "key": {
+              "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        "name": "delete_project"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "List notes as compact rows: the first line as the title and the start of the rest (get_note for the full text). A locked note has locked: true and no preview. Pinned notes first, then the last edited. With q only notes whose text contains it. Returns at most limit rows; when has_more is true, call again with a higher offset.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "default": 30,
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "offset": {
+              "default": 0,
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "project": {
+              "description": "A project ID, or \"none\" for notes without a project.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "q": {
+              "description": "Text that the note contains.",
+              "type": "string"
+            },
+            "trashed": {
+              "description": "True lists the trash.",
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "name": "search_notes"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "One note in full, with its current version. A locked note comes with a notice on how its text may be used.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Note ID from search_notes."
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        "name": "get_note"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Add a note. Check search_notes first for a note that already covers the subject, and append to that one instead. Keep it very short and in plain text: a title line, then only the facts the owner needs. Returns the note as a compact row with its id and version.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "key": {
+              "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "note": {
+              "additionalProperties": false,
+              "properties": {
+                "body": {
+                  "description": "Markdown. The first line is the title.",
+                  "maxLength": 100000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "locked": {
+                  "const": true,
+                  "description": "Locks the note: the app asks the owner for Face ID or Touch ID before it shows the text. For private text. Only the owner can remove a lock.",
+                  "type": "boolean"
+                },
+                "pinned": {
+                  "description": "Pinned notes are listed first.",
+                  "type": "boolean"
+                },
+                "project_id": {
+                  "anyOf": [
+                    {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Project ID from workspace.projects. Null means no project."
+                }
+              },
+              "required": [
+                "body"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "note"
+          ],
+          "type": "object"
+        },
+        "name": "create_note"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Change a note. Send its current version and only the fields that change. A body replaces the whole text, so read the note with get_note first; to add text use append_note. trashed moves it to the trash; false brings it back. locked: true locks it. Returns the note as a compact row with its new version.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "changes": {
+              "additionalProperties": false,
+              "properties": {
+                "body": {
+                  "description": "Markdown. The first line is the title.",
+                  "maxLength": 100000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "locked": {
+                  "const": true,
+                  "description": "Locks the note: the app asks the owner for Face ID or Touch ID before it shows the text. For private text. Only the owner can remove a lock.",
+                  "type": "boolean"
+                },
+                "pinned": {
+                  "description": "Pinned notes are listed first.",
+                  "type": "boolean"
+                },
+                "project_id": {
+                  "anyOf": [
+                    {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Project ID from workspace.projects. Null means no project."
+                },
+                "trashed": {
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            },
+            "id": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Note ID from search_notes."
+            },
+            "key": {
+              "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "version": {
+              "description": "The version from your last read of this note.",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "changes"
+          ],
+          "type": "object"
+        },
+        "name": "update_note"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Add text at the end of a note, on a new line. Needs no version: the text goes after whatever the note holds at that moment, so nothing the owner wrote meanwhile is lost. Returns the note as a compact row with its new version.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Note ID from search_notes."
+            },
+            "key": {
+              "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "text": {
+              "description": "Markdown. Start it with an empty line to set it apart from the text before.",
+              "maxLength": 20000,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "text"
+          ],
+          "type": "object"
+        },
+        "name": "append_note"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Everything that changed since a cursor: items, comments and projects in their current state, oldest change first. Notes are left out; find them with search_notes. A project with deleted: true is gone, and its items are in the inbox. Store the returned cursor and send it next time. When reset is true, your cursor is no longer valid: start again from 0.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "cursor": {
+              "default": 0,
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "limit": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "name": "changes"
+      }
+    ],
+    "step": "tools for bot"
+  },
+  {
+    "answer": [
+      "workspace",
+      "list_items",
+      "get_item",
+      "get_item_image",
+      "search_notes",
+      "get_note",
+      "changes"
+    ],
+    "step": "tools for reader"
+  },
+  {
+    "answer": [
+      "create_item",
+      "update_item",
+      "add_comment",
+      "remove_item_image",
+      "create_project",
+      "update_project",
+      "delete_project",
+      "create_note",
+      "update_note",
+      "append_note"
+    ],
+    "step": "tools for writer"
+  },
+  {
+    "answer": [
+      "workspace",
+      "list_items",
+      "get_item",
+      "create_item",
+      "update_item",
+      "add_comment",
+      "get_item_image",
+      "remove_item_image",
+      "create_project",
+      "update_project",
+      "delete_project",
+      "search_notes",
+      "get_note",
+      "create_note",
+      "update_note",
+      "append_note",
+      "changes"
+    ],
+    "step": "tools for owner"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "MCP error -32602: Tool nope not found"
+        }
+      ],
+      "isError": true
+    },
+    "step": "unknown tool"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "MCP error -32602: Tool create_item not found"
+        }
+      ],
+      "isError": true
+    },
+    "step": "tool the scopes leave out"
+  },
+  {
+    "answer": -32601,
+    "step": "call without a name"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "actor": {
+              "id": "bot",
+              "kind": "agent",
+              "name": "bot"
+            },
+            "actors": [
+              {
+                "id": "owner",
+                "kind": "human",
+                "name": "Owner"
+              },
+              {
+                "id": "bot",
+                "kind": "agent",
+                "name": "bot"
+              },
+              {
+                "id": "reader",
+                "kind": "agent",
+                "name": "reader"
+              },
+              {
+                "id": "writer",
+                "kind": "agent",
+                "name": "writer"
+              }
+            ],
+            "options": {
+              "agent_stages": [
+                "new",
+                "none",
+                "gathering",
+                "needs_answer",
+                "ready",
+                "running",
+                "review",
+                "declined"
+              ],
+              "created_via": [
+                "telegram",
+                "mcp"
+              ],
+              "priorities": [
+                {
+                  "label": "None",
+                  "value": 0
+                },
+                {
+                  "label": "Low",
+                  "value": 1
+                },
+                {
+                  "label": "Medium",
+                  "value": 2
+                },
+                {
+                  "label": "High",
+                  "value": 3
+                },
+                {
+                  "label": "Urgent",
+                  "value": 4
+                }
+              ],
+              "repeat_rule": {
+                "examples": [
+                  "FREQ=DAILY",
+                  "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH",
+                  "FREQ=MONTHLY;BYMONTHDAY=31"
+                ],
+                "syntax": "FREQ=DAILY, WEEKLY, MONTHLY or YEARLY, then optional parts separated by semicolons: INTERVAL=1 to 999, BYDAY=MO,TU,WE,TH,FR,SA,SU (weekly only), BYMONTHDAY=1 to 31 (monthly only). The item needs a due_at."
+              },
+              "statuses": [
+                "todo",
+                "doing",
+                "done"
+              ]
+            },
+            "projects": [],
+            "scopes": [
+              "read",
+              "write"
+            ],
+            "timezone": "Europe/Zurich"
+          }
+        }
+      ]
+    },
+    "step": "call without arguments"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "actor": {
+              "id": "bot",
+              "kind": "agent",
+              "name": "bot"
+            },
+            "actors": [
+              {
+                "id": "owner",
+                "kind": "human",
+                "name": "Owner"
+              },
+              {
+                "id": "bot",
+                "kind": "agent",
+                "name": "bot"
+              },
+              {
+                "id": "reader",
+                "kind": "agent",
+                "name": "reader"
+              },
+              {
+                "id": "writer",
+                "kind": "agent",
+                "name": "writer"
+              }
+            ],
+            "options": {
+              "agent_stages": [
+                "new",
+                "none",
+                "gathering",
+                "needs_answer",
+                "ready",
+                "running",
+                "review",
+                "declined"
+              ],
+              "created_via": [
+                "telegram",
+                "mcp"
+              ],
+              "priorities": [
+                {
+                  "label": "None",
+                  "value": 0
+                },
+                {
+                  "label": "Low",
+                  "value": 1
+                },
+                {
+                  "label": "Medium",
+                  "value": 2
+                },
+                {
+                  "label": "High",
+                  "value": 3
+                },
+                {
+                  "label": "Urgent",
+                  "value": 4
+                }
+              ],
+              "repeat_rule": {
+                "examples": [
+                  "FREQ=DAILY",
+                  "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH",
+                  "FREQ=MONTHLY;BYMONTHDAY=31"
+                ],
+                "syntax": "FREQ=DAILY, WEEKLY, MONTHLY or YEARLY, then optional parts separated by semicolons: INTERVAL=1 to 999, BYDAY=MO,TU,WE,TH,FR,SA,SU (weekly only), BYMONTHDAY=1 to 31 (monthly only). The item needs a due_at."
+              },
+              "statuses": [
+                "todo",
+                "doing",
+                "done"
+              ]
+            },
+            "projects": [],
+            "scopes": [
+              "read",
+              "write"
+            ],
+            "timezone": "Europe/Zurich"
+          }
+        }
+      ]
+    },
+    "step": "workspace"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "created_at": "<time>",
+            "deleted": false,
+            "icon": "server.rack",
+            "id": "home-lab",
+            "name": "Home Lab",
+            "seq": 1
+          }
+        }
+      ]
+    },
+    "step": "create project"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "created_at": "<time>",
+            "deleted": false,
+            "icon": "server.rack",
+            "id": "home-lab",
+            "name": "Home Lab",
+            "seq": 1
+          }
+        }
+      ]
+    },
+    "step": "create project again with the key"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "created_at": "<time>",
+            "deleted": false,
+            "icon": null,
+            "id": "errands",
+            "name": "Errands",
+            "seq": 2
+          }
+        }
+      ]
+    },
+    "step": "create project without icon"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "created_at": "<time>",
+            "deleted": false,
+            "icon": "server.rack",
+            "id": "home-lab",
+            "name": "Homelab",
+            "seq": 3
+          }
+        }
+      ]
+    },
+    "step": "rename project"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "created_at": "<time>",
+            "deleted": false,
+            "icon": "wrench.and.screwdriver",
+            "id": "home-lab",
+            "name": "Homelab",
+            "seq": 4
+          }
+        }
+      ]
+    },
+    "step": "re-icon project"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "Send a name, an icon or both."
+        }
+      ],
+      "isError": true
+    },
+    "step": "update project with nothing"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "Use a project ID from workspace, such as home-lab."
+        }
+      ],
+      "isError": true
+    },
+    "step": "update project with a bad id"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "404: Not found."
+        }
+      ],
+      "isError": true
+    },
+    "step": "update missing project"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 1,
+            "ref": "P-1",
+            "status": "todo",
+            "title": "Call the dentist",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "create minimal item"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "checklist": "1/2 done",
+            "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (get_item for the rest)",
+            "due_at": "2030-01-15T09:00:00+01:00",
+            "due_tz": "Europe/Zurich",
+            "id": 2,
+            "position": 5,
+            "priority": 3,
+            "project_id": "home-lab",
+            "ref": "P-2",
+            "remind_at": "2030-01-15T08:00:00+01:00",
+            "repeat_rule": "FREQ=WEEKLY",
+            "source_url": "https://example.com/passport",
+            "status": "doing",
+            "tags": [
+              "admin",
+              "travel"
+            ],
+            "title": "Renew the passport",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "create full item"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "checklist": "1/2 done",
+            "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (get_item for the rest)",
+            "due_at": "2030-01-15T09:00:00+01:00",
+            "due_tz": "Europe/Zurich",
+            "id": 2,
+            "position": 5,
+            "priority": 3,
+            "project_id": "home-lab",
+            "ref": "P-2",
+            "remind_at": "2030-01-15T08:00:00+01:00",
+            "repeat_rule": "FREQ=WEEKLY",
+            "source_url": "https://example.com/passport",
+            "status": "doing",
+            "tags": [
+              "admin",
+              "travel"
+            ],
+            "title": "Renew the passport",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "create full item again with the key"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "400: This idempotency key was already used for another request."
+        }
+      ],
+      "isError": true
+    },
+    "step": "create item with the key and other arguments"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "400: Choose an existing project ID, or leave project_id empty for the inbox."
+        }
+      ],
+      "isError": true
+    },
+    "step": "create item in a missing project"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "400: Write due_at as a date (2026-11-13) or a time (2026-11-13T09:00, with or without an offset)."
+        }
+      ],
+      "isError": true
+    },
+    "step": "create item with a bad date"
+  },
+  {
+    "answer": [
+      {
+        "content": [
+          {
+            "json": {
+              "due_at": "2030-01-10",
+              "due_tz": "Europe/Zurich",
+              "id": 3,
+              "priority": 1,
+              "ref": "P-3",
+              "status": "todo",
+              "tags": [
+                "errand"
+              ],
+              "title": "Buy milk",
+              "version": 1
+            }
+          }
+        ]
+      },
+      {
+        "content": [
+          {
+            "json": {
+              "description": "Short.",
+              "id": 4,
+              "position": 100,
+              "ref": "P-4",
+              "status": "todo",
+              "title": "Fix the shelf",
+              "version": 1
+            }
+          }
+        ]
+      }
+    ],
+    "step": "create inbox items"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "description": "Short.",
+                "id": 4,
+                "ref": "P-4",
+                "status": "todo",
+                "title": "Fix the shelf",
+                "version": 1
+              },
+              {
+                "due_at": "2030-01-10",
+                "due_tz": "Europe/Zurich",
+                "id": 3,
+                "priority": 1,
+                "ref": "P-3",
+                "status": "todo",
+                "tags": [
+                  "errand"
+                ],
+                "title": "Buy milk",
+                "version": 1
+              },
+              {
+                "checklist": "1/2 done",
+                "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (get_item for the rest)",
+                "due_at": "2030-01-15T09:00:00+01:00",
+                "due_tz": "Europe/Zurich",
+                "id": 2,
+                "priority": 3,
+                "project_id": "home-lab",
+                "ref": "P-2",
+                "remind_at": "2030-01-15T08:00:00+01:00",
+                "repeat_rule": "FREQ=WEEKLY",
+                "source_url": "https://example.com/passport",
+                "status": "doing",
+                "tags": [
+                  "admin",
+                  "travel"
+                ],
+                "title": "Renew the passport",
+                "version": 1
+              },
+              {
+                "id": 1,
+                "ref": "P-1",
+                "status": "todo",
+                "title": "Call the dentist",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list open"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "checklist": "1/2 done",
+                "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (get_item for the rest)",
+                "due_at": "2030-01-15T09:00:00+01:00",
+                "due_tz": "Europe/Zurich",
+                "id": 2,
+                "position": 5,
+                "priority": 3,
+                "project_id": "home-lab",
+                "ref": "P-2",
+                "remind_at": "2030-01-15T08:00:00+01:00",
+                "repeat_rule": "FREQ=WEEKLY",
+                "source_url": "https://example.com/passport",
+                "status": "doing",
+                "tags": [
+                  "admin",
+                  "travel"
+                ],
+                "title": "Renew the passport",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list project manual"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "description": "Short.",
+                "id": 4,
+                "position": 100,
+                "ref": "P-4",
+                "status": "todo",
+                "title": "Fix the shelf",
+                "version": 1
+              },
+              {
+                "due_at": "2030-01-10",
+                "due_tz": "Europe/Zurich",
+                "id": 3,
+                "position": 7,
+                "priority": 1,
+                "ref": "P-3",
+                "status": "todo",
+                "tags": [
+                  "errand"
+                ],
+                "title": "Buy milk",
+                "version": 1
+              },
+              {
+                "id": 1,
+                "position": 5,
+                "ref": "P-1",
+                "status": "todo",
+                "title": "Call the dentist",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list inbox manual"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "id": 1,
+                "ref": "P-1",
+                "status": "todo",
+                "title": "Call the dentist",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list all with q"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": true,
+            "items": [
+              {
+                "id": 1,
+                "ref": "P-1",
+                "status": "todo",
+                "title": "Call the dentist",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list with limit"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": true,
+            "items": [
+              {
+                "checklist": "1/2 done",
+                "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (get_item for the rest)",
+                "due_at": "2030-01-15T09:00:00+01:00",
+                "due_tz": "Europe/Zurich",
+                "id": 2,
+                "priority": 3,
+                "project_id": "home-lab",
+                "ref": "P-2",
+                "remind_at": "2030-01-15T08:00:00+01:00",
+                "repeat_rule": "FREQ=WEEKLY",
+                "source_url": "https://example.com/passport",
+                "status": "doing",
+                "tags": [
+                  "admin",
+                  "travel"
+                ],
+                "title": "Renew the passport",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list with offset"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "due_at": "2030-01-10",
+                "due_tz": "Europe/Zurich",
+                "id": 3,
+                "priority": 1,
+                "ref": "P-3",
+                "status": "todo",
+                "tags": [
+                  "errand"
+                ],
+                "title": "Buy milk",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list by tag"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "checklist": "1/2 done",
+                "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (get_item for the rest)",
+                "due_at": "2030-01-15T09:00:00+01:00",
+                "due_tz": "Europe/Zurich",
+                "id": 2,
+                "priority": 3,
+                "project_id": "home-lab",
+                "ref": "P-2",
+                "remind_at": "2030-01-15T08:00:00+01:00",
+                "repeat_rule": "FREQ=WEEKLY",
+                "source_url": "https://example.com/passport",
+                "status": "doing",
+                "tags": [
+                  "admin",
+                  "travel"
+                ],
+                "title": "Renew the passport",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list by priority"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "due_at": "2030-01-10",
+                "due_tz": "Europe/Zurich",
+                "id": 3,
+                "priority": 1,
+                "ref": "P-3",
+                "status": "todo",
+                "tags": [
+                  "errand"
+                ],
+                "title": "Buy milk",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list due range"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "due_at": "2030-01-10",
+                "due_tz": "Europe/Zurich",
+                "id": 3,
+                "priority": 1,
+                "ref": "P-3",
+                "status": "todo",
+                "tags": [
+                  "errand"
+                ],
+                "title": "Buy milk",
+                "version": 1
+              },
+              {
+                "id": 1,
+                "ref": "P-1",
+                "status": "todo",
+                "title": "Call the dentist",
+                "version": 1
+              },
+              {
+                "description": "Short.",
+                "id": 4,
+                "ref": "P-4",
+                "status": "todo",
+                "title": "Fix the shelf",
+                "version": 1
+              },
+              {
+                "checklist": "1/2 done",
+                "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (get_item for the rest)",
+                "due_at": "2030-01-15T09:00:00+01:00",
+                "due_tz": "Europe/Zurich",
+                "id": 2,
+                "priority": 3,
+                "project_id": "home-lab",
+                "ref": "P-2",
+                "remind_at": "2030-01-15T08:00:00+01:00",
+                "repeat_rule": "FREQ=WEEKLY",
+                "source_url": "https://example.com/passport",
+                "status": "doing",
+                "tags": [
+                  "admin",
+                  "travel"
+                ],
+                "title": "Renew the passport",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list by title"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "activity": [
+              {
+                "action": "created",
+                "actor_id": "bot",
+                "created_at": "<time>",
+                "detail": {
+                  "created_via": "mcp"
+                },
+                "id": 10
+              }
+            ],
+            "activity_has_more": false,
+            "comments": [],
+            "item": {
+              "agent_stage": "none",
+              "archived": false,
+              "checklist": [
+                {
+                  "done": true,
+                  "id": "<line>",
+                  "text": "Photo"
+                },
+                {
+                  "done": false,
+                  "id": "<line>",
+                  "text": "Form"
+                }
+              ],
+              "completed_at": null,
+              "created_at": "<time>",
+              "created_by": "bot",
+              "created_via": "mcp",
+              "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔑 end",
+              "due_at": "2030-01-15T09:00:00+01:00",
+              "due_tz": "Europe/Zurich",
+              "hidden_from_agents": false,
+              "id": 2,
+              "images": [],
+              "position": 5,
+              "priority": 3,
+              "project_id": "home-lab",
+              "remind_at": "2030-01-15T08:00:00+01:00",
+              "repeat_rule": "FREQ=WEEKLY",
+              "seq": 6,
+              "source_url": "https://example.com/passport",
+              "status": "doing",
+              "tags": [
+                "admin",
+                "travel"
+              ],
+              "title": "Renew the passport",
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "bot",
+              "version": 1
+            }
+          }
+        }
+      ]
+    },
+    "step": "get item"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "activity": [],
+            "activity_has_more": true,
+            "comments": [],
+            "item": {
+              "agent_stage": "none",
+              "archived": false,
+              "checklist": [
+                {
+                  "done": true,
+                  "id": "<line>",
+                  "text": "Photo"
+                },
+                {
+                  "done": false,
+                  "id": "<line>",
+                  "text": "Form"
+                }
+              ],
+              "completed_at": null,
+              "created_at": "<time>",
+              "created_by": "bot",
+              "created_via": "mcp",
+              "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔑 end",
+              "due_at": "2030-01-15T09:00:00+01:00",
+              "due_tz": "Europe/Zurich",
+              "hidden_from_agents": false,
+              "id": 2,
+              "images": [],
+              "position": 5,
+              "priority": 3,
+              "project_id": "home-lab",
+              "remind_at": "2030-01-15T08:00:00+01:00",
+              "repeat_rule": "FREQ=WEEKLY",
+              "seq": 6,
+              "source_url": "https://example.com/passport",
+              "status": "doing",
+              "tags": [
+                "admin",
+                "travel"
+              ],
+              "title": "Renew the passport",
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "bot",
+              "version": 1
+            }
+          }
+        }
+      ]
+    },
+    "step": "get item lowercase ref without activity"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "activity": [
+              {
+                "action": "created",
+                "actor_id": "bot",
+                "created_at": "<time>",
+                "detail": {
+                  "created_via": "mcp"
+                },
+                "id": 9
+              }
+            ],
+            "activity_has_more": false,
+            "comments": [],
+            "item": {
+              "agent_stage": "none",
+              "archived": false,
+              "checklist": [],
+              "completed_at": null,
+              "created_at": "<time>",
+              "created_by": "bot",
+              "created_via": "mcp",
+              "description": "",
+              "due_at": null,
+              "due_tz": null,
+              "hidden_from_agents": false,
+              "id": 1,
+              "images": [],
+              "position": 5,
+              "priority": 0,
+              "project_id": null,
+              "remind_at": null,
+              "repeat_rule": null,
+              "seq": 5,
+              "source_url": null,
+              "status": "todo",
+              "tags": [],
+              "title": "Call the dentist",
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "bot",
+              "version": 1
+            }
+          }
+        }
+      ]
+    },
+    "step": "get item by number"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "activity": [
+              {
+                "action": "created",
+                "actor_id": "bot",
+                "created_at": "<time>",
+                "detail": {
+                  "created_via": "mcp"
+                },
+                "id": 11
+              }
+            ],
+            "activity_has_more": false,
+            "comments": [],
+            "item": {
+              "agent_stage": "none",
+              "archived": false,
+              "checklist": [],
+              "completed_at": null,
+              "created_at": "<time>",
+              "created_by": "bot",
+              "created_via": "mcp",
+              "description": "",
+              "due_at": "2030-01-10",
+              "due_tz": "Europe/Zurich",
+              "hidden_from_agents": false,
+              "id": 3,
+              "images": [],
+              "position": 7,
+              "priority": 1,
+              "project_id": null,
+              "remind_at": null,
+              "repeat_rule": null,
+              "seq": 7,
+              "source_url": null,
+              "status": "todo",
+              "tags": [
+                "errand"
+              ],
+              "title": "Buy milk",
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "bot",
+              "version": 1
+            }
+          }
+        }
+      ]
+    },
+    "step": "get item by string number"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "404: Not found."
+        }
+      ],
+      "isError": true
+    },
+    "step": "get missing item"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 1,
+            "ref": "P-1",
+            "status": "done",
+            "title": "Call the dentist",
+            "version": 2
+          }
+        }
+      ]
+    },
+    "step": "finish item"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "409: This item changed. Read it again before saving."
+        }
+      ],
+      "isError": true
+    },
+    "step": "update with an old version"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "checklist": "0/2 done",
+            "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (get_item for the rest)",
+            "due_at": "2030-01-22T09:00:00+01:00",
+            "due_tz": "Europe/Zurich",
+            "id": 2,
+            "priority": 3,
+            "project_id": "home-lab",
+            "ref": "P-2",
+            "remind_at": "2030-01-22T08:00:00+01:00",
+            "repeat_rule": "FREQ=WEEKLY",
+            "source_url": "https://example.com/passport",
+            "status": "todo",
+            "tags": [
+              "admin",
+              "travel"
+            ],
+            "title": "Renew the passport",
+            "version": 2
+          }
+        }
+      ]
+    },
+    "step": "finish repeating item"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "due_at": "2030-01-10",
+            "due_tz": "Europe/Zurich",
+            "id": 3,
+            "position": 250.5,
+            "priority": 1,
+            "ref": "P-3",
+            "status": "todo",
+            "tags": [
+              "errand"
+            ],
+            "title": "Buy milk",
+            "version": 2
+          }
+        }
+      ]
+    },
+    "step": "move item"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "checklist": "0/1 done",
+            "id": 4,
+            "project_id": "home-lab",
+            "ref": "P-4",
+            "status": "todo",
+            "title": "Fix the kitchen shelf",
+            "version": 2
+          }
+        }
+      ]
+    },
+    "step": "change many fields"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "due_at": "2030-01-10",
+            "due_tz": "Europe/Zurich",
+            "id": 3,
+            "priority": 1,
+            "ref": "P-3",
+            "status": "todo",
+            "tags": [
+              "errand"
+            ],
+            "title": "Buy milk",
+            "version": 3
+          }
+        }
+      ]
+    },
+    "step": "archive item"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "due_at": "2030-01-10",
+                "due_tz": "Europe/Zurich",
+                "id": 3,
+                "priority": 1,
+                "ref": "P-3",
+                "status": "todo",
+                "tags": [
+                  "errand"
+                ],
+                "title": "Buy milk",
+                "version": 3
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list archived"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "due_at": "2030-01-10",
+            "due_tz": "Europe/Zurich",
+            "id": 3,
+            "priority": 1,
+            "ref": "P-3",
+            "status": "todo",
+            "tags": [
+              "errand"
+            ],
+            "title": "Buy milk",
+            "version": 4
+          }
+        }
+      ]
+    },
+    "step": "trash item"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "due_at": "2030-01-10",
+                "due_tz": "Europe/Zurich",
+                "id": 3,
+                "priority": 1,
+                "ref": "P-3",
+                "status": "todo",
+                "tags": [
+                  "errand"
+                ],
+                "title": "Buy milk",
+                "version": 4
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list trashed"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "id": 1,
+                "ref": "P-1",
+                "status": "done",
+                "title": "Call the dentist",
+                "version": 2
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list done"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "author_id": "bot",
+            "body": "Booked the photo.",
+            "created_at": "<time>",
+            "id": 1,
+            "item_id": 2,
+            "seq": 15
+          }
+        }
+      ]
+    },
+    "step": "comment"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "404: Not found."
+        }
+      ],
+      "isError": true
+    },
+    "step": "comment on a missing item"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "checklist": "0/1 done",
+                "id": 4,
+                "project_id": "home-lab",
+                "ref": "P-4",
+                "status": "todo",
+                "title": "Fix the kitchen shelf",
+                "version": 2
+              },
+              {
+                "checklist": "0/2 done",
+                "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (get_item for the rest)",
+                "due_at": "2030-01-22T09:00:00+01:00",
+                "due_tz": "Europe/Zurich",
+                "id": 2,
+                "images": 1,
+                "priority": 3,
+                "project_id": "home-lab",
+                "ref": "P-2",
+                "remind_at": "2030-01-22T08:00:00+01:00",
+                "repeat_rule": "FREQ=WEEKLY",
+                "source_url": "https://example.com/passport",
+                "status": "todo",
+                "tags": [
+                  "admin",
+                  "travel"
+                ],
+                "title": "Renew the passport",
+                "version": 3
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "list shows the image count"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "activity": [
+              {
+                "action": "image_added",
+                "actor_id": "owner",
+                "created_at": "<time>",
+                "detail": {
+                  "bytes": 67,
+                  "image_id": 1
+                },
+                "id": 20
+              }
+            ],
+            "activity_has_more": true,
+            "comments": [
+              {
+                "author_id": "bot",
+                "body": "Booked the photo.",
+                "created_at": "<time>",
+                "id": 1,
+                "item_id": 2,
+                "seq": 15
+              }
+            ],
+            "item": {
+              "agent_stage": "none",
+              "archived": false,
+              "checklist": [
+                {
+                  "done": false,
+                  "id": "<line>",
+                  "text": "Photo"
+                },
+                {
+                  "done": false,
+                  "id": "<line>",
+                  "text": "Form"
+                }
+              ],
+              "completed_at": null,
+              "created_at": "<time>",
+              "created_by": "bot",
+              "created_via": "mcp",
+              "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔑 end",
+              "due_at": "2030-01-22T09:00:00+01:00",
+              "due_tz": "Europe/Zurich",
+              "hidden_from_agents": false,
+              "id": 2,
+              "images": [
+                {
+                  "bytes": 67,
+                  "height": 1,
+                  "id": 1,
+                  "mime": "image/png",
+                  "sha256": "2b1da20a14b97d8f01f0a809d9f7d53eeefc59df6312eaa5a0c8b5c1228d1d7f",
+                  "width": 1
+                }
+              ],
+              "position": 5,
+              "priority": 3,
+              "project_id": "home-lab",
+              "remind_at": "2030-01-22T08:00:00+01:00",
+              "repeat_rule": "FREQ=WEEKLY",
+              "seq": 16,
+              "source_url": "https://example.com/passport",
+              "status": "todo",
+              "tags": [
+                "admin",
+                "travel"
+              ],
+              "title": "Renew the passport",
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "owner",
+              "version": 3
+            }
+          }
+        }
+      ]
+    },
+    "step": "get item with image"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==",
+          "image": "image/png"
+        }
+      ]
+    },
+    "step": "get image"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==",
+          "image": "image/png"
+        }
+      ]
+    },
+    "step": "get image as string"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "404: Not found."
+        }
+      ],
+      "isError": true
+    },
+    "step": "get missing image"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "checklist": "0/2 done",
+            "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (get_item for the rest)",
+            "due_at": "2030-01-22T09:00:00+01:00",
+            "due_tz": "Europe/Zurich",
+            "id": 2,
+            "priority": 3,
+            "project_id": "home-lab",
+            "ref": "P-2",
+            "remind_at": "2030-01-22T08:00:00+01:00",
+            "repeat_rule": "FREQ=WEEKLY",
+            "source_url": "https://example.com/passport",
+            "status": "todo",
+            "tags": [
+              "admin",
+              "travel"
+            ],
+            "title": "Renew the passport",
+            "version": 4
+          }
+        }
+      ]
+    },
+    "step": "remove image"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "404: Not found."
+        }
+      ],
+      "isError": true
+    },
+    "step": "remove image again"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "404: Not found."
+        }
+      ],
+      "isError": true
+    },
+    "step": "get hidden item"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": []
+          }
+        }
+      ]
+    },
+    "step": "list without hidden"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "agent_stage": "new",
+                "id": 5,
+                "ref": "P-5",
+                "status": "todo",
+                "title": "Secret",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "owner sees hidden"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 1,
+            "length": 293,
+            "preview": "The password is on the router 🔑. yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy… (get_note for the rest)",
+            "title": "Wifi",
+            "updated_at": "<time>",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "create note"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 2,
+            "length": 14,
+            "locked": true,
+            "pinned": true,
+            "project_id": "home-lab",
+            "title": "Bank",
+            "updated_at": "<time>",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "create locked note"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 3,
+            "length": 16,
+            "title": "Just a title",
+            "updated_at": "<time>",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "create title-only note"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "notes": [
+              {
+                "id": 2,
+                "length": 14,
+                "locked": true,
+                "pinned": true,
+                "project_id": "home-lab",
+                "title": "Bank",
+                "updated_at": "<time>",
+                "version": 1
+              },
+              {
+                "id": 3,
+                "length": 16,
+                "title": "Just a title",
+                "updated_at": "<time>",
+                "version": 1
+              },
+              {
+                "id": 1,
+                "length": 293,
+                "preview": "The password is on the router 🔑. yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy… (get_note for the rest)",
+                "title": "Wifi",
+                "updated_at": "<time>",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "search notes"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "notes": [
+              {
+                "id": 1,
+                "length": 293,
+                "preview": "The password is on the router 🔑. yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy… (get_note for the rest)",
+                "title": "Wifi",
+                "updated_at": "<time>",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "search notes with q"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "notes": [
+              {
+                "id": 2,
+                "length": 14,
+                "locked": true,
+                "pinned": true,
+                "project_id": "home-lab",
+                "title": "Bank",
+                "updated_at": "<time>",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "search locked note by text"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": true,
+            "notes": [
+              {
+                "id": 3,
+                "length": 16,
+                "title": "Just a title",
+                "updated_at": "<time>",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "search notes without project"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "notes": [
+              {
+                "id": 2,
+                "length": 14,
+                "locked": true,
+                "pinned": true,
+                "project_id": "home-lab",
+                "title": "Bank",
+                "updated_at": "<time>",
+                "version": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "search notes in project"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "body": "## Wifi\n\nThe password is on the router 🔑. yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+            "created_at": "<time>",
+            "created_by": "bot",
+            "hidden_from_agents": false,
+            "id": 1,
+            "locked": false,
+            "pinned": false,
+            "project_id": null,
+            "seq": 19,
+            "trashed": false,
+            "updated_at": "<time>",
+            "updated_by": "bot",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "get note"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "body": "Bank\n\nPIN 1234",
+            "created_at": "<time>",
+            "created_by": "bot",
+            "hidden_from_agents": false,
+            "id": 2,
+            "locked": true,
+            "notice": "The owner locked this note. Use its text only for the task you are on: do not save it or a summary of it to a memory, a journal or a log, and do not copy it into another note, an item, a comment or a message.",
+            "pinned": true,
+            "project_id": "home-lab",
+            "seq": 20,
+            "trashed": false,
+            "updated_at": "<time>",
+            "updated_by": "bot",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "get locked note"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "404: Not found."
+        }
+      ],
+      "isError": true
+    },
+    "step": "get hidden note"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 1,
+            "length": 293,
+            "pinned": true,
+            "preview": "The password is on the router 🔑. yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy… (get_note for the rest)",
+            "title": "Wifi",
+            "updated_at": "<time>",
+            "version": 2
+          }
+        }
+      ]
+    },
+    "step": "pin note"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "409: This note changed. Read it again before saving."
+        }
+      ],
+      "isError": true
+    },
+    "step": "rewrite note with an old version"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 1,
+            "length": 315,
+            "pinned": true,
+            "preview": "The password is on the router 🔑. yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy… (get_note for the rest)",
+            "title": "Wifi",
+            "updated_at": "<time>",
+            "version": 3
+          }
+        }
+      ]
+    },
+    "step": "append to note"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 2,
+            "length": 23,
+            "locked": true,
+            "pinned": true,
+            "project_id": "home-lab",
+            "title": "Bank",
+            "updated_at": "<time>",
+            "version": 2
+          }
+        }
+      ]
+    },
+    "step": "append to locked note"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 3,
+            "length": 16,
+            "locked": true,
+            "project_id": "home-lab",
+            "title": "Just a title",
+            "updated_at": "<time>",
+            "version": 2
+          }
+        }
+      ]
+    },
+    "step": "lock note"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 3,
+            "length": 16,
+            "locked": true,
+            "project_id": "home-lab",
+            "title": "Just a title",
+            "trashed": true,
+            "updated_at": "<time>",
+            "version": 3
+          }
+        }
+      ]
+    },
+    "step": "trash note"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "notes": [
+              {
+                "id": 3,
+                "length": 16,
+                "locked": true,
+                "project_id": "home-lab",
+                "title": "Just a title",
+                "trashed": true,
+                "updated_at": "<time>",
+                "version": 3
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "search trashed notes"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "404: Not found."
+        }
+      ],
+      "isError": true
+    },
+    "step": "get missing note"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "changes": [
+              {
+                "data": {
+                  "created_at": "<time>",
+                  "deleted": false,
+                  "icon": null,
+                  "id": "errands",
+                  "name": "Errands",
+                  "seq": 2
+                },
+                "seq": 2,
+                "type": "project"
+              },
+              {
+                "data": {
+                  "created_at": "<time>",
+                  "deleted": false,
+                  "icon": "wrench.and.screwdriver",
+                  "id": "home-lab",
+                  "name": "Homelab",
+                  "seq": 4
+                },
+                "seq": 4,
+                "type": "project"
+              },
+              {
+                "data": {
+                  "agent_stage": "none",
+                  "archived": false,
+                  "checklist": [],
+                  "completed_at": "<time>",
+                  "created_at": "<time>",
+                  "created_by": "bot",
+                  "created_via": "mcp",
+                  "description": "",
+                  "due_at": null,
+                  "due_tz": null,
+                  "hidden_from_agents": false,
+                  "id": 1,
+                  "images": [],
+                  "position": 5,
+                  "priority": 0,
+                  "project_id": null,
+                  "remind_at": null,
+                  "repeat_rule": null,
+                  "seq": 9,
+                  "source_url": null,
+                  "status": "done",
+                  "tags": [],
+                  "title": "Call the dentist",
+                  "trashed": false,
+                  "updated_at": "<time>",
+                  "updated_by": "bot",
+                  "version": 2
+                },
+                "seq": 9,
+                "type": "item"
+              },
+              {
+                "data": {
+                  "agent_stage": "none",
+                  "archived": false,
+                  "checklist": [
+                    {
+                      "done": false,
+                      "id": "<line>",
+                      "text": "Screws"
+                    }
+                  ],
+                  "completed_at": null,
+                  "created_at": "<time>",
+                  "created_by": "bot",
+                  "created_via": "mcp",
+                  "description": "",
+                  "due_at": null,
+                  "due_tz": null,
+                  "hidden_from_agents": false,
+                  "id": 4,
+                  "images": [],
+                  "position": 100,
+                  "priority": 0,
+                  "project_id": "home-lab",
+                  "remind_at": null,
+                  "repeat_rule": null,
+                  "seq": 12,
+                  "source_url": null,
+                  "status": "todo",
+                  "tags": [],
+                  "title": "Fix the kitchen shelf",
+                  "trashed": false,
+                  "updated_at": "<time>",
+                  "updated_by": "bot",
+                  "version": 2
+                },
+                "seq": 12,
+                "type": "item"
+              },
+              {
+                "data": {
+                  "agent_stage": "none",
+                  "archived": false,
+                  "checklist": [],
+                  "completed_at": null,
+                  "created_at": "<time>",
+                  "created_by": "bot",
+                  "created_via": "mcp",
+                  "description": "",
+                  "due_at": "2030-01-10",
+                  "due_tz": "Europe/Zurich",
+                  "hidden_from_agents": false,
+                  "id": 3,
+                  "images": [],
+                  "position": 250.5,
+                  "priority": 1,
+                  "project_id": null,
+                  "remind_at": null,
+                  "repeat_rule": null,
+                  "seq": 14,
+                  "source_url": null,
+                  "status": "todo",
+                  "tags": [
+                    "errand"
+                  ],
+                  "title": "Buy milk",
+                  "trashed": true,
+                  "updated_at": "<time>",
+                  "updated_by": "bot",
+                  "version": 4
+                },
+                "seq": 14,
+                "type": "item"
+              },
+              {
+                "data": {
+                  "author_id": "bot",
+                  "body": "Booked the photo.",
+                  "created_at": "<time>",
+                  "id": 1,
+                  "item_id": 2,
+                  "seq": 15
+                },
+                "seq": 15,
+                "type": "comment"
+              },
+              {
+                "data": {
+                  "agent_stage": "none",
+                  "archived": false,
+                  "checklist": [
+                    {
+                      "done": false,
+                      "id": "<line>",
+                      "text": "Photo"
+                    },
+                    {
+                      "done": false,
+                      "id": "<line>",
+                      "text": "Form"
+                    }
+                  ],
+                  "completed_at": null,
+                  "created_at": "<time>",
+                  "created_by": "bot",
+                  "created_via": "mcp",
+                  "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔑 end",
+                  "due_at": "2030-01-22T09:00:00+01:00",
+                  "due_tz": "Europe/Zurich",
+                  "hidden_from_agents": false,
+                  "id": 2,
+                  "images": [],
+                  "position": 5,
+                  "priority": 3,
+                  "project_id": "home-lab",
+                  "remind_at": "2030-01-22T08:00:00+01:00",
+                  "repeat_rule": "FREQ=WEEKLY",
+                  "seq": 17,
+                  "source_url": "https://example.com/passport",
+                  "status": "todo",
+                  "tags": [
+                    "admin",
+                    "travel"
+                  ],
+                  "title": "Renew the passport",
+                  "trashed": false,
+                  "updated_at": "<time>",
+                  "updated_by": "bot",
+                  "version": 4
+                },
+                "seq": 17,
+                "type": "item"
+              }
+            ],
+            "cursor": 27,
+            "has_more": false,
+            "reset": false
+          }
+        }
+      ]
+    },
+    "step": "changes"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "changes": [
+              {
+                "data": {
+                  "created_at": "<time>",
+                  "deleted": false,
+                  "icon": "wrench.and.screwdriver",
+                  "id": "home-lab",
+                  "name": "Homelab",
+                  "seq": 4
+                },
+                "seq": 4,
+                "type": "project"
+              },
+              {
+                "data": {
+                  "agent_stage": "none",
+                  "archived": false,
+                  "checklist": [],
+                  "completed_at": "<time>",
+                  "created_at": "<time>",
+                  "created_by": "bot",
+                  "created_via": "mcp",
+                  "description": "",
+                  "due_at": null,
+                  "due_tz": null,
+                  "hidden_from_agents": false,
+                  "id": 1,
+                  "images": [],
+                  "position": 5,
+                  "priority": 0,
+                  "project_id": null,
+                  "remind_at": null,
+                  "repeat_rule": null,
+                  "seq": 9,
+                  "source_url": null,
+                  "status": "done",
+                  "tags": [],
+                  "title": "Call the dentist",
+                  "trashed": false,
+                  "updated_at": "<time>",
+                  "updated_by": "bot",
+                  "version": 2
+                },
+                "seq": 9,
+                "type": "item"
+              }
+            ],
+            "cursor": 9,
+            "has_more": true,
+            "reset": false
+          }
+        }
+      ]
+    },
+    "step": "changes page"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "changes": [
+              {
+                "data": {
+                  "created_at": "<time>",
+                  "deleted": false,
+                  "icon": null,
+                  "id": "errands",
+                  "name": "Errands",
+                  "seq": 2
+                },
+                "seq": 2,
+                "type": "project"
+              },
+              {
+                "data": {
+                  "created_at": "<time>",
+                  "deleted": false,
+                  "icon": "wrench.and.screwdriver",
+                  "id": "home-lab",
+                  "name": "Homelab",
+                  "seq": 4
+                },
+                "seq": 4,
+                "type": "project"
+              },
+              {
+                "data": {
+                  "agent_stage": "none",
+                  "archived": false,
+                  "checklist": [],
+                  "completed_at": "<time>",
+                  "created_at": "<time>",
+                  "created_by": "bot",
+                  "created_via": "mcp",
+                  "description": "",
+                  "due_at": null,
+                  "due_tz": null,
+                  "hidden_from_agents": false,
+                  "id": 1,
+                  "images": [],
+                  "position": 5,
+                  "priority": 0,
+                  "project_id": null,
+                  "remind_at": null,
+                  "repeat_rule": null,
+                  "seq": 9,
+                  "source_url": null,
+                  "status": "done",
+                  "tags": [],
+                  "title": "Call the dentist",
+                  "trashed": false,
+                  "updated_at": "<time>",
+                  "updated_by": "bot",
+                  "version": 2
+                },
+                "seq": 9,
+                "type": "item"
+              },
+              {
+                "data": {
+                  "agent_stage": "none",
+                  "archived": false,
+                  "checklist": [
+                    {
+                      "done": false,
+                      "id": "<line>",
+                      "text": "Screws"
+                    }
+                  ],
+                  "completed_at": null,
+                  "created_at": "<time>",
+                  "created_by": "bot",
+                  "created_via": "mcp",
+                  "description": "",
+                  "due_at": null,
+                  "due_tz": null,
+                  "hidden_from_agents": false,
+                  "id": 4,
+                  "images": [],
+                  "position": 100,
+                  "priority": 0,
+                  "project_id": "home-lab",
+                  "remind_at": null,
+                  "repeat_rule": null,
+                  "seq": 12,
+                  "source_url": null,
+                  "status": "todo",
+                  "tags": [],
+                  "title": "Fix the kitchen shelf",
+                  "trashed": false,
+                  "updated_at": "<time>",
+                  "updated_by": "bot",
+                  "version": 2
+                },
+                "seq": 12,
+                "type": "item"
+              },
+              {
+                "data": {
+                  "agent_stage": "none",
+                  "archived": false,
+                  "checklist": [],
+                  "completed_at": null,
+                  "created_at": "<time>",
+                  "created_by": "bot",
+                  "created_via": "mcp",
+                  "description": "",
+                  "due_at": "2030-01-10",
+                  "due_tz": "Europe/Zurich",
+                  "hidden_from_agents": false,
+                  "id": 3,
+                  "images": [],
+                  "position": 250.5,
+                  "priority": 1,
+                  "project_id": null,
+                  "remind_at": null,
+                  "repeat_rule": null,
+                  "seq": 14,
+                  "source_url": null,
+                  "status": "todo",
+                  "tags": [
+                    "errand"
+                  ],
+                  "title": "Buy milk",
+                  "trashed": true,
+                  "updated_at": "<time>",
+                  "updated_by": "bot",
+                  "version": 4
+                },
+                "seq": 14,
+                "type": "item"
+              },
+              {
+                "data": {
+                  "author_id": "bot",
+                  "body": "Booked the photo.",
+                  "created_at": "<time>",
+                  "id": 1,
+                  "item_id": 2,
+                  "seq": 15
+                },
+                "seq": 15,
+                "type": "comment"
+              },
+              {
+                "data": {
+                  "agent_stage": "none",
+                  "archived": false,
+                  "checklist": [
+                    {
+                      "done": false,
+                      "id": "<line>",
+                      "text": "Photo"
+                    },
+                    {
+                      "done": false,
+                      "id": "<line>",
+                      "text": "Form"
+                    }
+                  ],
+                  "completed_at": null,
+                  "created_at": "<time>",
+                  "created_by": "bot",
+                  "created_via": "mcp",
+                  "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔑 end",
+                  "due_at": "2030-01-22T09:00:00+01:00",
+                  "due_tz": "Europe/Zurich",
+                  "hidden_from_agents": false,
+                  "id": 2,
+                  "images": [],
+                  "position": 5,
+                  "priority": 3,
+                  "project_id": "home-lab",
+                  "remind_at": "2030-01-22T08:00:00+01:00",
+                  "repeat_rule": "FREQ=WEEKLY",
+                  "seq": 17,
+                  "source_url": "https://example.com/passport",
+                  "status": "todo",
+                  "tags": [
+                    "admin",
+                    "travel"
+                  ],
+                  "title": "Renew the passport",
+                  "trashed": false,
+                  "updated_at": "<time>",
+                  "updated_by": "bot",
+                  "version": 4
+                },
+                "seq": 17,
+                "type": "item"
+              }
+            ],
+            "cursor": 27,
+            "has_more": false,
+            "reset": false
+          }
+        }
+      ]
+    },
+    "step": "changes default"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "created_at": "<time>",
+            "deleted": true,
+            "icon": "wrench.and.screwdriver",
+            "id": "home-lab",
+            "name": "Homelab",
+            "seq": 32
+          }
+        }
+      ]
+    },
+    "step": "delete project"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "404: Not found."
+        }
+      ],
+      "isError": true
+    },
+    "step": "delete project again"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "has_more": false,
+            "items": [
+              {
+                "checklist": "0/1 done",
+                "id": 4,
+                "ref": "P-4",
+                "status": "todo",
+                "title": "Fix the kitchen shelf",
+                "version": 3
+              },
+              {
+                "checklist": "0/2 done",
+                "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (get_item for the rest)",
+                "due_at": "2030-01-22T09:00:00+01:00",
+                "due_tz": "Europe/Zurich",
+                "id": 2,
+                "priority": 3,
+                "ref": "P-2",
+                "remind_at": "2030-01-22T08:00:00+01:00",
+                "repeat_rule": "FREQ=WEEKLY",
+                "source_url": "https://example.com/passport",
+                "status": "todo",
+                "tags": [
+                  "admin",
+                  "travel"
+                ],
+                "title": "Renew the passport",
+                "version": 5
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "step": "inbox after delete"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "actor": {
+              "id": "bot",
+              "kind": "agent",
+              "name": "bot"
+            },
+            "actors": [
+              {
+                "id": "owner",
+                "kind": "human",
+                "name": "Owner"
+              },
+              {
+                "id": "bot",
+                "kind": "agent",
+                "name": "bot"
+              },
+              {
+                "id": "reader",
+                "kind": "agent",
+                "name": "reader"
+              },
+              {
+                "id": "writer",
+                "kind": "agent",
+                "name": "writer"
+              }
+            ],
+            "options": {
+              "agent_stages": [
+                "new",
+                "none",
+                "gathering",
+                "needs_answer",
+                "ready",
+                "running",
+                "review",
+                "declined"
+              ],
+              "created_via": [
+                "telegram",
+                "mcp"
+              ],
+              "priorities": [
+                {
+                  "label": "None",
+                  "value": 0
+                },
+                {
+                  "label": "Low",
+                  "value": 1
+                },
+                {
+                  "label": "Medium",
+                  "value": 2
+                },
+                {
+                  "label": "High",
+                  "value": 3
+                },
+                {
+                  "label": "Urgent",
+                  "value": 4
+                }
+              ],
+              "repeat_rule": {
+                "examples": [
+                  "FREQ=DAILY",
+                  "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH",
+                  "FREQ=MONTHLY;BYMONTHDAY=31"
+                ],
+                "syntax": "FREQ=DAILY, WEEKLY, MONTHLY or YEARLY, then optional parts separated by semicolons: INTERVAL=1 to 999, BYDAY=MO,TU,WE,TH,FR,SA,SU (weekly only), BYMONTHDAY=1 to 31 (monthly only). The item needs a due_at."
+              },
+              "statuses": [
+                "todo",
+                "doing",
+                "done"
+              ]
+            },
+            "projects": [
+              {
+                "icon": null,
+                "id": "errands",
+                "name": "Errands"
+              }
+            ],
+            "scopes": [
+              "read",
+              "write"
+            ],
+            "timezone": "Europe/Zurich"
+          }
+        }
+      ]
+    },
+    "step": "workspace after delete"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 6,
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "writer creates"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 1,
+            "version": 3
+          }
+        }
+      ]
+    },
+    "step": "writer updates"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 5,
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "writer creates note"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 1,
+            "version": 4
+          }
+        }
+      ]
+    },
+    "step": "writer appends"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 2,
+            "item_id": 1
+          }
+        }
+      ]
+    },
+    "step": "writer comments"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": "blind"
+          }
+        }
+      ]
+    },
+    "step": "writer creates project"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "activity": [
+              {
+                "action": "commented",
+                "actor_id": "writer",
+                "created_at": "<time>",
+                "detail": {
+                  "comment_id": 2
+                },
+                "id": 41
+              },
+              {
+                "action": "reopened",
+                "actor_id": "writer",
+                "created_at": "<time>",
+                "detail": {
+                  "changes": {
+                    "status": {
+                      "from": "done",
+                      "to": "todo"
+                    }
+                  }
+                },
+                "id": 38
+              },
+              {
+                "action": "completed",
+                "actor_id": "bot",
+                "created_at": "<time>",
+                "detail": {
+                  "changes": {
+                    "status": {
+                      "from": "todo",
+                      "to": "done"
+                    }
+                  }
+                },
+                "id": 13
+              }
+            ],
+            "activity_has_more": true,
+            "comments": [
+              {
+                "author_id": "writer",
+                "body": "seen",
+                "created_at": "<time>",
+                "id": 2,
+                "item_id": 1,
+                "seq": 37
+              }
+            ],
+            "item": {
+              "agent_stage": "none",
+              "archived": false,
+              "checklist": [],
+              "completed_at": null,
+              "created_at": "<time>",
+              "created_by": "bot",
+              "created_via": "mcp",
+              "description": "",
+              "due_at": null,
+              "due_tz": null,
+              "hidden_from_agents": false,
+              "id": 1,
+              "images": [],
+              "position": 5,
+              "priority": 0,
+              "project_id": null,
+              "remind_at": null,
+              "repeat_rule": null,
+              "seq": 34,
+              "source_url": null,
+              "status": "todo",
+              "tags": [],
+              "title": "Call the dentist",
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "writer",
+              "version": 3
+            }
+          }
+        }
+      ]
+    },
+    "step": "reader reads"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 7,
+            "ref": "P-7",
+            "status": "todo",
+            "title": "Padded",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "padded key"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 7,
+            "ref": "P-7",
+            "status": "todo",
+            "title": "Padded",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "the same key without padding"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 8,
+            "position": 2,
+            "priority": 1,
+            "ref": "P-8",
+            "status": "todo",
+            "title": "Floats",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "whole numbers written with a fraction"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 8,
+            "position": 2,
+            "priority": 1,
+            "ref": "P-8",
+            "status": "todo",
+            "title": "Floats",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "the same call with plain numbers"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 8,
+            "priority": 1,
+            "ref": "P-8",
+            "status": "doing",
+            "title": "Floats",
+            "version": 2
+          }
+        }
+      ]
+    },
+    "step": "version written with a fraction"
+  },
+  {
+    "answer": {
+      "body": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "_meta": {
+            "io.modelcontextprotocol/serverInfo": {
+              "name": "pendenz",
+              "version": "0.1.0"
+            }
+          },
+          "cacheScope": "private",
+          "capabilities": {
+            "tools": {}
+          },
+          "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nImages: an item can carry images, listed under images in get_item with an id each. Look at one with get_item_image when it matters for the task. Remove one only when the owner asks for it; a removed image does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
+          "resultType": "complete",
+          "supportedVersions": [
+            "2024-11-05",
+            "2025-03-26",
+            "2025-06-18",
+            "2025-11-25",
+            "2026-07-28"
+          ],
+          "ttlMs": 0
+        }
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json",
+        "x-content-type-options": "nosniff"
+      },
+      "status": 200
+    },
+    "step": "2026 discover"
+  },
+  {
+    "answer": [
+      "workspace",
+      "list_items",
+      "get_item",
+      "get_item_image",
+      "search_notes",
+      "get_note",
+      "changes"
+    ],
+    "step": "2026 tools for reader"
+  },
+  {
+    "answer": {
+      "body": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "{\"activity\":[],\"activity_has_more\":true,\"comments\":[{\"author_id\":\"writer\",\"body\":\"seen\",\"created_at\":\"<time>\",\"id\":2,\"item_id\":1,\"seq\":37}],\"item\":{\"agent_stage\":\"none\",\"archived\":false,\"checklist\":[],\"completed_at\":null,\"created_at\":\"<time>\",\"created_by\":\"bot\",\"created_via\":\"mcp\",\"description\":\"\",\"due_at\":null,\"due_tz\":null,\"hidden_from_agents\":false,\"id\":1,\"images\":[],\"position\":5,\"priority\":0,\"project_id\":null,\"remind_at\":null,\"repeat_rule\":null,\"seq\":34,\"source_url\":null,\"status\":\"todo\",\"tags\":[],\"title\":\"Call the dentist\",\"trashed\":false,\"updated_at\":\"<time>\",\"updated_by\":\"writer\",\"version\":3}}",
+              "type": "text"
+            }
+          ],
+          "resultType": "complete"
+        }
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json",
+        "x-content-type-options": "nosniff"
+      },
+      "status": 200
+    },
+    "step": "2026 tool call"
+  },
+  {
+    "answer": {
+      "body": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "404: Not found.",
+              "type": "text"
+            }
+          ],
+          "isError": true,
+          "resultType": "complete"
+        }
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json",
+        "x-content-type-options": "nosniff"
+      },
+      "status": 200
+    },
+    "step": "2026 tool error"
+  },
+  {
+    "answer": {
+      "body": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "404: Not found.",
+              "type": "text"
+            }
+          ],
+          "isError": true,
+          "resultType": "complete"
+        }
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json",
+        "x-content-type-options": "nosniff"
+      },
+      "status": 200
+    },
+    "step": "2026 hidden item"
+  },
+  {
+    "answer": {
+      "body": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "{\"id\":9,\"version\":1}",
+              "type": "text"
+            }
+          ],
+          "resultType": "complete"
+        }
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json",
+        "x-content-type-options": "nosniff"
+      },
+      "status": 200
+    },
+    "step": "2026 writer receipt"
+  },
+  {
+    "answer": 400,
+    "step": "2026 without the method header"
+  }
+]
