@@ -43,6 +43,7 @@ Tasks, reminders and notes for one person, with a server that agents can work fr
 
 - A new MCP tool goes into `server/src/agent/tools.json` (name, description, input schema, annotations) and `tools.rs` (what it does), with the same call in `cli.rs`. A tool with `readOnlyHint` needs the read scope, any other the write scope. The tool descriptions and `instructions.txt` are what an agent reads, so keep them short, exact and free of names.
 - `schema.rs` checks the arguments against the input schemas. It knows the keywords and the patterns that `tools.json` uses; a new pattern needs its check there, or the tool list refuses to load.
+- The protocol is rmcp's (`server.rs`): do not answer MCP methods by hand. `hosted.rs` guards the door before rmcp and hands the caller to it in the request's extensions.
 - The hosted endpoint calls the API router in process with the caller's token (`Client::local`). Keep it that way: a tool that reads the database itself would skip the scope checks and the hidden filter.
 - `server/tests/agent.rs` runs every tool, the hosted endpoint's HTTP rules, the stdio server and the CLI against a scratch server and compares each answer with `server/tests/fixtures/`. Add steps for a new tool. When what an agent should see changes on purpose, record again with `PENDENZ_RECORD_FIXTURES=1 cargo test --test agent` and read the fixture diff before committing it.
 - No agent token may approve or pair a device, and no agent sees a hidden row. Keep it that way in every new tool.

@@ -4,7 +4,7 @@
 pub mod cli;
 mod client;
 pub mod hosted;
-mod protocol;
 mod schema;
+mod server;
 pub mod stdio;
 mod tools;

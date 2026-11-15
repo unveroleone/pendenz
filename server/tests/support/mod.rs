@@ -7,8 +7,10 @@
 // PENDENZ_RECORD_FIXTURES=1 writes the fixtures instead of comparing them.
 //
 // The fixtures were first recorded from the Node adapters that these tools replaced (agent/ at
-// commit a28d0da, run with PENDENZ_AGENT=node). Record them again only for a change in what an
-// agent should see, and read the diff of the fixtures before committing it.
+// commit a28d0da, run with PENDENZ_AGENT=node). Every tool call still answers as it did there.
+// Steps of the protocol itself (the answers to malformed requests, initialize) were recorded
+// again when the protocol moved to rmcp. Record them again only for a change in what an agent
+// should see, and read the diff of the fixtures before committing it.
 #![allow(dead_code)]
 
 use base64::{Engine, engine::general_purpose::STANDARD};

@@ -1,9 +1,10 @@
 // The hosted MCP endpoint: a stateless POST /mcp that takes the caller's own Pendenz token.
-// Each request is checked against the token store and then served with exactly that token's
-// scopes. The tools call the API router of this process with the same token.
+// This file guards the door: the host, the rate and the number of requests at once, the token
+// and the size of the body. A request that passes goes to rmcp's Streamable HTTP service with
+// its caller, and the tools call the API router of this process with the caller's token.
 use super::{
     client::Client,
-    protocol::{self, Message, Session, VERSIONS},
+    server::{Caller, Pendenz},
 };
 use crate::{AppState, auth};
 use axum::{
@@ -11,6 +12,9 @@ use axum::{
     extract::{ConnectInfo, Request, State},
     http::{HeaderMap, HeaderValue, Method, StatusCode, header},
     response::{IntoResponse, Response},
+};
+use rmcp::transport::streamable_http_server::{
+    StreamableHttpServerConfig, StreamableHttpService, session::never::NeverSessionManager,
 };
 use serde_json::{Value, json};
 use std::{
@@ -22,6 +26,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
+use tower::ServiceExt;
 
 const BODY_LIMIT: usize = 1024 * 1024;
 const PER_MINUTE: u32 = 180;
@@ -38,6 +43,7 @@ pub struct Hosted {
     origin: String,
     attempts: Mutex<Attempts>,
     active: AtomicUsize,
+    mcp: StreamableHttpService<Pendenz, NeverSessionManager>,
 }
 
 struct Attempts {
@@ -57,11 +63,31 @@ impl Hosted {
             Some(port) => format!("{host}:{port}"),
             None => host.to_owned(),
         };
+        let origin = url.origin().ascii_serialization();
+        let port = url.port_or_known_default().unwrap_or(443);
+        // Stateless, with a JSON answer per request. rmcp checks the host and the origin as
+        // well, with the port spelled out, as its docs ask for.
+        let config = StreamableHttpServerConfig::default()
+            .with_legacy_session_mode(false)
+            .with_json_response(true)
+            .with_sse_keep_alive(None)
+            .with_allowed_hosts([host.clone()])
+            .with_allowed_origins([match url.port() {
+                Some(_) => origin.clone(),
+                None => format!("{origin}:{port}"),
+            }])
+            .with_max_request_body_bytes(BODY_LIMIT);
+        let mcp = StreamableHttpService::new(
+            || Ok(Pendenz::default()),
+            Arc::new(NeverSessionManager::default()),
+            config,
+        );
         Ok(Self {
             state,
             api,
             host,
-            origin: url.origin().ascii_serialization(),
+            origin,
+            mcp,
             attempts: Mutex::new(Attempts {
                 buckets: HashMap::new(),
                 swept: Instant::now(),
@@ -114,16 +140,6 @@ impl Drop for Active<'_> {
 
 fn reply(status: StatusCode, message: &str) -> Response {
     (status, axum::Json(json!({"error": message}))).into_response()
-}
-
-fn rpc_error(status: StatusCode, code: i64, message: &str) -> Response {
-    (
-        status,
-        axum::Json(
-            json!({"jsonrpc": "2.0", "error": {"code": code, "message": message}, "id": null}),
-        ),
-    )
-        .into_response()
 }
 
 fn unauthorized(message: &str) -> Response {
@@ -240,9 +256,7 @@ async fn serve(hosted: &Hosted, peer: SocketAddr, request: Request) -> Response 
     if !content_type.starts_with("application/json") {
         return reply(StatusCode::UNSUPPORTED_MEDIA_TYPE, "Use application/json.");
     }
-    let accept = joined(headers, "accept").unwrap_or_default();
-    let version = joined(headers, "mcp-protocol-version");
-    let body = request.into_body();
+    let (mut parts, body) = request.into_parts();
     let bytes = match tokio::time::timeout(
         Duration::from_secs(30),
         axum::body::to_bytes(body, BODY_LIMIT),
@@ -269,55 +283,20 @@ async fn serve(hosted: &Hosted, peer: SocketAddr, request: Request) -> Response 
             "Send one JSON-RPC request per call.",
         );
     }
-    // The rules of the Streamable HTTP transport, in stateless mode with JSON answers.
-    if !accept.contains("application/json") || !accept.contains("text/event-stream") {
-        return rpc_error(
-            StatusCode::NOT_ACCEPTABLE,
-            -32000,
-            "Not Acceptable: Client must accept both application/json and text/event-stream",
-        );
-    }
-    let media = content_type.split(';').next().unwrap_or("").trim();
-    if !media.eq_ignore_ascii_case("application/json") {
-        return rpc_error(
-            StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            -32000,
-            "Unsupported Media Type: Content-Type must be application/json",
-        );
-    }
-    let initialize = protocol::is_initialize(&message);
-    let Some(parsed) = protocol::parse(&message) else {
-        return rpc_error(
-            StatusCode::BAD_REQUEST,
-            -32700,
-            "Parse error: Invalid JSON-RPC message",
-        );
-    };
-    if !initialize
-        && let Some(version) = version
-        && !VERSIONS.contains(&version.as_str())
-    {
-        return rpc_error(
-            StatusCode::BAD_REQUEST,
-            -32000,
-            &format!(
-                "Bad Request: Unsupported protocol version: {version} (supported versions: {})",
-                VERSIONS.join(", ")
-            ),
-        );
-    }
-    if !matches!(parsed, Message::Request { .. }) {
-        return StatusCode::ACCEPTED.into_response();
-    }
-    let session = Session {
+    // The protocol and the rules of Streamable HTTP are rmcp's from here.
+    parts.extensions.insert(Arc::new(Caller {
         client: Client::local(hosted.api.clone(), token),
         scopes: Some(identity.scopes),
         files: false,
-    };
-    match session.handle(parsed).await {
-        Some(answer) => axum::Json(answer).into_response(),
-        None => StatusCode::ACCEPTED.into_response(),
-    }
+    }));
+    let request = Request::from_parts(parts, axum::body::Body::from(bytes));
+    let response = hosted
+        .mcp
+        .clone()
+        .oneshot(request)
+        .await
+        .unwrap_or_else(|never| match never {});
+    response.map(axum::body::Body::new)
 }
 
 fn too_large(error: &axum::Error) -> bool {

@@ -15,6 +15,38 @@ fn init_params(version: &str) -> Value {
     })
 }
 
+// The request metadata a client of protocol version 2026-07-28 sends with every request, in
+// place of the initialize handshake.
+fn meta_2026() -> Value {
+    json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": {"name": "test", "version": "1"}
+    })
+}
+
+// A request as a 2026-07-28 client sends it: no session, the method and name in headers.
+async fn post_2026(hosted: &Hosted, method: &str, name: Option<&str>, params: Value) -> Value {
+    let mut params = params;
+    params["_meta"] = meta_2026();
+    let mut request = hosted
+        .http
+        .post(&hosted.url)
+        .bearer_auth(&hosted.token)
+        .header("Accept", ACCEPT)
+        .header("MCP-Protocol-Version", "2026-07-28")
+        .header("Mcp-Method", method);
+    if let Some(name) = name {
+        request = request.header("Mcp-Name", name);
+    }
+    let response = request
+        .json(&json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}))
+        .send()
+        .await
+        .unwrap();
+    answer(response).await
+}
+
 #[tokio::test]
 async fn hosted_http_rules() {
     let server = Server::start().await;
@@ -1129,6 +1161,75 @@ async fn hosted_tools() {
         )
         .await,
     );
+    // Protocol version 2026-07-28, which the Node adapter did not speak: no handshake, and
+    // each request names its method in a header.
+    t.add(
+        "2026 discover",
+        post_2026(&bot, "server/discover", None, json!({})).await,
+    );
+    t.add(
+        "2026 tools for reader",
+        post_2026(&reader, "tools/list", None, json!({})).await["body"]["result"]["tools"]
+            .as_array()
+            .map(|tools| json!(tools.iter().map(|t| t["name"].clone()).collect::<Vec<_>>()))
+            .unwrap_or(Value::Null),
+    );
+    t.add(
+        "2026 tool call",
+        post_2026(
+            &bot,
+            "tools/call",
+            Some("get_item"),
+            json!({"name": "get_item", "arguments": {"id": "P-1", "activity": 0}}),
+        )
+        .await,
+    );
+    t.add(
+        "2026 tool error",
+        post_2026(
+            &bot,
+            "tools/call",
+            Some("get_item"),
+            json!({"name": "get_item", "arguments": {"id": "P-999"}}),
+        )
+        .await,
+    );
+    t.add(
+        "2026 hidden item",
+        post_2026(
+            &bot,
+            "tools/call",
+            Some("get_item"),
+            json!({"name": "get_item", "arguments": {"id": hidden_id}}),
+        )
+        .await,
+    );
+    t.add(
+        "2026 writer receipt",
+        post_2026(
+            &writer,
+            "tools/call",
+            Some("create_item"),
+            json!({"name": "create_item", "arguments": {"item": {"title": "New protocol"}}}),
+        )
+        .await,
+    );
+    t.add(
+        "2026 without the method header",
+        bot.http
+            .post(&bot.url)
+            .bearer_auth(&bot.token)
+            .header("Accept", ACCEPT)
+            .header("MCP-Protocol-Version", "2026-07-28")
+            .json(&json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {"_meta": meta_2026()}}))
+            .send()
+            .await
+            .unwrap()
+            .status()
+            .as_u16()
+            .into(),
+    );
+
     t.finish();
 }
 
@@ -1146,6 +1247,11 @@ async fn stdio_server() {
     );
     t.add("ping", mcp.rpc("ping", None).await);
     t.add("unknown method", mcp.rpc("foo/bar", None).await);
+    t.add(
+        "discover",
+        mcp.rpc("server/discover", Some(json!({"_meta": meta_2026()})))
+            .await,
+    );
     t.add(
         "create item",
         mcp.call("create_item", json!({"item": {"title": "Scan the letter"}}))
