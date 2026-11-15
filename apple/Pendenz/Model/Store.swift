@@ -50,6 +50,11 @@ final class Store {
     private(set) var today = Day(.now)
     // Changes that wait for the server.
     private(set) var pendingCount = 0
+    // Those of them that wait until the server is updated, with the ones that depend on them.
+    // See `ServerVersion.minimum`.
+    private(set) var heldCount = 0
+    // The version the server named in its last answer. Unknown until it answers.
+    private(set) var serverVersion: ServerVersion?
     // Counts completions, for the haptic.
     private(set) var completions = 0
     // Set when the server refused a waiting change for good. The root view shows it once.
@@ -83,6 +88,8 @@ final class Store {
     // Called when the server no longer takes this device's token.
     @ObservationIgnored var onUnauthorized: (() -> Void)?
     @ObservationIgnored private var wantsSync = false
+    // Whether this sync has already let the changes go that waited for a server update.
+    @ObservationIgnored private var hasReleased = false
     // Set when the pairing this store belongs to has ended. It then starts no request and
     // writes nothing to disk.
     @ObservationIgnored private(set) var isClosed = false
@@ -109,6 +116,8 @@ final class Store {
         notesByID = Dictionary(snapshot.notes.map { ($0.id, $0) }, uniquingKeysWith: { $1 })
         outbox = snapshot.outbox
         cursor = snapshot.cursor
+        // What the server was when it last refused a change, until it answers again.
+        serverVersion = outbox.compactMap(\.heldFor).last.flatMap(ServerVersion.init)
         // Rows without a cursor: the store asked for every row again, and what it has is shown
         // until they arrive.
         hasLoaded = snapshot.cursor > 0 || !snapshot.items.isEmpty || !snapshot.projects.isEmpty
@@ -133,6 +142,7 @@ final class Store {
             return
         }
         let task = Task {
+            hasReleased = false
             while wantsSync {
                 wantsSync = false
                 await pass()
@@ -176,9 +186,10 @@ final class Store {
     private func pull() async throws {
         var hasMore = true
         while hasMore, !isClosed {
-            let page = try await api.changes(after: cursor)
+            let (page, version) = try await api.changes(after: cursor)
             // The pairing ended while the request was on its way.
             if isClosed { return }
+            observe(version)
             if page.reset {
                 // The server came back from an older backup. Start over from its state.
                 isCurrent = false
@@ -206,6 +217,21 @@ final class Store {
             save()
         }
         if !isClosed { isCurrent = true }
+    }
+
+    // A server that is new enough now gets the changes that waited for its update, in the
+    // order they were made. They go in one more pass of this sync, since the outbox was sent
+    // before the pull. Once per sync: a server that refuses them again keeps them waiting.
+    private func observe(_ version: ServerVersion) {
+        if serverVersion != version { serverVersion = version }
+        guard version >= .minimum, !hasReleased, outbox.contains(where: { $0.heldFor != nil }) else { return }
+        for index in outbox.indices where outbox[index].heldFor != nil {
+            outbox[index].heldFor = nil
+            disk.put(outbox[index])
+        }
+        // On disk with the page, in `save`.
+        hasReleased = true
+        wantsSync = true
     }
 
     // An answer can arrive after a sync has already brought a newer state of the same row, so
@@ -278,7 +304,7 @@ final class Store {
     // reached; the changes then stay where they are.
     private func flush() async throws {
         var rebases = 0
-        while !isClosed, let entry = outbox.first {
+        while !isClosed, let entry = nextEntry() {
             let wait = entry.sendAfter.timeIntervalSinceNow
             if wait > 0 {
                 wake(after: wait)
@@ -345,9 +371,11 @@ final class Store {
                         let stored = item.images.last { $0.sha256 == hash }
                         if isUnwanted(entry) {
                             // Removed here while the server may already have had it. Now it
-                            // has an ID there, and the removal can follow.
-                            finish(entry)
-                            if let stored { enqueue(.removeImage(itemID: id, imageID: stored.id)) }
+                            // has an ID there, and the removal takes the upload's place in the
+                            // same step: before later changes to the item, since an image of a
+                            // trashed item cannot be removed, and with no moment in between
+                            // where neither is queued.
+                            finish(entry, replacingWith: stored.map { .removeImage(itemID: id, imageID: $0.id) })
                             rebases = 0
                             continue
                         }
@@ -361,6 +389,11 @@ final class Store {
                     }
                 }
                 finish(entry)
+                rebases = 0
+            } catch APIError.outdated(let version, _) {
+                // The server is older than this build needs, and most likely does not know the
+                // route or a field yet. The change waits for its update; it is not refused.
+                hold(entry, for: version)
                 rebases = 0
             } catch APIError.status(409, let message?) {
                 // The row changed elsewhere. Read it again and send the change on top of it.
@@ -399,6 +432,47 @@ final class Store {
                 if !isSilent { rejection = Self.describe(entry, reason: message) }
             }
         }
+    }
+
+    // The first waiting change that may go now. A change that waits for a server update holds
+    // back every later one that depends on it: one to the same item or note, one that files a
+    // new item or note into a project whose change waits, and any change to a project, since
+    // their names are unique across projects. The others go on.
+    private func nextEntry() -> PendingEntry? {
+        let waiting = waitingForUpdate()
+        return outbox.first { !waiting.contains($0.key) }
+    }
+
+    // The keys of the changes that wait for a server update, held back ones included.
+    private func waitingForUpdate() -> Set<String> {
+        var keys: Set<String> = []
+        var items: Set<Int> = []
+        var notes: Set<Int> = []
+        var projects: Set<String> = []
+        for entry in outbox {
+            let rows = entry.write.rows
+            let isWaiting = entry.heldFor != nil
+                || !items.isDisjoint(with: rows.items)
+                || !notes.isDisjoint(with: rows.notes)
+                || (rows.project != nil && !projects.isEmpty)
+                || rows.filedInto.map(projects.contains) == true
+            guard isWaiting else { continue }
+            keys.insert(entry.key)
+            items.formUnion(rows.items)
+            notes.formUnion(rows.notes)
+            if let project = rows.project { projects.insert(project) }
+        }
+        return keys
+    }
+
+    private func hold(_ entry: PendingEntry, for version: ServerVersion) {
+        guard let index = outbox.firstIndex(where: { $0.key == entry.key }) else { return }
+        // The same key: if the server took it after all, a retry gets the same answer.
+        outbox[index].heldFor = version.description
+        disk.put(outbox[index])
+        if !disk.commit() { reportStorageProblem() }
+        serverVersion = version
+        publish()
     }
 
     // The server refused a new project. What was queued for it must not reach another project
@@ -453,8 +527,14 @@ final class Store {
         return image.isUnwanted
     }
 
-    private func finish(_ entry: PendingEntry) {
-        outbox.removeAll { $0.key == entry.key }
+    private func finish(_ entry: PendingEntry, replacingWith next: PendingWrite? = nil) {
+        if let next, let index = outbox.firstIndex(where: { $0.key == entry.key }) {
+            let replacement = PendingEntry(key: UUID().uuidString, order: entry.order, sendAfter: .now, write: next)
+            outbox[index] = replacement
+            disk.put(replacement)
+        } else {
+            outbox.removeAll { $0.key == entry.key }
+        }
         disk.remove(key: entry.key)
         let isSaved = save()
         // The file of a waiting image goes only once its entry is gone from the disk. An entry
@@ -537,6 +617,17 @@ final class Store {
         case .addImage: "An image was not saved. \(reason)"
         case .removeImage: "An image was not removed. \(reason)"
         }
+    }
+
+    // Said at the top of the app and in Settings while the server is older than this build needs.
+    var outdatedServerNotice: String? {
+        guard let serverVersion, serverVersion < .minimum else { return nil }
+        let waiting = switch heldCount {
+        case 0: "Some changes cannot be saved until it is updated."
+        case 1: "1 change waits until it is updated."
+        default: "\(heldCount) changes wait until it is updated."
+        }
+        return "Your server runs \(serverVersion). This version of the app needs \(ServerVersion.minimum) or newer. \(waiting)"
     }
 
     // MARK: Changes made on this device
@@ -1144,6 +1235,8 @@ final class Store {
         if binnedNotes != trashedNotes { trashedNotes = binnedNotes }
         if waiting != waitingImages { waitingImages = waiting }
         if outbox.count != pendingCount { pendingCount = outbox.count }
+        let held = outbox.contains(where: { $0.heldFor != nil }) ? waitingForUpdate().count : 0
+        if held != heldCount { heldCount = held }
         feedWidgets()
         if !isClosed { SpotlightFeed.shared.changed(self) }
     }

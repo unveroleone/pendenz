@@ -29,6 +29,7 @@ struct SidebarShell: View {
         let place = navigation.place
         NavigationSplitView {
             List(selection: $navigation.place) {
+                OutdatedServerSection()
                 Section {
                     PlaceLink(place: .inbox)
                     PlaceLink(place: .reminders)
