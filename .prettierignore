@@ -6,3 +6,5 @@ docs
 *.md
 apple/
 .claude
+# Written by the agent tests with PENDENZ_RECORD_FIXTURES=1.
+server/tests/fixtures

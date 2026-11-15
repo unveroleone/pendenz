@@ -5,12 +5,11 @@
   "packageManager": "pnpm@12.11.2",
   "scripts": {
     "dev:api": "PENDENZ_AUTH_MODE=local cargo run --bin pendenz",
-    "check": "cargo clippy -- -D warnings && prettier --check .",
-    "pendenz": "node agent/cli.mjs",
-    "mcp": "node agent/mcp.mjs",
+    "check": "cargo clippy --all-targets -- -D warnings && prettier --check .",
     "format": "prettier --write . && cargo fmt",
     "check:swift": "swiftformat --lint .",
-    "format:swift": "swiftformat ."
+    "format:swift": "swiftformat .",
+    "test": "cargo test"
   },
   "devDependencies": {
     "prettier": "^3.10.0"

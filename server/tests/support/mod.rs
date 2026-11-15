@@ -6,9 +6,9 @@
 // replaced, and is compared with `server/tests/fixtures/<name>.json`.
 // PENDENZ_RECORD_FIXTURES=1 writes the fixtures instead of comparing them.
 //
-// PENDENZ_AGENT=node runs the same tests against the Node adapters that the Rust ones replaced
-// (agent/ in the commit before the port), which is how the fixtures were recorded. That server
-// insists on an API at 127.0.0.1:8080, so those tests take turns.
+// The fixtures were first recorded from the Node adapters that these tools replaced (agent/ at
+// commit a28d0da, run with PENDENZ_AGENT=node). Record them again only for a change in what an
+// agent should see, and read the diff of the fixtures before committing it.
 #![allow(dead_code)]
 
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -26,36 +26,6 @@ use tokio::{
 
 pub const BIN: &str = env!("CARGO_BIN_EXE_pendenz");
 pub const ACCEPT: &str = "application/json, text/event-stream";
-
-pub fn node() -> bool {
-    std::env::var("PENDENZ_AGENT").is_ok_and(|v| v == "node")
-}
-
-fn repo() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .to_owned()
-}
-
-// The command of an agent tool: the Rust binary, or the Node script it replaced.
-fn agent_command(rust_args: &[&str], node_script: &str) -> (String, Vec<String>) {
-    if node() {
-        let script = repo().join("agent").join(node_script);
-        let mut args = vec![script.display().to_string()];
-        if node_script == "cli.mjs" {
-            args.extend(rust_args.iter().map(|a| a.to_string()));
-        }
-        ("node".into(), args)
-    } else {
-        (
-            BIN.into(),
-            rust_args.iter().map(|a| a.to_string()).collect(),
-        )
-    }
-}
-
-static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 // A 1x1 PNG.
 pub const PNG: [u8; 67] = [
@@ -86,8 +56,6 @@ pub fn scratch_dir() -> PathBuf {
 
 pub struct Server {
     api: Child,
-    mcp: Option<(Child, u16)>,
-    _turn: Option<tokio::sync::MutexGuard<'static, ()>>,
     pub dir: PathBuf,
     pub port: u16,
     db: String,
@@ -96,13 +64,8 @@ pub struct Server {
 
 impl Server {
     pub async fn start() -> Self {
-        let turn = if node() {
-            Some(SERIAL.lock().await)
-        } else {
-            None
-        };
         let dir = scratch_dir();
-        let port = if node() { 8080 } else { free_port() };
+        let port = free_port();
         let db = format!("sqlite://{}/pendenz.db", dir.display());
         let api = Command::new(BIN)
             .env("DATABASE_URL", &db)
@@ -115,32 +78,14 @@ impl Server {
             .stderr(Stdio::null())
             .spawn()
             .unwrap();
-        let mcp = node().then(|| {
-            let mcp_port = free_port();
-            let child = Command::new("node")
-                .arg(repo().join("agent/http.mjs"))
-                .env("PORT", mcp_port.to_string())
-                .env("PENDENZ_ORIGIN", format!("http://127.0.0.1:{mcp_port}"))
-                .env("PENDENZ_INTERNAL_API_URL", "http://127.0.0.1:8080")
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-                .unwrap();
-            (child, mcp_port)
-        });
         let mut server = Self {
             api,
-            mcp,
-            _turn: turn,
             dir,
             port,
             db,
             owner: String::new(),
         };
         wait_for(&format!("{}/healthz", server.url())).await;
-        if let Some((_, mcp_port)) = &server.mcp {
-            wait_for(&format!("http://127.0.0.1:{mcp_port}/healthz")).await;
-        }
         server.owner = server.token("owner", "read,write,propose,approve");
         server
     }
@@ -149,12 +94,9 @@ impl Server {
         format!("http://127.0.0.1:{}", self.port)
     }
 
-    // Where the hosted MCP endpoint is: on the API itself, or the Node server next to it.
+    // The hosted MCP endpoint is on the API itself.
     pub fn mcp_origin(&self) -> String {
-        match &self.mcp {
-            Some((_, port)) => format!("http://127.0.0.1:{port}"),
-            None => self.url(),
-        }
+        self.url()
     }
 
     pub fn mcp_url(&self) -> String {
@@ -239,10 +181,6 @@ impl Server {
 
 impl Drop for Server {
     fn drop(&mut self) {
-        if let Some((child, _)) = &mut self.mcp {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
         let _ = self.api.kill();
         let _ = self.api.wait();
         let _ = std::fs::remove_dir_all(&self.dir);
@@ -278,8 +216,7 @@ impl Run {
 }
 
 pub fn run_cli(api: &str, token: &str, args: &[&str], env: &[(&str, &str)]) -> Run {
-    let (program, args) = agent_command(args, "cli.mjs");
-    let mut command = Command::new(program);
+    let mut command = Command::new(BIN);
     command
         .args(args)
         .env("PENDENZ_API_URL", api)
@@ -422,10 +359,9 @@ pub struct StdioMcp {
 
 impl StdioMcp {
     pub fn start(api: &str, token: Option<&str>, env: &[(&str, &str)]) -> Self {
-        let (program, args) = agent_command(&["mcp"], "mcp.mjs");
-        let mut command = AsyncCommand::new(program);
+        let mut command = AsyncCommand::new(BIN);
         command
-            .args(args)
+            .arg("mcp")
             .env("PENDENZ_API_URL", api)
             .env_remove("PENDENZ_SOURCE")
             .env_remove("DATABASE_URL")
@@ -678,11 +614,16 @@ impl Transcript {
             .unwrap_or_else(|_| panic!("missing fixture {}", path.display()));
         let expected: Vec<Value> = serde_json::from_str(&text).unwrap();
         for (i, (got, want)) in self.entries.iter().zip(&expected).enumerate() {
-            assert_eq!(
-                got, want,
-                "{}: step {i} ({}) differs from the fixture",
-                self.name, want["step"]
-            );
+            if got != want {
+                let mut found = Vec::new();
+                differences(got, want, String::new(), &mut found);
+                panic!(
+                    "{}: step {i} ({}) differs from the fixture:\n{}",
+                    self.name,
+                    want["step"],
+                    found.join("\n")
+                );
+            }
         }
         assert_eq!(
             self.entries.len(),
@@ -690,5 +631,26 @@ impl Transcript {
             "{}: the number of steps differs from the fixture",
             self.name
         );
+    }
+}
+
+// Where two values differ, as JSON paths with both sides.
+fn differences(got: &Value, want: &Value, path: String, found: &mut Vec<String>) {
+    match (got, want) {
+        (Value::Object(a), Value::Object(b)) => {
+            for key in a.keys().chain(b.keys().filter(|k| !a.contains_key(*k))) {
+                match (a.get(key), b.get(key)) {
+                    (Some(x), Some(y)) => differences(x, y, format!("{path}.{key}"), found),
+                    (x, y) => found.push(format!("{path}.{key}: got {x:?}, fixture {y:?}")),
+                }
+            }
+        }
+        (Value::Array(a), Value::Array(b)) if a.len() == b.len() => {
+            for (i, (x, y)) in a.iter().zip(b).enumerate() {
+                differences(x, y, format!("{path}[{i}]"), found);
+            }
+        }
+        _ if got != want => found.push(format!("{path}: got {got}, fixture {want}")),
+        _ => {}
     }
 }

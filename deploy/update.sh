@@ -1,14 +1,14 @@
 #!/bin/sh
 # Move the running Pendenz to the images of one commit. Run it on the host, from anywhere:
 #   /srv/pendenz/update.sh <full commit sha>
-# It pulls both images, backs up, switches .env to the new digests and restarts. If the new
+# It pulls the image, backs up, switches .env to the new digest and restarts. If the new
 # containers do not become healthy it puts the previous images back. The database is never
 # restored automatically, and an older image does not start on a database that a newer one has
 # migrated: then the way back is the backup taken before the update.
 #
 # Settings, from the environment or from .env next to this script:
 #   PENDENZ_HOME          the folder with compose.yaml and .env (default: this script's folder)
-#   PENDENZ_IMAGE_PREFIX  the images without -api or -mcp (default: ghcr.io/unveroleone/pendenz)
+#   PENDENZ_IMAGE_PREFIX  the image name without -api (default: ghcr.io/unveroleone/pendenz)
 #   PENDENZ_SOURCE_URL    the repo the images must have been built from
 #                         (default: https://github.com/unveroleone/pendenz)
 # A fork that publishes its own images sets the last two.
@@ -34,7 +34,7 @@ source_url=${source_url:-https://github.com/unveroleone/pendenz}
 # docker compose reads COMPOSE_FILE from .env by itself, so a tunnel or an override stays on.
 compose() { docker compose --project-directory "$live" "$@"; }
 
-for service in api mcp; do
+for service in api; do
     image="$prefix-$service:$revision"
     docker pull --quiet "$image" >/dev/null
     label() { docker image inspect --format "{{ index .Config.Labels \"$1\" }}" "$image"; }
@@ -57,10 +57,11 @@ set_image() {
     sed "s|^$1=.*|$1=$2|" .env >.env.next && mv .env.next .env
 }
 set_image PENDENZ_API_IMAGE "$api_image"
-set_image PENDENZ_MCP_IMAGE "$mcp_image"
 
+# --remove-orphans takes away a container of a service that compose.yaml no longer has, such as
+# the separate MCP container of versions before the MCP endpoint moved into the API.
 healthy() {
-    compose up -d --wait --wait-timeout 120 &&
+    compose up -d --remove-orphans --wait --wait-timeout 120 &&
         compose exec -T api curl -fsS -o /dev/null http://127.0.0.1:8080/readyz &&
         [ "$(compose exec -T api curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/items)" = 401 ]
 }
