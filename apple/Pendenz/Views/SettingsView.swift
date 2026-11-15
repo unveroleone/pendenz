@@ -56,6 +56,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            versionSection
         }
         .formStyle(.grouped)
         // The app tint is black or white, which hides a control that is on.
@@ -96,6 +97,29 @@ struct SettingsView: View {
         let waiting = session.store?.pendingCount ?? 0
         let lost = waiting == 0 ? "" : " \(waiting) changes that were not sent yet are lost."
         return "You need a new pairing code to use Pendenz on this device again." + lost
+    }
+
+    // The app's version and build, and the version the server named in its last answer.
+    private var versionSection: some View {
+        Section {
+            LabeledContent("App", value: Self.appVersion)
+            if session.connection != nil {
+                LabeledContent("Server", value: session.store?.serverVersion?.description ?? "Not known yet")
+            }
+        } header: {
+            Text("Version")
+        } footer: {
+            if let notice = session.store?.outdatedServerNotice {
+                Label(notice, systemImage: "exclamationmark.triangle")
+            }
+        }
+    }
+
+    private static var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        guard let build = info?["CFBundleVersion"] as? String else { return version }
+        return "\(version) (\(build))"
     }
 
     private var devicesSection: some View {
