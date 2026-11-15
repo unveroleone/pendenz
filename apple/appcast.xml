@@ -1,0 +1,20 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Pendenz</title>
+        <item>
+            <title>0.1.0</title>
+            <pubDate>Sun, 15 Nov 2026 17:09:49 +0100</pubDate>
+            <sparkle:version>16</sparkle:version>
+            <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>27.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[The first Mac release of Pendenz as a download.
+
+Open the DMG and drag Pendenz into Applications. The app is signed with Developer ID and notarized by Apple, so it opens without a warning. It needs macOS 27 and a Pendenz server to pair with; see the [quickstart](https://github.com/unveroleone/pendenz#get-started) to run one.
+
+From now on the app updates itself. On its second launch it asks whether it may check for new versions on its own, which it then does once a day. **Pendenz > Check for Updates…** checks right away.
+]]></description>
+            <enclosure url="https://github.com/unveroleone/pendenz/releases/download/mac-v0.1.0/Pendenz-0.1.0.dmg" length="3684905" type="application/octet-stream" sparkle:edSignature="6FrXSiu/UTXHCCkmk8TFATs5YOCcfgBR/Vmf6m1iiF2uQAJXp7dMapkJav6zsd7uOH+/HneefBnBz6+S1CUMAQ=="/>
+        </item>
+    </channel>
+</rss>
