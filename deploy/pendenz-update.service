@@ -1,0 +1,12 @@
+[Unit]
+Description=Pendenz update to the newest release
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+OnFailure=pendenz-alert@%n.service
+
+[Service]
+Type=oneshot
+# update.sh does nothing when the newest release already runs.
+WorkingDirectory=/srv/pendenz
+ExecStart=/srv/pendenz/update.sh latest

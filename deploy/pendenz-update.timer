@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly Pendenz update to the newest release
+
+[Timer]
+# After the nightly backup at 03:20 UTC.
+OnCalendar=*-*-* 04:00:00 UTC
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

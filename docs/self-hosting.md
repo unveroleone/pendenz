@@ -173,6 +173,21 @@ If the new containers do not become healthy, it puts the previous `.env` back an
 
 Changes to `compose.yaml` or `update.sh` reach the host only when you copy the files again. The commit history of `deploy/` says when that is needed.
 
+When the image of the version you name already runs, the script stops before the backup and changes nothing.
+
+### Automatic updates
+
+To move to each new release by itself, copy `deploy/pendenz-update.service` and `deploy/pendenz-update.timer` to `/etc/systemd/system`, then:
+
+```sh
+systemctl daemon-reload
+systemctl enable --now pendenz-update.timer
+```
+
+It runs `update.sh latest` at 04:00 UTC with up to 30 minutes of delay, after the nightly backup. `latest` names full releases only, so a pre-release is never installed this way. A failed update starts `pendenz-alert@.service` like a failed backup does (see "Alert when a backup fails"), and `journalctl -u pendenz-update.service` shows what happened.
+
+Two things it does not do. It applies a new version's migrations without asking, and the way back past one is the backup taken right before (see "A real restore"). And it does not copy a changed `compose.yaml` or `update.sh` to the host: the release notes say when that is needed.
+
 ### From two containers to one
 
 Before the MCP endpoint moved into the API, it ran in a container of its own, `mcp`, on port 8090. To update a server from that time:

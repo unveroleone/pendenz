@@ -4,7 +4,8 @@
 #   /srv/pendenz/update.sh 1.2.0              a release (v1.2.0 works too)
 #   /srv/pendenz/update.sh latest             the newest release
 #   /srv/pendenz/update.sh <full commit sha>  any commit on main
-# It pulls the image, backs up, switches .env to the new digest and restarts. If the new
+# It pulls the image, backs up, switches .env to the new digest and restarts. When that image
+# already runs it does nothing, so a timer can call it every night (pendenz-update.timer). If the new
 # containers do not become healthy it puts the previous images back. The database is never
 # restored automatically, and an older image does not start on a database that a newer one has
 # migrated: then the way back is the backup taken before the update.
@@ -64,6 +65,12 @@ for service in api; do
     pinned=$(docker image inspect --format '{{ index .RepoDigests 0 }}' "$image")
     eval "${service}_image=\$pinned"
 done
+
+# The image that runs already: no backup and no restart.
+if [ "$(setting PENDENZ_API_IMAGE)" = "$api_image" ] && compose ps --status running --services | grep -qx api; then
+    echo "Pendenz already runs this image, $revision."
+    exit 0
+fi
 
 # A first installation has no database yet, so there is nothing to back up.
 if [ -f data/pendenz.db ]; then
