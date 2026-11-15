@@ -3,6 +3,19 @@
     <channel>
         <title>Pendenz</title>
         <item>
+            <title>0.2.0</title>
+            <pubDate>Sun, 15 Nov 2026 17:33:28 +0100</pubDate>
+            <sparkle:version>19</sparkle:version>
+            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>27.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[Download `Pendenz-0.2.0.dmg` below, open it and drag Pendenz into Applications. It needs macOS 27. A copy you already have updates itself.
+
+- A change that your server does not know yet is no longer lost. It waits on the Mac until the server is updated and then goes out in its old order. A line above the list says how many changes wait and which server version they need.
+- Settings has a Version section with the app's version and build and the version of your server.
+]]></description>
+            <enclosure url="https://github.com/unveroleone/pendenz/releases/download/v0.2.0/Pendenz-0.2.0.dmg" length="3698712" type="application/octet-stream" sparkle:edSignature="FXWPMBnte2+aehK0We94m+bZm9PcVn3ZD76exiFsSHc1M0GIKktHaim9bltdcBYyuS+CpZYkvwlLdRxMVJhODA=="/>
+        </item>
+        <item>
             <title>0.1.0</title>
             <pubDate>Sun, 15 Nov 2026 17:09:49 +0100</pubDate>
             <sparkle:version>16</sparkle:version>
