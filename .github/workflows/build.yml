@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # The Mac release script commits the update feed alone. Path filters do not apply to tags.
+    paths-ignore: ['apple/appcast.xml']
   pull_request:
   workflow_dispatch:
 
