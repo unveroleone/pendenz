@@ -169,10 +169,11 @@ Changes to `compose.yaml` or `update.sh` reach the host only when you copy the f
 
 Before the MCP endpoint moved into the API, it ran in a container of its own, `mcp`, on port 8090. To update a server from that time:
 
-1. Copy the new `compose.yaml`, `update.sh` and, if you use it, `compose.tunnel.yaml`. Take `mcp` out of a `compose.override.yaml`.
-2. Run `update.sh` with the new commit. It removes the `mcp` container.
-3. Route `/mcp` to the API: drop the `/mcp` rule from the reverse proxy or the tunnel, so the whole hostname goes to `127.0.0.1:8080` or `http://api:8080`.
-4. Delete `PENDENZ_MCP_IMAGE` and `PENDENZ_MCP_PORT` from `.env`. They do nothing anymore.
+1. Keep the old `compose.yaml`, `update.sh` and any `compose.tunnel.yaml` or `compose.override.yaml` in a folder of their own, such as `/srv/pendenz/before-one-container/`.
+2. Copy the new `compose.yaml`, `update.sh` and, if you use it, `compose.tunnel.yaml`. Take `mcp` out of a `compose.override.yaml`.
+3. Run `update.sh` with the new commit. It removes the `mcp` container. If it reports that the new container is not healthy, its rollback starts the previous API image with the new compose files, which have no `mcp` service: copy the old files back and run `docker compose up -d` to get both containers again.
+4. Route `/mcp` to the API: drop the `/mcp` rule from the reverse proxy or the tunnel, so the whole hostname goes to `127.0.0.1:8080` or `http://api:8080`.
+5. Delete `PENDENZ_MCP_IMAGE` and `PENDENZ_MCP_PORT` from `.env`. They do nothing anymore.
 
 MCP clients keep their address, `https://<hostname>/mcp`, and their tokens.
 
