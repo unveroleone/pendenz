@@ -34,10 +34,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/reminders.png" width="200" alt="Reminders: overdue, today, tomorrow and later items, each with its date, repeat and project">
-  <img src="docs/screenshots/tasks.png" width="200" alt="Tasks: the inbox and the projects Home, Travel and Work">
-  <img src="docs/screenshots/detail.png" width="200" alt="An item with its description and a checklist of steps">
-  <img src="docs/screenshots/notes.png" width="200" alt="Notes, one of them locked">
+  <img src="docs/screenshots/app.png" width="860" alt="Four iPhone screens: Reminders with overdue, today, tomorrow and later items; Tasks with the inbox and the projects Home, Travel and Work; an item with its description and a checklist of steps; and Notes, one of them locked">
 </p>
 
 ---
