@@ -1,0 +1,46 @@
+# Pendenz in one file: the server and Caddy, which gets an HTTPS certificate for your hostname
+# by itself. Needs a hostname whose DNS points at this host, with ports 80 and 443 open.
+#
+#   echo "PENDENZ_HOST=pendenz.example.com" > .env
+#   docker compose up -d
+#   docker compose exec api pendenz pairing-code
+#
+# A new version migrates the database when it starts, and an older one does not start on it
+# again. Copy the database before an update:
+#
+#   docker compose exec api sqlite3 /data/pendenz.db ".backup /data/before-update.db"
+#   docker compose pull && docker compose up -d
+#
+# docs/self-hosting.md has the full setup: nightly backups, a pinned image digest with rollback,
+# and a Cloudflare Tunnel for a host without open ports.
+name: pendenz
+services:
+  api:
+    image: ghcr.io/unveroleone/pendenz-api:${PENDENZ_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      PENDENZ_ORIGIN: https://${PENDENZ_HOST:?Set PENDENZ_HOST in .env to the server's hostname}
+      PENDENZ_TIMEZONE: ${PENDENZ_TIMEZONE:-Europe/Zurich}
+    volumes:
+      - data:/data
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8080/readyz]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    command: caddy reverse-proxy --from ${PENDENZ_HOST} --to api:8080
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    volumes:
+      - caddy:/data
+    depends_on: [api]
+volumes:
+  data:
+  caddy:
