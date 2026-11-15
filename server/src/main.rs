@@ -464,7 +464,10 @@ async fn main() -> anyhow::Result<()> {
         // Added after the layer above: a device that pairs has no token yet.
         .route("/pair", post(devices::pair));
     // What clients call this server, for the hosted MCP endpoint's host check.
-    let origin = std::env::var("PENDENZ_ORIGIN").unwrap_or_else(|_| format!("http://{bind}"));
+    let origin = std::env::var("PENDENZ_ORIGIN")
+        .ok()
+        .filter(|origin| !origin.is_empty())
+        .unwrap_or_else(|| format!("http://{bind}"));
     let hosted = Arc::new(agent::hosted::Hosted::new(
         state.clone(),
         Router::new()

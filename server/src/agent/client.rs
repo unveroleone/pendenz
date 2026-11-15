@@ -106,8 +106,16 @@ impl Client {
         };
         let method = call.method.clone().unwrap_or(Method::GET);
         let mut body = call.body;
+        // Sent as JavaScript sent it, so a retry of a call made by the first version of these
+        // tools has the same fingerprint, and 1.0 reaches a whole-number field as 1.
+        if let Some(body) = body.as_mut() {
+            js_numbers(body);
+        }
+        // HTTP drops the white space around a header value, and an empty key meant none.
         let key = body.as_ref().map(|_| {
             call.key
+                .map(|key| key.trim_matches([' ', '\t']))
+                .filter(|key| !key.is_empty())
                 .map(str::to_owned)
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
         });
@@ -244,7 +252,7 @@ impl Client {
 }
 
 // JavaScript has one kind of number, so the first version of these tools wrote a position of
-// 5.0 as 5. Whole numbers are written without the fraction here too.
+// 5.0 as 5, in what it sent and in what it showed. Whole numbers go without the fraction here too.
 fn js_numbers(value: &mut Value) {
     match value {
         Value::Number(n) if n.is_f64() => {

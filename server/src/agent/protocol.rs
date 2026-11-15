@@ -46,9 +46,8 @@ pub fn parse(message: &Value) -> Option<Message> {
                 method: method.clone(),
                 params: params.cloned(),
             }),
-            // An id that is neither a string nor a whole number makes it a notification, as
-            // it did for the SDK that served these tools first.
-            (Some(_), None) => Some(Message::Other),
+            // An id that is there but neither a string nor a whole number is not valid.
+            (Some(_), None) => None,
         },
         Some(_) => None,
         None => {

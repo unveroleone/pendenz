@@ -138,6 +138,17 @@ fn text(headers: &HeaderMap, name: header::HeaderName) -> Option<&str> {
     headers.get(name).and_then(|v| v.to_str().ok())
 }
 
+// A header that may come more than once, its values joined as Node's HTTP server joined them.
+// Bytes that are not text still count, so they cannot make a header look absent.
+fn joined(headers: &HeaderMap, name: &str) -> Option<String> {
+    let values: Vec<String> = headers
+        .get_all(name)
+        .iter()
+        .map(|v| String::from_utf8_lossy(v.as_bytes()).into_owned())
+        .collect();
+    (!values.is_empty()).then(|| values.join(", "))
+}
+
 // The token of an Authorization header that has the form of a Pendenz token.
 fn bearer(headers: &HeaderMap) -> Option<&str> {
     let token = text(headers, header::AUTHORIZATION)?.strip_prefix("Bearer ")?;
@@ -165,9 +176,17 @@ pub async fn handle(
 }
 
 async fn serve(hosted: &Hosted, peer: SocketAddr, request: Request) -> Response {
+    // The endpoint is /mcp exactly, without a query.
+    if request.uri().query().is_some() {
+        return reply(StatusCode::NOT_FOUND, "Not found.");
+    }
     let headers = request.headers();
-    let origin_ok = text(headers, header::ORIGIN).is_none_or(|o| o == hosted.origin);
-    if text(headers, header::HOST) != Some(hosted.host.as_str()) || !origin_ok {
+    // An empty Origin counts as none, as it did before.
+    let origin_ok = joined(headers, "origin").is_none_or(|o| o.is_empty() || o == hosted.origin);
+    let host = headers
+        .get(header::HOST)
+        .map(|v| String::from_utf8_lossy(v.as_bytes()).into_owned());
+    if host.as_deref() != Some(hosted.host.as_str()) || !origin_ok {
         return reply(StatusCode::FORBIDDEN, "Unrecognized host or origin.");
     }
     if request.method() != Method::POST {
@@ -186,8 +205,16 @@ async fn serve(hosted: &Hosted, peer: SocketAddr, request: Request) -> Response 
         .filter(|v| !v.is_empty())
         .map(str::to_owned)
         .unwrap_or_else(|| peer.ip().to_string());
-    let admitted = hosted.admit(ip);
-    if !admitted || hosted.active.load(Ordering::SeqCst) >= AT_ONCE {
+    // The place among the requests served at once is taken here, in one step, so two requests
+    // cannot both take the last one. A request that fails below gives it back.
+    let admitted = hosted.admit(ip)
+        && hosted
+            .active
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
+                (n < AT_ONCE).then_some(n + 1)
+            })
+            .is_ok();
+    if !admitted {
         let mut response = reply(
             StatusCode::TOO_MANY_REQUESTS,
             "Too many requests. Retry shortly.",
@@ -197,24 +224,24 @@ async fn serve(hosted: &Hosted, peer: SocketAddr, request: Request) -> Response 
             .insert(header::RETRY_AFTER, HeaderValue::from_static("60"));
         return response;
     }
+    let _active = Active(&hosted.active);
     let Some(token) = bearer(headers).map(str::to_owned) else {
         return unauthorized("Send a valid Pendenz bearer token.");
     };
-    hosted.active.fetch_add(1, Ordering::SeqCst);
-    let _active = Active(&hosted.active);
-    let identity = match auth::lookup(&hosted.state, &token).await {
-        Ok(identity) => identity,
-        Err(error) if error.0 == StatusCode::UNAUTHORIZED => {
+    let lookup = tokio::time::timeout(Duration::from_secs(5), auth::lookup(&hosted.state, &token));
+    let identity = match lookup.await {
+        Ok(Ok(identity)) => identity,
+        Ok(Err(error)) if error.0 == StatusCode::UNAUTHORIZED => {
             return unauthorized("This token is invalid, expired or revoked.");
         }
-        Err(_) => return reply(StatusCode::SERVICE_UNAVAILABLE, "The API is unavailable."),
+        _ => return reply(StatusCode::SERVICE_UNAVAILABLE, "The API is unavailable."),
     };
     let content_type = text(headers, header::CONTENT_TYPE).unwrap_or("").to_owned();
     if !content_type.starts_with("application/json") {
         return reply(StatusCode::UNSUPPORTED_MEDIA_TYPE, "Use application/json.");
     }
-    let accept = text(headers, header::ACCEPT).unwrap_or("").to_owned();
-    let version = text(headers, "mcp-protocol-version".parse().unwrap()).map(str::to_owned);
+    let accept = joined(headers, "accept").unwrap_or_default();
+    let version = joined(headers, "mcp-protocol-version");
     let body = request.into_body();
     let bytes = match tokio::time::timeout(
         Duration::from_secs(30),

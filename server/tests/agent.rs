@@ -321,6 +321,87 @@ async fn hosted_http_rules() {
         )
         .await,
     );
+    // Edges found in review: each answer here was recorded from the Node endpoint.
+    t.add(
+        "query string",
+        answer(
+            http.post(format!("{url}?x=1"))
+                .bearer_auth(&token)
+                .header("Content-Type", "application/json")
+                .header("Accept", ACCEPT)
+                .body(list.to_string())
+                .send()
+                .await
+                .unwrap(),
+        )
+        .await,
+    );
+    t.add(
+        "empty origin",
+        answer(
+            post(
+                vec![auth(), json_type(), accept(), ("Origin", String::new())],
+                list.to_string(),
+            )
+            .await
+            .unwrap(),
+        )
+        .await,
+    );
+    t.add(
+        "origin twice",
+        answer(
+            post(
+                vec![
+                    auth(),
+                    json_type(),
+                    accept(),
+                    ("Origin", origin.clone()),
+                    ("Origin", "https://evil.example".into()),
+                ],
+                list.to_string(),
+            )
+            .await
+            .unwrap(),
+        )
+        .await,
+    );
+    t.add(
+        "accept split over two headers",
+        answer(
+            post(
+                vec![
+                    auth(),
+                    json_type(),
+                    ("Accept", "application/json".into()),
+                    ("Accept", "text/event-stream".into()),
+                ],
+                json!({"jsonrpc": "2.0", "id": 3, "method": "ping"}).to_string(),
+            )
+            .await
+            .unwrap(),
+        )
+        .await,
+    );
+    for (label, id) in [
+        ("id true", json!(true)),
+        ("id null", Value::Null),
+        ("id fraction", json!(1.5)),
+        ("id object", json!({})),
+    ] {
+        t.add(
+            label,
+            answer(
+                post(
+                    vec![auth(), json_type(), accept()],
+                    json!({"jsonrpc": "2.0", "id": id, "method": "ping"}).to_string(),
+                )
+                .await
+                .unwrap(),
+            )
+            .await,
+        );
+    }
     t.finish();
 }
 
@@ -1005,6 +1086,49 @@ async fn hosted_tools() {
             .call("get_item", json!({"id": 1, "activity": 3}))
             .await,
     );
+
+    // Keys and numbers as the Node adapter sent them: white space around a key does not make
+    // it another key, and 1.0 is the number 1.
+    t.add(
+        "padded key",
+        bot.call(
+            "create_item",
+            json!({"item": {"title": "Padded"}, "key": " pk "}),
+        )
+        .await,
+    );
+    t.add(
+        "the same key without padding",
+        bot.call(
+            "create_item",
+            json!({"item": {"title": "Padded"}, "key": "pk"}),
+        )
+        .await,
+    );
+    t.add(
+        "whole numbers written with a fraction",
+        bot.call(
+            "create_item",
+            json!({"item": {"title": "Floats", "priority": 1.0, "position": 2.0}, "key": "f1"}),
+        )
+        .await,
+    );
+    t.add(
+        "the same call with plain numbers",
+        bot.call(
+            "create_item",
+            json!({"item": {"title": "Floats", "priority": 1, "position": 2}, "key": "f1"}),
+        )
+        .await,
+    );
+    t.add(
+        "version written with a fraction",
+        bot.call(
+            "update_item",
+            json!({"id": 8, "version": 1.0, "changes": {"status": "doing"}}),
+        )
+        .await,
+    );
     t.finish();
 }
 
@@ -1413,6 +1537,15 @@ async fn cli() {
     t.add(
         "no token",
         run_cli(&server.url(), "", &["workspace"], &[]).record(),
+    );
+    t.add(
+        "empty key",
+        server
+            .cli(
+                &token,
+                &["create", "--json", r#"{"title":"Empty key"}"#, "--key", ""],
+            )
+            .record(),
     );
     t.add(
         "created_via from the environment",

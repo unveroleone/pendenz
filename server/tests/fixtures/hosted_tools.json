@@ -4048,5 +4048,90 @@
       ]
     },
     "step": "reader reads"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 7,
+            "ref": "P-7",
+            "status": "todo",
+            "title": "Padded",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "padded key"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 7,
+            "ref": "P-7",
+            "status": "todo",
+            "title": "Padded",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "the same key without padding"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 8,
+            "position": 2,
+            "priority": 1,
+            "ref": "P-8",
+            "status": "todo",
+            "title": "Floats",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "whole numbers written with a fraction"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 8,
+            "position": 2,
+            "priority": 1,
+            "ref": "P-8",
+            "status": "todo",
+            "title": "Floats",
+            "version": 1
+          }
+        }
+      ]
+    },
+    "step": "the same call with plain numbers"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "id": 8,
+            "priority": 1,
+            "ref": "P-8",
+            "status": "doing",
+            "title": "Floats",
+            "version": 2
+          }
+        }
+      ]
+    },
+    "step": "version written with a fraction"
   }
 ]
