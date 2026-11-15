@@ -85,6 +85,12 @@ struct AppCommands: Commands {
     }
 
     var body: some Commands {
+        #if SPARKLE
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") { Updater.shared.check() }
+                .disabled(!Updater.shared.canCheck)
+        }
+        #endif
         CommandGroup(after: .newItem) {
             Button("New Item") { isAddingItem = true }
                 .keyboardShortcut("t")

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A10000000000000000000081 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = A10000000000000000000080 /* Sparkle */; };
 		A1000000000000000000002A /* PendenzWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000D /* PendenzWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -73,6 +74,7 @@
 		A10000000000000000000021 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				A10000000000000000000081 /* Sparkle in Frameworks */,
 			);
 		};
 		A10000000000000000000024 /* Frameworks */ = {
@@ -141,6 +143,7 @@
 			);
 			name = Pendenz;
 			packageProductDependencies = (
+				A10000000000000000000080 /* Sparkle */,
 			);
 			productName = Pendenz;
 			productReference = A1000000000000000000000A /* Pendenz.app */;
@@ -223,6 +226,9 @@
 			);
 			mainGroup = A10000000000000000000030;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A10000000000000000000082 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 100;
 			productRefGroup = A10000000000000000000031 /* Products */;
 			projectDirPath = "";
@@ -305,6 +311,7 @@
 				"PENDENZ_APP_GROUP[sdk=macosx*]" = "$(DEVELOPMENT_TEAM).$(PENDENZ_BUNDLE_ID)";
 				PENDENZ_BUNDLE_ID = ch.roadtofinal.pendenz;
 				PENDENZ_MAC_IDENTITY_adhoc = "-";
+				PENDENZ_MAC_IDENTITY_developerid = "Apple Development";
 				PENDENZ_MAC_IDENTITY_team = "Apple Development";
 				PENDENZ_MAC_SIGNING = adhoc;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -330,6 +337,7 @@
 				"PENDENZ_APP_GROUP[sdk=macosx*]" = "$(DEVELOPMENT_TEAM).$(PENDENZ_BUNDLE_ID)";
 				PENDENZ_BUNDLE_ID = ch.roadtofinal.pendenz;
 				PENDENZ_MAC_IDENTITY_adhoc = "-";
+				PENDENZ_MAC_IDENTITY_developerid = "Apple Development";
 				PENDENZ_MAC_IDENTITY_team = "Apple Development";
 				PENDENZ_MAC_SIGNING = adhoc;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -369,13 +377,18 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 0.1.0;
+				PENDENZ_MAC_CONDITIONS_developerid = SPARKLE;
+				PENDENZ_MAC_ENTITLEMENTS_developerid = Config/PendenzMacDeveloperID.entitlements;
 				PENDENZ_MAC_ENTITLEMENTS_team = Config/PendenzMac.entitlements;
+				PENDENZ_MAC_NO_LIBRARY_VALIDATION_adhoc = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PENDENZ_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				"RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION[sdk=macosx*]" = "$(PENDENZ_MAC_NO_LIBRARY_VALIDATION_$(PENDENZ_MAC_SIGNING))";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = "$(inherited) $(PENDENZ_MAC_CONDITIONS_$(PENDENZ_MAC_SIGNING))";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -416,13 +429,18 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 0.1.0;
+				PENDENZ_MAC_CONDITIONS_developerid = SPARKLE;
+				PENDENZ_MAC_ENTITLEMENTS_developerid = Config/PendenzMacDeveloperID.entitlements;
 				PENDENZ_MAC_ENTITLEMENTS_team = Config/PendenzMac.entitlements;
+				PENDENZ_MAC_NO_LIBRARY_VALIDATION_adhoc = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PENDENZ_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				"RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION[sdk=macosx*]" = "$(PENDENZ_MAC_NO_LIBRARY_VALIDATION_$(PENDENZ_MAC_SIGNING))";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = "$(inherited) $(PENDENZ_MAC_CONDITIONS_$(PENDENZ_MAC_SIGNING))";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -487,6 +505,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks @executable_path/../../../../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 0.1.0;
+				PENDENZ_MAC_ENTITLEMENTS_developerid = Config/PendenzWidgetsMac.entitlements;
 				PENDENZ_MAC_ENTITLEMENTS_team = Config/PendenzWidgetsMac.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PENDENZ_BUNDLE_ID).widgets";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -520,6 +539,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks @executable_path/../../../../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 0.1.0;
+				PENDENZ_MAC_ENTITLEMENTS_developerid = Config/PendenzWidgetsMac.entitlements;
 				PENDENZ_MAC_ENTITLEMENTS_team = Config/PendenzWidgetsMac.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PENDENZ_BUNDLE_ID).widgets";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -571,6 +591,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A10000000000000000000082 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 2.10.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A10000000000000000000080 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000000000000000000082 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A10000000000000000000001 /* Project object */;
 }

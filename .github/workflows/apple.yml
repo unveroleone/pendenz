@@ -3,7 +3,11 @@ name: Apple app
 on:
   push:
     branches: [main]
-    paths: ['apple/**', '.swiftformat', '.github/workflows/apple.yml']
+    paths:
+      - 'apple/**'
+      - '!apple/appcast.xml'
+      - '.swiftformat'
+      - '.github/workflows/apple.yml'
   pull_request:
     paths: ['apple/**', '.swiftformat', '.github/workflows/apple.yml']
   workflow_dispatch:
