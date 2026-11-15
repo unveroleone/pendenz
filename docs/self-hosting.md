@@ -17,7 +17,7 @@ The API has no login page. Every `/api` route and `/mcp` need a bearer token, ap
 
 - A Linux host with Docker and the Compose plugin.
 - A hostname with HTTPS, reached through a reverse proxy on the host or a Cloudflare Tunnel.
-- The published image is for `linux/amd64`. On another architecture, build the image yourself (see "Images").
+- A host on `linux/amd64` or `linux/arm64`, such as a Raspberry Pi 4 or 5 with a 64-bit OS. On another architecture, build the image yourself (see "Images").
 
 ## Install
 
@@ -73,11 +73,13 @@ To take the loopback ports away again when the tunnel is the only way in, add a 
 
 ### Start
 
-Pick a commit on `main` whose CI run passed, and run:
+Start the newest release:
 
 ```sh
-/srv/pendenz/update.sh <full commit sha>
+/srv/pendenz/update.sh latest
 ```
+
+The [releases](https://github.com/unveroleone/pendenz/releases) list every version. To run one of them, or a commit on `main` whose CI run passed, give the script its version (`update.sh 1.2.0`) or the full commit sha instead.
 
 The first run finds no database and skips the backup. Then check that the server answers through your hostname:
 
@@ -150,16 +152,20 @@ The stdio server is `pendenz mcp` with `PENDENZ_API_URL` and `PENDENZ_API_TOKEN`
 ## Updates
 
 ```sh
-/srv/pendenz/update.sh <full commit sha>
+/srv/pendenz/update.sh latest              # the newest release
+/srv/pendenz/update.sh 1.2.0               # a release
+/srv/pendenz/update.sh <full commit sha>   # any commit on main
 ```
+
+Read the release notes before you update: they say when `compose.yaml` or `update.sh` changed.
 
 The script:
 
-1. Pulls the image for that commit and checks that its labels name this commit and the expected repo.
+1. Pulls the image and checks that its labels name the expected repo, and for a commit sha that they name this commit.
 2. Runs the backup, unless there is no database yet. Without `backup.env` it stops.
 3. Writes the image reference with its digest into `.env`.
 4. Starts the services of the compose files, removes containers of services they no longer have, and waits until they are healthy. It then checks that `/readyz` answers and that `/api/items` without a token answers 401.
-5. Writes the commit to `last-deployed-sha`.
+5. Writes the commit the image was built from to `last-deployed-sha`.
 
 If the new containers do not become healthy, it puts the previous `.env` back and starts the previous images. It never restores the database. A new version applies its migrations when it starts, and an older image refuses a database with a migration it does not know. To go back past a migration, restore the backup the script made before the update (see "A real restore").
 
@@ -179,7 +185,16 @@ MCP clients keep their address, `https://<hostname>/mcp`, and their tokens.
 
 ### Images
 
-CI publishes `ghcr.io/unveroleone/pendenz-api:<commit>` for every commit on `main`. The image carries the commit and the repo URL as labels, which `update.sh` checks.
+CI publishes `ghcr.io/unveroleone/pendenz-api` for `linux/amd64` and `linux/arm64`, each built on a runner of its own architecture, with these tags:
+
+| Tag | Points at |
+|---|---|
+| `<full commit sha>` | Every commit on `main` |
+| `1.2.0` | A release |
+| `1.2` | The newest release of 1.2 |
+| `latest` | The newest release |
+
+The image carries the commit and the repo URL as labels, which `update.sh` checks, and a signed provenance attestation that ties it to the commit and the workflow run.
 
 A fork that publishes its own images sets the prefix and the repo in `.env`:
 
