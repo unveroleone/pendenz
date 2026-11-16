@@ -76,7 +76,7 @@ These are three different things, and none of them deletes anything:
 - **Archived** means the owner decided not to do it.
 - **Trashed** is for mistakes and duplicates. Everything in the trash can be put back.
 
-Nothing is deleted for good and the trash is never emptied. The server keeps trashed rows, so a device that was offline for weeks still learns that a row went to the trash. Images and files are the exceptions, see "Images" and "Files".
+Nothing is deleted for good and the trash is never emptied. The server keeps trashed rows, so a device that was offline for weeks still learns that a row went to the trash. Files on items are the exception, see "Files".
 
 ## The server
 
@@ -84,12 +84,11 @@ Nothing is deleted for good and the trash is never emptied. The server keeps tra
 
 | Table | Holds |
 |---|---|
-| `items` | Items, with the checklist, tags, image list and file list as JSON columns |
+| `items` | Items, with the checklist, tags and file list as JSON columns |
 | `comments` | Progress notes on an item, mostly from agents |
 | `notes` | Notes |
 | `projects` | Projects, including deleted ones (`deleted = 1`) |
-| `item_images` | The bytes of images, one row per image |
-| `item_files` | The bytes of files, one row per file |
+| `item_files` | The bytes of files, pictures among them, one row per file |
 | `server_settings` | One row: the settings the owner changes in the app (the largest file) |
 | `activity` | The append-only history of every change |
 | `actors` | The owner and the agents |
@@ -105,7 +104,7 @@ A migration that is committed is never edited again. sqlx compares each file's h
 
 ### One writer
 
-Every write to an item, comment, project, image or note goes through `write` in [`items.rs`](../server/src/items.rs):
+Every write to an item, comment, project, file or note goes through `write` in [`items.rs`](../server/src/items.rs):
 
 1. It checks the `write` scope and reads the `Idempotency-Key` header.
 2. It takes one process-wide writer lock.
@@ -167,32 +166,25 @@ Anyone may lock a note, agents included, because an agent knows when it writes s
 
 The lock is a gate in the app, not encryption. The text sits in the database, the backups and every device's local store like any other note. A note that agents must not read should be hidden instead.
 
-### Images
-
-An item can carry up to 20 images. The metadata (`id`, `mime`, `width`, `height`, `bytes`, `sha256`) is a JSON list on the item row, the only copy, so every read of an item carries it without a join. No PATCH can write it. The bytes are in `item_images` in the same database, so the backup stays one file. The code is in [`images.rs`](../server/src/images.rs).
-
-- `POST /api/items/<id>/images` takes `{"mime", "data"}` with base64 data and goes through `write`. JPEG or PNG by their first bytes, at most 5 MB and 40 megapixels. The upload is decoded and checked in `images::prepare` before the writer lock is taken, so megabytes of base64 do not hold up other writes, and its SHA-256 stands for the body in the idempotency fingerprint. This route has a body limit of 8 MB; every other route has 1 MB.
-- `GET /api/items/<id>/images/<image>` returns the bytes.
-- `DELETE /api/items/<id>/images/<image>` removes the image for good. Backups made before keep it.
-
-All three check the item with the hidden filter and look the image up by its ID and the item's ID together. An image must never be found by its ID alone, or an agent could reach the image of a hidden item through an item it may see.
-
-The app scales an image to 2048 pixels on its long side and writes it as JPEG before it is queued. That also drops the EXIF data, so no location reaches the server or an agent.
-
 ### Files
 
-An item can carry up to 20 files of any kind, kept byte for byte under their name. They are a list of their own beside the images, because an image is changed before it is sent (scaled, its EXIF data dropped) and a file never is. As with images, the metadata (`id`, `name`, `mime`, `bytes`, `sha256`, `upload_id`) is a JSON list on the item row and the only copy, no PATCH can write it, and the bytes are in `item_files` in the same database. The code is in [`files.rs`](../server/src/files.rs).
+An item can carry up to 40 files of any kind, pictures among them, kept byte for byte under their name. The metadata (`id`, `name`, `mime`, `bytes`, `sha256`, `upload_id`, and `width` and `height` for a picture) is a JSON list on the item row, the only copy, so every read of an item carries it without a join. No PATCH can write it. The bytes are in `item_files` in the same database, so the backup stays one file. The code is in [`files.rs`](../server/src/files.rs).
 
 - `POST /api/items/<id>/files` takes the file itself as the body, not JSON: base64 would make it a third larger and hold it twice. The type is the `Content-Type` (anything that is not a plain `type/subtype` is stored as `application/octet-stream`), the name comes percent-encoded in `Pendenz-File-Name`, and `Pendenz-Upload-Id` is an optional name of the sender's own for this upload. A name with a slash, a backslash or a control character, `.`, `..` or more than 255 bytes is refused.
 - The body is read and hashed before the writer lock, which is never held while bytes still arrive, and at most two uploads are read into memory at once. Then it goes through the same writer as every other change (`items::commit`). The fingerprint covers the hash, the name, the type and the upload ID.
+- A JPEG, PNG, GIF, WebP or HEIF file gets its `width` and `height`, read from its first bytes whatever the sender calls it. That is what makes it a picture, which the app shows as a thumbnail. One with more than 40 million pixels stays a file without a size, because whoever draws it would need the memory.
 - A retry with a used key is answered before the size is checked. A limit lowered between an upload and its retry must not refuse a file the server already holds. Only a new upload is checked, against the limit as it is inside the transaction.
 - The upload ID tells the app which file its upload became. The hash cannot: the same bytes can be on an item twice, and the app removes the file of an upload that was taken back while it was on its way.
 - `GET /api/items/<id>/files/<file>` returns the bytes with the stored type as a download (`Content-Disposition: attachment`), with `nosniff` and `Content-Security-Policy: sandbox`, so a web page among the files is never run in a browser. It works for a trashed item too.
 - `DELETE /api/items/<id>/files/<file>` removes the file for good. Backups made before keep it. A trashed item takes no new file and loses none.
 
-All three check the item with the hidden filter and look the file up by its ID and the item's ID together, as for images.
+All three check the item with the hidden filter and look the file up by its ID and the item's ID together. A file must never be found by its ID alone, or an agent could reach the file of a hidden item through an item it may see.
 
-The app shows both lists in one Attachments section: the pictures as thumbnails, then the files, then one menu to add either. A photo from the library or the camera becomes an image; a chosen file is kept as it is, even when it is a picture. A list row marks both with one paperclip. Merging the two lists on the server too is left for later: it would mean less code, but no faster app, and it needs a migration of the images already stored.
+The app scales a photo (from the library, the camera, the clipboard or a dropped picture) to 2048 pixels on its long side and writes it as JPEG before it is queued. That also drops the EXIF data, so no location reaches the server or an agent. A chosen file is kept as it is, even when it is a picture. The Attachments section shows the pictures as thumbnails, then the other files, then one menu to add either. A list row marks both with one paperclip.
+
+Images and files were two lists until 0.3.0 (`items.images` and `item_images` beside the files). Migration [`0008_merge_attachments.sql`](../server/migrations/0008_merge_attachments.sql) made one list of them: the images kept their IDs and became files named `Image.jpg` or `Image.png`, and the files moved up by the highest image ID ever given, so no two share an ID.
+
+The apps of 0.2.0 knew images only. For them an item still lists its JPEG and PNG pictures under `images`, in the old shape, and the old routes stay in [`images.rs`](../server/src/images.rs): `POST /api/items/<id>/images` with `{"mime", "data"}` in base64 (JPEG or PNG, at most 5 MB and 40 megapixels, with a body limit of 8 MB where every other JSON route has 1 MB) stores a file, and `GET` and `DELETE /api/items/<id>/images/<image>` reach only the pictures among the files. Agents get no `images` list. The list and the routes go together once no 0.2.0 app is left.
 
 ### Settings
 
@@ -220,7 +212,7 @@ Tokens are `pdz_` plus 64 hex characters, stored as a SHA-256 hash. They are iss
 
 | Scope | Allows |
 |---|---|
-| `read` | Lists, details, the changes feed, images, files, the settings |
+| `read` | Lists, details, the changes feed, files, the settings |
 | `write` | Every write that goes through `write` |
 | `propose` | Reserved; nothing uses it yet |
 | `approve` | Device routes: pairing codes, the device list, revoking; changing the settings |
@@ -243,13 +235,13 @@ The device routes and `PATCH /api/settings` need a human token with `approve` (`
 
 These hold in the server, not in the tool instructions:
 
-- See, read or write a hidden item or note, or its comments, images and files.
+- See, read or write a hidden item or note, or its comments and files.
 - Set or clear `hidden_from_agents`.
 - Remove the lock of a note.
 - Get the `approve` scope. `issue-token` refuses it for an agent.
 - Make pairing codes, list or revoke devices, register a push token, or change the largest file size.
 
-Everything else the app can do with items, notes and projects, an agent can do too: create, edit, complete, reorder, comment, add and remove images and files, make, rename and delete projects, write and append to notes.
+Everything else the app can do with items, notes and projects, an agent can do too: create, edit, complete, reorder, comment, add and remove files, make, rename and delete projects, write and append to notes.
 
 ### Local mode
 
@@ -284,7 +276,7 @@ Answers are handled like this:
 
 The Mac app updates itself, so an app can be newer than the server it is paired with. Every answer of the server names its version in the header `Pendenz-Version`; a server from before the header counts as 0.1.0. The app knows the oldest server it works with (`ServerVersion.minimum`), raised whenever the app starts to send a route, a method or a field that an older server does not know. Versions are ordered as in semantic versioning, so a release candidate comes before its release.
 
-An older server answers what it does not know with 404 (a route), 405 (a method) or 400 (a field). From a server below the minimum such an answer to a write does not count as a refusal: the change is marked held (`heldFor`, kept on disk) and the outbox goes on with the changes that do not depend on it. Depending means the same item or note, a new or moved item or note filed into a project whose change waits, and any change to a project, because project names are unique across projects. A held change keeps its key, its place and its image or file.
+An older server answers what it does not know with 404 (a route), 405 (a method) or 400 (a field). From a server below the minimum such an answer to a write does not count as a refusal: the change is marked held (`heldFor`, kept on disk) and the outbox goes on with the changes that do not depend on it. Depending means the same item or note, a new or moved item or note filed into a project whose change waits, and any change to a project, because project names are unique across projects. A held change keeps its key, its place and its file.
 
 When a sync sees a server at or above the minimum, the marks are cleared and the waiting changes go out in their old order in one more pass of the same sync. One that is refused then is handled like any other refusal. Until then the Tasks list and Settings say which version the server runs, which one the app needs and how many changes wait. Nothing in the app is hidden, and a proxy in front of the server has to pass the header on.
 
@@ -292,7 +284,7 @@ The decision rests on the refusing answer's own header, not on a version seen ea
 
 ### Local IDs
 
-An item or note added without a connection gets an ID below zero until the server answers. A local ID is never reused within a launch: `serverIDs` and `noteServerIDs` keep leading the old ID to the row it became, so a change queued against the local ID reaches the right row. An image added to such an item follows it to its server ID.
+An item or note added without a connection gets an ID below zero until the server answers. A local ID is never reused within a launch: `serverIDs` and `noteServerIDs` keep leading the old ID to the row it became, so a change queued against the local ID reaches the right row. A file added to such an item follows it to its server ID.
 
 Anything that may outlive the launch only uses IDs above zero: widget rows, Shortcuts entities, notification actions. A local ID means another row after the next launch.
 
@@ -347,9 +339,7 @@ The protocol is the official Rust SDK's, [rmcp](https://crates.io/crates/rmcp) (
 | `list_items`, `get_item` | Compact rows with a filter and a sort (`manual` adds positions); one item in full | read |
 | `create_item`, `update_item` | Create, and edit with the version | write |
 | `add_comment` | A progress note on an item | write |
-| `get_item_image`, `remove_item_image` | Show an image to the model; remove one | read, write |
-| `add_item_image` | Attach a local image (stdio only) | write |
-| `get_item_file`, `remove_item_file` | Show a file to the model (text up to 1 MB, an image up to 5 MB, otherwise its name, type and size); remove one | read, write |
+| `get_item_file`, `remove_item_file` | Show a file to the model (text up to 1 MB, a picture up to 5 MB, otherwise its name, type and size); remove one | read, write |
 | `add_item_file` | Attach a local file of any kind (stdio only) | write |
 | `create_project`, `update_project`, `delete_project` | Make, rename, re-icon and delete a project | write |
 | `search_notes`, `get_note` | Notes as title and preview; one note in full | read |
@@ -360,7 +350,7 @@ Some choices in them:
 
 - `changes` leaves notes out. Notes are context, not work to pick up, and they can be long. An agent finds them with `search_notes`.
 - `list_items` and the write tools return compact rows with descriptions cut at 200 characters. `get_item` returns the full item with its comments and only the latest changes from its history (`activity`, 10 by default), because the history is the bulky part.
-- `add_item_image` and `add_item_file` exist only over stdio, where a path means a file next to the agent. The hosted server would have to fetch an address or take megabytes of base64 from a model.
+- `add_item_file` exists only over stdio, where a path means a file next to the agent. The hosted server would have to fetch an address or take megabytes of base64 from a model.
 - `get_item_file` reads the item's list first and fetches the bytes only for what it can show, so a large file is never pulled through the hosted endpoint.
 - A locked note comes from `get_note` with a `notice` next to the text, and from the list tools with its title and no preview, as in the app.
 - Every write tool takes an optional `key`. An agent that retries after a timeout sends the same key and arguments, and the write cannot apply twice. Without one the adapter makes a fresh key per call.
@@ -369,7 +359,7 @@ The server instructions tell the agent how to write titles, dates and notes, how
 
 ### CLI
 
-The `pendenz` binary has the same calls as the tools ([`cli.rs`](../server/src/agent/cli.rs): `list`, `get`, `create`, `update`, `comment`, `add-image`, `add-file`, `get-file`, `notes`, `note-append`, `project-delete`, `changes` and so on) plus `reminders` for scripts. It reads `PENDENZ_API_URL` and `PENDENZ_API_TOKEN`, prints JSON and needs no database. A new tool goes into `tools.json` and `tools.rs`, with the same call in `cli.rs` and steps in `server/tests/agent.rs`.
+The `pendenz` binary has the same calls as the tools ([`cli.rs`](../server/src/agent/cli.rs): `list`, `get`, `create`, `update`, `comment`, `add-file`, `get-file`, `notes`, `note-append`, `project-delete`, `changes` and so on) plus `reminders` for scripts. It reads `PENDENZ_API_URL` and `PENDENZ_API_TOKEN`, prints JSON and needs no database. A new tool goes into `tools.json` and `tools.rs`, with the same call in `cli.rs` and steps in `server/tests/agent.rs`.
 
 ## App architecture
 
@@ -408,7 +398,7 @@ The control "New Item" for Control Center, the lock screen and the Action button
 
 - The app is black and white. The tint is the label color, and color is kept for state, such as red for overdue. Liquid Glass takes its color from what is behind it, so color in the chrome would carry nothing.
 - Quick add is one line. It understands dates, times, repeats and `#project` in English and German ([`QuickAddParser.swift`](../apple/Pendenz/Model/QuickAddParser.swift)), and shows what it understood as chips.
-- The app asks only before what cannot be taken back: unpairing, revoking a device, deleting a project and removing an image. Always as an alert with the red action and Cancel. Moving something to the trash never asks, because "Put Back" undoes it, and a question before every trash teaches the hand to confirm without reading.
+- The app asks only before what cannot be taken back: unpairing, revoking a device, deleting a project and removing an attachment. Always as an alert with the red action and Cancel. Moving something to the trash never asks, because "Put Back" undoes it, and a question before every trash teaches the hand to confirm without reading.
 - Each list keeps its own sort order on each device. Manual order is the only one in which rows can be dragged.
 
 ## Kept simple on purpose
