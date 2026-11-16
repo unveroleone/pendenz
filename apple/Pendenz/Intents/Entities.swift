@@ -115,7 +115,7 @@ nonisolated struct ItemQuery: EntityPropertyQuery, EntityStringQuery {
     // below zero is the item's until the next launch, and the server's ID after the item has
     // reached it.
     func entities(for identifiers: [Int]) async throws -> [ItemEntity] {
-        let store = try await Session.freshIntentStore()
+        let store = try await Session.listingIntentStore()
         return await MainActor.run {
             if identifiers.contains(where: { store.item($0) == nil }) { store.loadCompleted() }
             return identifiers.compactMap { store.item($0) }.map { ItemEntity($0, in: store) }
@@ -124,12 +124,12 @@ nonisolated struct ItemQuery: EntityPropertyQuery, EntityStringQuery {
 
     // What Siri and the pickers offer first: the open items, the soonest due first.
     func suggestedEntities() async throws -> [ItemEntity] {
-        let store = try await Session.freshIntentStore()
+        let store = try await Session.listingIntentStore()
         return await MainActor.run { Self.open(in: store).sorted(by: Self.bySoonest) }
     }
 
     func entities(matching string: String) async throws -> [ItemEntity] {
-        let store = try await Session.freshIntentStore()
+        let store = try await Session.listingIntentStore()
         return await MainActor.run {
             store.search(string).filter { $0.isOpen && $0.id > 0 }.map { ItemEntity($0, in: store) }
         }
@@ -146,7 +146,7 @@ nonisolated struct ItemQuery: EntityPropertyQuery, EntityStringQuery {
             if sort.by == \ItemEntity.$dueDate as PartialKeyPath<ItemEntity> { return (false, ascending) }
             return nil
         }
-        let store = try await Session.freshIntentStore()
+        let store = try await Session.listingIntentStore()
         var found = await MainActor.run { Self.open(in: store) }
         if !comparators.isEmpty {
             found = found.filter { item in
@@ -238,7 +238,7 @@ nonisolated struct NoteEntity: AppEntity {
 
 nonisolated struct NoteQuery: EntityStringQuery {
     func entities(for identifiers: [Int]) async throws -> [NoteEntity] {
-        let store = try await Session.freshIntentStore()
+        let store = try await Session.listingIntentStore()
         return await MainActor.run {
             identifiers.compactMap { store.note($0) }.filter { !$0.trashed }.map(NoteEntity.init)
         }
@@ -246,13 +246,13 @@ nonisolated struct NoteQuery: EntityStringQuery {
 
     // Without the notes the server has not given a number yet, as for items.
     func suggestedEntities() async throws -> [NoteEntity] {
-        let store = try await Session.freshIntentStore()
+        let store = try await Session.listingIntentStore()
         return await MainActor.run { store.notes.filter { $0.id > 0 }.map(NoteEntity.init) }
     }
 
     // A locked note is found by its title alone, as in the app's search while the lock is closed.
     func entities(matching string: String) async throws -> [NoteEntity] {
-        let store = try await Session.freshIntentStore()
+        let store = try await Session.listingIntentStore()
         return await MainActor.run {
             store.searchNotes(string, readsLocked: false).filter { $0.id > 0 }.map(NoteEntity.init)
         }
@@ -285,18 +285,23 @@ nonisolated struct ProjectEntity: AppEntity {
 }
 
 nonisolated struct ProjectQuery: EntityStringQuery {
+    // A saved or spoken project is still found while the device is locked, so Add Item and Add
+    // Note work hands-free with one. Only the list of all projects waits for the unlock.
     func entities(for identifiers: [String]) async throws -> [ProjectEntity] {
         let store = try await Session.freshIntentStore()
         return await MainActor.run { identifiers.compactMap(store.project).map(ProjectEntity.init) }
     }
 
     func suggestedEntities() async throws -> [ProjectEntity] {
-        let store = try await Session.freshIntentStore()
+        let store = try await Session.listingIntentStore()
         return await MainActor.run { store.orderedProjects.map(ProjectEntity.init) }
     }
 
     func entities(matching string: String) async throws -> [ProjectEntity] {
-        try await suggestedEntities().filter { $0.name.localizedStandardContains(string) }
+        let store = try await Session.freshIntentStore()
+        return await MainActor.run {
+            store.orderedProjects.map(ProjectEntity.init).filter { $0.name.localizedStandardContains(string) }
+        }
     }
 }
 
@@ -350,7 +355,7 @@ nonisolated struct ListEntity: AppEntity {
 
 nonisolated struct ListQuery: EntityStringQuery {
     func entities(for identifiers: [String]) async throws -> [ListEntity] {
-        let store = try await Session.freshIntentStore()
+        let store = try await Session.listingIntentStore()
         return await MainActor.run {
             identifiers.compactMap(ListEntity.place).filter { place in
                 if case .project(let id) = place { store.project(id) != nil } else { true }
@@ -360,7 +365,7 @@ nonisolated struct ListQuery: EntityStringQuery {
 
     // In the order of the sidebar.
     func suggestedEntities() async throws -> [ListEntity] {
-        let store = try await Session.freshIntentStore()
+        let store = try await Session.listingIntentStore()
         return await MainActor.run { Self.lists(in: store).map { ListEntity($0, in: store) } }
     }
 

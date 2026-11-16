@@ -9,10 +9,9 @@ enum ReminderText {
     // What markdown puts in front of a line: a heading, a quote, a list entry with or without
     // a box to tick, a number.
     private static let lineMark = #/^(?:#{1,6}\s+|>\s*|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)/#
-    private static let link = #/!?\[([^\]]*)\]\([^)]*\)/#
     // A line that only draws something: a rule, the underline of a heading, or a code fence,
     // which may name the language of the code under it.
-    private static let drawn = #/^\s*(?:[-*_=#>\s]+|(?:```|~~~).*)$/#
+    private static let drawn = #/^(?:[-*_=#>\s]+|\s*(?:```|~~~).*)$/#
 
     // The due date and the project, as a row shows them.
     static func subtitle(for item: Item, firing: Date, project: String?) -> String {
@@ -53,7 +52,7 @@ enum ReminderText {
         if line.wholeMatch(of: drawn) != nil { return "" }
         return line.trimmingCharacters(in: .whitespaces)
             .replacing(lineMark, with: "")
-            .replacing(link) { String($0.1) }
+            .linkTexts
             .replacing("**", with: "")
             .replacing("`", with: "")
             .trimmingCharacters(in: .whitespaces)
@@ -70,5 +69,37 @@ enum ReminderText {
         }
         let end = cut.trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))
         return end + "…"
+    }
+}
+
+private extension String {
+    // Each markdown link or image, [text](target) or ![text](target), replaced by its text. One
+    // pass over the line: a pattern for it tries every `[` and reads on to the end of the line
+    // from each, which takes a minute on a long line that an agent can write.
+    var linkTexts: String {
+        let chars = Array(self)
+        var out = ""
+        var i = 0
+        while i < chars.count {
+            guard chars[i] == "[" else {
+                out.append(chars[i])
+                i += 1
+                continue
+            }
+            // Every `[` up to the first `]` ends there, so they all fail or match together.
+            guard let close = chars[(i + 1)...].firstIndex(of: "]") else { break }
+            guard close + 1 < chars.count, chars[close + 1] == "(" else {
+                out.append(contentsOf: chars[i ... close])
+                i = close + 1
+                continue
+            }
+            // Without a `)` after this `](` no later link can end either.
+            guard let end = chars[(close + 2)...].firstIndex(of: ")") else { break }
+            if i > 0, chars[i - 1] == "!", out.last == "!" { out.removeLast() }
+            out.append(contentsOf: chars[(i + 1) ..< close])
+            i = end + 1
+        }
+        if i < chars.count { out.append(contentsOf: chars[i...]) }
+        return out
     }
 }
