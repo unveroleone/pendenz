@@ -9,7 +9,7 @@ use super::{
 use crate::{AppState, auth};
 use axum::{
     Router,
-    extract::{ConnectInfo, Request, State},
+    extract::{Request, State},
     http::{HeaderMap, HeaderValue, Method, StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -19,7 +19,6 @@ use rmcp::transport::streamable_http_server::{
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,
-    net::SocketAddr,
     sync::{
         Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
@@ -96,8 +95,9 @@ impl Hosted {
         })
     }
 
-    // Counts a request from this address. False when it is over the limit for this minute.
-    fn admit(&self, ip: String) -> bool {
+    // Counts a request made with this token, by its hash. False when it is over the limit for
+    // this minute.
+    fn admit(&self, token: String) -> bool {
         let now = Instant::now();
         let mut attempts = self.attempts.lock().unwrap_or_else(|e| e.into_inner());
         if now.duration_since(attempts.swept) >= MINUTE {
@@ -106,7 +106,7 @@ impl Hosted {
                 .retain(|_, (at, _)| now.duration_since(*at) < MINUTE);
             attempts.swept = now;
         }
-        let bucket = attempts.buckets.entry(ip).or_insert((now, 0));
+        let bucket = attempts.buckets.entry(token).or_insert((now, 0));
         if now.duration_since(bucket.0) >= MINUTE {
             *bucket = (now, 0);
         }
@@ -121,7 +121,7 @@ impl Hosted {
                     .buckets
                     .iter()
                     .min_by_key(|(_, (at, _))| *at)
-                    .map(|(ip, _)| ip.clone())
+                    .map(|(token, _)| token.clone())
             {
                 attempts.buckets.remove(&oldest);
             }
@@ -176,12 +176,8 @@ fn bearer(headers: &HeaderMap) -> Option<&str> {
     .then_some(token)
 }
 
-pub async fn handle(
-    State(hosted): State<Arc<Hosted>>,
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
-    request: Request,
-) -> Response {
-    let mut response = serve(&hosted, peer, request).await;
+pub async fn handle(State(hosted): State<Arc<Hosted>>, request: Request) -> Response {
+    let mut response = serve(&hosted, request).await;
     let headers = response.headers_mut();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     headers.insert(
@@ -191,7 +187,7 @@ pub async fn handle(
     response
 }
 
-async fn serve(hosted: &Hosted, peer: SocketAddr, request: Request) -> Response {
+async fn serve(hosted: &Hosted, request: Request) -> Response {
     // The endpoint is /mcp exactly, without a query.
     if request.uri().query().is_some() {
         return reply(StatusCode::NOT_FOUND, "Not found.");
@@ -215,15 +211,22 @@ async fn serve(hosted: &Hosted, peer: SocketAddr, request: Request) -> Response 
             .insert(header::ALLOW, HeaderValue::from_static("POST"));
         return response;
     }
-    let ip = headers
-        .get("cf-connecting-ip")
-        .and_then(|v| v.to_str().ok())
-        .filter(|v| !v.is_empty())
-        .map(str::to_owned)
-        .unwrap_or_else(|| peer.ip().to_string());
+    // The token is checked before anything is counted. A request without a valid token costs
+    // one lookup, as on /api, and cannot use up the budget of the agents that hold one.
+    let Some(token) = bearer(headers).map(str::to_owned) else {
+        return unauthorized("Send a valid Pendenz bearer token.");
+    };
+    let lookup = tokio::time::timeout(Duration::from_secs(5), auth::lookup(&hosted.state, &token));
+    let identity = match lookup.await {
+        Ok(Ok(identity)) => identity,
+        Ok(Err(error)) if error.0 == StatusCode::UNAUTHORIZED => {
+            return unauthorized("This token is invalid, expired or revoked.");
+        }
+        _ => return reply(StatusCode::SERVICE_UNAVAILABLE, "The API is unavailable."),
+    };
     // The place among the requests served at once is taken here, in one step, so two requests
     // cannot both take the last one. A request that fails below gives it back.
-    let admitted = hosted.admit(ip)
+    let admitted = hosted.admit(auth::hash(&token))
         && hosted
             .active
             .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
@@ -241,17 +244,6 @@ async fn serve(hosted: &Hosted, peer: SocketAddr, request: Request) -> Response 
         return response;
     }
     let _active = Active(&hosted.active);
-    let Some(token) = bearer(headers).map(str::to_owned) else {
-        return unauthorized("Send a valid Pendenz bearer token.");
-    };
-    let lookup = tokio::time::timeout(Duration::from_secs(5), auth::lookup(&hosted.state, &token));
-    let identity = match lookup.await {
-        Ok(Ok(identity)) => identity,
-        Ok(Err(error)) if error.0 == StatusCode::UNAUTHORIZED => {
-            return unauthorized("This token is invalid, expired or revoked.");
-        }
-        _ => return reply(StatusCode::SERVICE_UNAVAILABLE, "The API is unavailable."),
-    };
     let content_type = text(headers, header::CONTENT_TYPE).unwrap_or("").to_owned();
     if !content_type.starts_with("application/json") {
         return reply(StatusCode::UNSUPPORTED_MEDIA_TYPE, "Use application/json.");

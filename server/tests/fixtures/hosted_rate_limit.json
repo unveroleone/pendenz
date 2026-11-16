@@ -1,7 +1,11 @@
 [
   {
     "answer": true,
-    "step": "first 180"
+    "step": "181 without a token"
+  },
+  {
+    "answer": true,
+    "step": "first 180 with a token"
   },
   {
     "answer": {

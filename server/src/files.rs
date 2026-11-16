@@ -9,8 +9,9 @@ use crate::{
 use axum::{
     Extension, Json,
     body::Body,
-    extract::{OriginalUri, Path, State},
+    extract::{OriginalUri, Path, Request, State},
     http::{HeaderMap, HeaderValue, Method, StatusCode, header},
+    middleware::Next,
     response::{IntoResponse, Response},
 };
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
@@ -24,6 +25,10 @@ pub(crate) const PIXEL_LIMIT: u64 = 40_000_000;
 const CEILING: usize = (FILE_CEILING_MB as u64 * MB) as usize;
 // How many uploads may be read into memory at once. Each can hold up to the ceiling.
 pub const UPLOADS_AT_ONCE: usize = 2;
+// How many downloads may hold a file in memory at once, until it is sent or the client leaves.
+pub const DOWNLOADS_AT_ONCE: usize = 4;
+// How much of a file is handed to the connection at a time.
+const CHUNK: usize = 256 * 1024;
 
 // A file that was read and hashed, before the writer lock is taken.
 pub(crate) struct Upload {
@@ -363,6 +368,14 @@ pub async fn download(
 ) -> Result<Response> {
     identity.require("read")?;
     let (id, file) = (item_id(&id)?, item_id(&file)?);
+    // Taken before the file is read and held by the body below, so a few files at a time are
+    // in memory, however many clients ask or however slowly they read.
+    let permit = state
+        .downloads
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "Try again.".into()))?;
     let mut tx = state.db.begin().await?;
     let item = visible_item(&mut *tx, id, &identity).await?;
     let Some(entry) = item.files.0.iter().find(|entry| entry.id == file) else {
@@ -375,6 +388,21 @@ pub async fn download(
             .fetch_optional(&mut *tx)
             .await?
             .ok_or_else(ApiError::missing)?;
+    drop(tx);
+    let length = HeaderValue::from(data.len());
+    // The permit lives with the bytes: every chunk shares them, and a chunk may still wait in
+    // the connection after the body is gone, so the permit goes when the last chunk does.
+    let data = axum::body::Bytes::from_owner(Held {
+        data,
+        _permit: permit,
+    });
+    let body = Body::from_stream(futures_util::stream::unfold(data, |mut rest| async move {
+        if rest.is_empty() {
+            return None;
+        }
+        let chunk = rest.split_to(rest.len().min(CHUNK));
+        Some((Ok::<_, std::convert::Infallible>(chunk), rest))
+    }));
     let mime = HeaderValue::from_str(&entry.mime)
         .unwrap_or(HeaderValue::from_static("application/octet-stream"));
     let disposition = HeaderValue::from_str(&format!(
@@ -394,8 +422,34 @@ pub async fn download(
                 header::CONTENT_SECURITY_POLICY,
                 HeaderValue::from_static("sandbox"),
             ),
+            (header::CONTENT_LENGTH, length),
         ],
-        data,
+        body,
     )
         .into_response())
+}
+
+// A downloaded file with the permit it was read under.
+struct Held {
+    data: Vec<u8>,
+    _permit: tokio::sync::OwnedSemaphorePermit,
+}
+
+impl AsRef<[u8]> for Held {
+    fn as_ref(&self) -> &[u8] {
+        &self.data
+    }
+}
+
+// For the old image route, whose JSON body of up to 8 MB is read before its handler runs: it
+// waits for its place among the uploads here, so it counts against the same limit.
+pub async fn one_of_the_uploads(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let Ok(_permit) = state.uploads.acquire().await else {
+        return ApiError(StatusCode::SERVICE_UNAVAILABLE, "Try again.".into()).into_response();
+    };
+    next.run(request).await
 }

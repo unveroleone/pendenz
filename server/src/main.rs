@@ -49,6 +49,8 @@ pub struct AppState {
     pub push: Arc<push::Push>,
     // Room for the file uploads that are read into memory at the same time.
     pub uploads: Arc<tokio::sync::Semaphore>,
+    // The same for the file downloads, each held until it is sent.
+    pub downloads: Arc<tokio::sync::Semaphore>,
 }
 
 #[derive(Parser)]
@@ -438,6 +440,7 @@ async fn main() -> anyhow::Result<()> {
         writer: Arc::new(Mutex::new(())),
         push: Arc::new(push::Push::new(relay)),
         uploads: Arc::new(tokio::sync::Semaphore::new(files::UPLOADS_AT_ONCE)),
+        downloads: Arc::new(tokio::sync::Semaphore::new(files::DOWNLOADS_AT_ONCE)),
     };
     if state.push.is_on() {
         tokio::spawn(push::run(state.clone()));
@@ -452,7 +455,12 @@ async fn main() -> anyhow::Result<()> {
         // An image is larger than anything else the API takes, so this route alone gets room.
         .route(
             "/items/{id}/images",
-            post(items::write).layer(DefaultBodyLimit::max(images::BODY_LIMIT)),
+            post(items::write)
+                .layer(DefaultBodyLimit::max(images::BODY_LIMIT))
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    files::one_of_the_uploads,
+                )),
         )
         .route(
             "/items/{id}/images/{image}",

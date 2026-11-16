@@ -442,27 +442,39 @@ async fn hosted_rate_limit() {
     let server = Server::start().await;
     let http = reqwest::Client::new();
     let url = server.mcp_url();
-    let mut statuses = Vec::new();
-    for _ in 0..181 {
-        let response = http
+    let token = server.token("bot", "read");
+    let send = |token: Option<&str>| {
+        let mut request = http
             .post(&url)
             .header("Content-Type", "application/json")
             .header("Accept", ACCEPT)
-            .body("{}")
-            .send()
-            .await
-            .unwrap();
-        statuses.push(response.status().as_u16());
-        if statuses.len() == 181 {
-            let mut t = Transcript::new("hosted_rate_limit");
-            t.add(
-                "first 180",
-                json!(statuses[..180].iter().all(|s| *s == 401)),
-            );
-            t.add("181st", answer(response).await);
-            t.finish();
+            .body(json!({"jsonrpc": "2.0", "id": 1, "method": "ping"}).to_string());
+        if let Some(token) = token {
+            request = request.header("Authorization", format!("Bearer {token}"));
         }
+        request.send()
+    };
+    let mut t = Transcript::new("hosted_rate_limit");
+    // Requests without a token are refused before they are counted, so they cannot use up the
+    // budget of a token.
+    let mut statuses = Vec::new();
+    for _ in 0..181 {
+        statuses.push(send(None).await.unwrap().status().as_u16());
     }
+    t.add(
+        "181 without a token",
+        json!(statuses.iter().all(|s| *s == 401)),
+    );
+    let mut statuses = Vec::new();
+    for _ in 0..180 {
+        statuses.push(send(Some(&token)).await.unwrap().status().as_u16());
+    }
+    t.add(
+        "first 180 with a token",
+        json!(statuses.iter().all(|s| *s == 200)),
+    );
+    t.add("181st", answer(send(Some(&token)).await.unwrap()).await);
+    t.finish();
 }
 
 #[tokio::test]
