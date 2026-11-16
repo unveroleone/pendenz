@@ -101,6 +101,9 @@ struct CompleteItemsIntent: AppIntent {
         "Completes an item in Pendenz. A repeating item moves on to its next date.",
     )
     static let supportedModes: IntentModes = .background
+    // It lists the open items to choose from and changes one, so a locked device asks to be
+    // unlocked first. Add Item and Add Note give nothing away and work while it is locked.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "Item", requestValueDialog: "Which item?")
     var item: ItemEntity

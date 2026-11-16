@@ -388,6 +388,7 @@ The actions for Siri and Shortcuts are in [`Intents/`](../apple/Pendenz/Intents)
 - An action that changes something writes through the outbox and ends with `Session.settleIntent`, which waits for the server for at most eight seconds, so Siri does not hang on a slow connection.
 - Entities offered to a picker have IDs above zero, because a shortcut may keep them.
 - A note entity carries no text that Shortcuts can read, so a shortcut is no way around the lock.
+- Siri answers on a locked iPhone, so nothing that lists items or notes works while the device is locked: the queries take their store from `Session.listingIntentStore()`, which refuses while protected data is closed, and Complete Item asks to unlock first (`authenticationPolicy`). A query has no `authenticationPolicy`, and the system closes protected data a few seconds after the device locks, which is the window Find Items leaves. Add Item and Add Note give nothing away and still work on a locked device, so an item can be added hands-free; a saved or spoken project is still found for them, and only the list of all projects waits for the unlock.
 
 The control "New Item" for Control Center, the lock screen and the Action button is `NewItemIntent` in `Shared/`, declared in the widget extension and carried out in the app. What an action wants shown goes through `OpenRequest`, which `RootView` carries out.
 

@@ -1,6 +1,9 @@
 import AppIntents
 import Foundation
 import Observation
+#if os(iOS)
+import UIKit
+#endif
 
 // Why an action from Siri, Shortcuts or Spotlight could not be carried out. The text is what
 // Siri says and Shortcuts shows.
@@ -13,6 +16,7 @@ nonisolated enum IntentError: Error, CustomLocalizedStringResourceConvertible {
     case emptyNote
     case longNote
     case rejected(String)
+    case locked
 
     var localizedStringResource: LocalizedStringResource {
         switch self {
@@ -24,6 +28,7 @@ nonisolated enum IntentError: Error, CustomLocalizedStringResourceConvertible {
         case .emptyNote: "A note needs some text."
         case .longNote: "The note is too long. A note can have up to 100,000 characters."
         case .rejected(let reason): "The server did not take it. \(reason)"
+        case .locked: "Unlock this device first. Pendenz does not list items or notes while it is locked."
         }
     }
 }
@@ -42,6 +47,25 @@ extension Session {
         await refreshForIntent(store)
         guard !store.isClosed else { throw IntentError.notPaired }
         return store
+    }
+
+    // The store for a query that lists items or notes, for Siri, Shortcuts and the pickers.
+    // While the device is locked nothing is listed: Siri answers on a locked iPhone, and whoever
+    // holds it must not learn the titles, dates and projects. The system keeps protected data
+    // open for a few seconds after the device locks, which is the window this leaves. Asked
+    // again after the sync, which can take seconds of its own. Adding an item or a note does
+    // not come through here and still works.
+    static func listingIntentStore() async throws -> Store {
+        try requireUnlocked()
+        let store = try await freshIntentStore()
+        try requireUnlocked()
+        return store
+    }
+
+    private static func requireUnlocked() throws {
+        #if os(iOS)
+        guard UIApplication.shared.isProtectedDataAvailable else { throw IntentError.locked }
+        #endif
     }
 
     // Before an intent reads or acts on rows: a launch in the background has only what was on
