@@ -96,11 +96,17 @@ private struct ItemFileRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
         .accessibilityAddTraits(.isButton)
+        // A file that is on this device already is shared straight from the menu.
+        .task(id: file.id) {
+            if shared == nil, let url = store.localFile(file) { shared = store.namedFile(url, file.name) }
+        }
         .contextMenu {
             if let shared {
                 ShareLink(item: shared)
             } else {
-                Button("Share", systemImage: "square.and.arrow.up") { Task { await prepareShare() } }
+                // Not on this device yet. The file is fetched and opened in the preview, whose
+                // share button sends it on, so one choice here leads to the share.
+                Button("Share", systemImage: "square.and.arrow.up", action: open)
             }
             Button("Remove", systemImage: "trash", role: .destructive) { isAskingToRemove = true }
         }
@@ -130,11 +136,6 @@ private struct ItemFileRow: View {
         Task {
             if let url = await load() { onOpen(url) }
         }
-    }
-
-    // The share sheet needs the file first. Once it is here, the menu offers it directly.
-    private func prepareShare() async {
-        shared = await load()
     }
 
     private func load() async -> URL? {

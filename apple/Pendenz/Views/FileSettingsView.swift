@@ -110,10 +110,15 @@ struct FileSettingsView: View {
         guard !isSaving else { return }
         isSaving = true
         Task {
+            var hasFailed = false
             while let target = wanted, target != confirmed?.fileLimitMb {
                 wanted = nil
                 do {
-                    try await show(session.setFileLimit(target))
+                    let saved = try await session.setFileLimit(target)
+                    confirmed = saved
+                    // A value chosen while this one was on its way stays on the slider and goes
+                    // out next. Only the value that was sent is replaced by the server's.
+                    if !isEditing, Int(value) == target { value = Double(saved.fileLimitMb) }
                     failure = nil
                 } catch is URLError {
                     // No answer: the server may have taken the value or not. It is asked what
@@ -121,14 +126,17 @@ struct FileSettingsView: View {
                     failure = "The server could not be reached, so the limit may not have changed."
                     if let now = try? await session.serverSettings() { show(now) }
                     wanted = nil
+                    hasFailed = true
                 } catch {
                     failure = error.localizedDescription
                     wanted = nil
+                    hasFailed = true
                 }
             }
             isSaving = false
-            // Back to what the server holds, after a failure or a refusal.
-            if !isEditing, let confirmed { value = Double(confirmed.fileLimitMb) }
+            // Back to what the server holds, after a failure or a refusal. After a success the
+            // slider keeps a value chosen since, which its own wait sends.
+            if hasFailed, !isEditing, let confirmed { value = Double(confirmed.fileLimitMb) }
         }
     }
 }

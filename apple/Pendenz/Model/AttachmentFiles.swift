@@ -126,7 +126,8 @@ nonisolated struct AttachmentFiles: Sendable {
         let folder = Self.links.appending(path: file.lastPathComponent, directoryHint: .isDirectory)
         let link = folder.appending(path: Self.basename(name))
         if FileManager.default.fileExists(atPath: link.path(percentEncoded: false)) { return link }
-        try? FileManager.default.removeItem(at: folder)
+        // The same bytes can be on items under several names. The folder keeps the links made
+        // for the others, which a row may still hand to a share.
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         if (try? FileManager.default.linkItem(at: file, to: link)) != nil { return link }
         return (try? FileManager.default.copyItem(at: file, to: link)) != nil ? link : file

@@ -1029,12 +1029,29 @@ final class Store {
                     try? FileManager.default.removeItem(at: download)
                     return nil
                 }
-                return await attachments.keep(download: download, as: stored)
+                let kept = await attachments.keep(download: download, as: stored)
+                // Ended while the hash was read: the erase has run already, so the copy goes.
+                if isClosed, let kept {
+                    try? FileManager.default.removeItem(at: kept)
+                    return nil
+                }
+                return kept
             }
             fileDownloads[stored.sha256] = task
             let url = await task.value
             fileDownloads[stored.sha256] = nil
             return url
+        }
+    }
+
+    // The bytes of a file when they are on this device already, without a request.
+    func localFile(_ file: ShownFile) -> URL? {
+        switch file {
+        case .waiting(let waiting):
+            let url = attachments.waitingFile(waiting)
+            return FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) ? url : nil
+        case .stored(let stored):
+            return attachments.file(of: stored)
         }
     }
 
