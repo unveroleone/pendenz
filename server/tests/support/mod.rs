@@ -66,7 +66,11 @@ pub struct Server {
 
 impl Server {
     pub async fn start() -> Self {
-        let dir = scratch_dir();
+        Self::start_in(scratch_dir()).await
+    }
+
+    // A server on the database already in `dir`, if there is one.
+    pub async fn start_in(dir: PathBuf) -> Self {
         let port = free_port();
         let db = format!("sqlite://{}/pendenz.db", dir.display());
         let api = Command::new(BIN)

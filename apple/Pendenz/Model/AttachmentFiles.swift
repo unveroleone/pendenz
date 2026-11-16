@@ -2,12 +2,12 @@ import CryptoKit
 import Foundation
 import UniformTypeIdentifiers
 
-// The files of items on this device, as `ImageFiles` keeps the images. Two kinds: files that wait
-// to be sent, which exist only here and so lie next to the local store, and copies of files the
-// server holds, which can be fetched again and so lie in the caches folder. A file can be large,
-// so nothing here reads one whole into memory.
+// The files of items on this device, pictures among them. Two kinds: files that wait to be sent,
+// which exist only here and so lie next to the local store, and copies of files the server holds,
+// which can be fetched again and so lie in the caches folder. A file can be large, so nothing here
+// reads one whole into memory.
 nonisolated struct AttachmentFiles: Sendable {
-    static let perItem = 20
+    static let perItem = 40
     // What a megabyte means for the limit: the server and the system's sizes count in thousands.
     static let megabyte = 1_000_000
 
@@ -48,6 +48,11 @@ nonisolated struct AttachmentFiles: Sendable {
             try? manager.removeItem(at: part)
             return false
         }
+    }
+
+    // A scaled photo, written in one step, so a file that exists is complete.
+    func keep(_ data: Data, for file: PendingFile) -> Bool {
+        (try? data.write(to: waitingFile(file), options: .atomic)) != nil
     }
 
     func discard(_ file: PendingFile) {
@@ -145,6 +150,54 @@ nonisolated struct AttachmentFiles: Sendable {
     func erase() {
         emptyCache()
         discardWaiting(except: [])
+    }
+
+    // MARK: What a build with images apart left behind
+
+    private static var oldWaitingImages: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appending(path: "WaitingImages", directoryHint: .isDirectory)
+    }
+
+    enum Takeover {
+        // Now a waiting file, of this many bytes.
+        case moved(Int)
+        // Not there: the entry can never be sent.
+        case gone
+        // Still where it was, and could not be moved. Tried again at the next launch.
+        case failed
+    }
+
+    // Moves a photo that waited to be sent as an image to where a waiting file lies.
+    static func takeOverWaitingImage(_ id: String) -> Takeover {
+        let manager = FileManager.default
+        let old = oldWaitingImages.appending(path: "\(id).jpg")
+        let new = manager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appending(path: "WaitingFiles", directoryHint: .isDirectory)
+        let target = new.appending(path: id)
+        let size = { (try? target.resourceValues(forKeys: [.fileSizeKey]))?.fileSize }
+        // Moved already by a launch that ended before it saved the entry.
+        if let bytes = size() { return .moved(bytes) }
+        guard manager.fileExists(atPath: old.path(percentEncoded: false)) else { return .gone }
+        try? manager.createDirectory(at: new, withIntermediateDirectories: true)
+        guard (try? manager.moveItem(at: old, to: target)) != nil, let bytes = size() else { return .failed }
+        return .moved(bytes)
+    }
+
+    // The folders of that build. Their waiting photos were taken over when the store was loaded,
+    // and the copies are fetched again as files when they are shown. The waiting photos stay
+    // while one of them could not be taken over.
+    static func removeOldImageFolders(keepingWaiting: Bool) {
+        let manager = FileManager.default
+        let caches = manager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        var folders = [
+            caches.appending(path: "Images", directoryHint: .isDirectory),
+            manager.temporaryDirectory.appending(path: "Images", directoryHint: .isDirectory),
+        ]
+        if !keepingWaiting { folders.append(oldWaitingImages) }
+        for folder in folders where manager.fileExists(atPath: folder.path(percentEncoded: false)) {
+            try? manager.removeItem(at: folder)
+        }
     }
 
     // MARK: Names and types

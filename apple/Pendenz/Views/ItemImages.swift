@@ -1,43 +1,13 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-// Lets images and files be dropped onto an item's detail from another app or window. A picture
-// becomes an image, anything else a file.
-struct ItemImageDrop: ViewModifier {
-    @Environment(Store.self) private var store
-    let itemID: Int
-
-    func body(content: Content) -> some View {
-        content.onDrop(of: [.image, .data, .package], isTargeted: nil) { providers in
-            let images = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }
-            let files = providers.filter { provider in
-                !images.contains(provider) && ItemFileDrop.accepts(provider)
-            }
-            for provider in images {
-                _ = provider.loadDataRepresentation(for: .image) { data, _ in
-                    guard let data else { return }
-                    Task { @MainActor in
-                        await store.addImage(data, to: itemID)
-                    }
-                }
-            }
-            for provider in files {
-                ItemFileDrop.add(provider, to: itemID, in: store)
-            }
-            return !images.isEmpty || !files.isEmpty
-        }
-    }
-}
-
-// One image in the row. It shows a spinner until its file is here, which for an image the
+// One picture in the row. It shows a spinner until its file is here, which for a picture the
 // server holds can take a request.
 struct ItemImageTile: View {
     @Environment(Store.self) private var store
     @Environment(\.displayScale) private var displayScale
-    let image: ShownImage
+    let image: ShownFile
     let itemID: Int
-    // The name of the file as the full view and a share show it.
-    let name: String
     let label: String
     let onOpen: (URL) -> Void
 
@@ -48,10 +18,6 @@ struct ItemImageTile: View {
     @State private var isAskingToRemove = false
 
     private static let side: CGFloat = 76
-
-    private var isWaiting: Bool {
-        if case .waiting = image { true } else { false }
-    }
 
     var body: some View {
         Button {
@@ -77,7 +43,7 @@ struct ItemImageTile: View {
             .frame(width: Self.side, height: Self.side)
             .clipShape(.rect(cornerRadius: 10))
             .overlay(alignment: .bottomTrailing) {
-                if isWaiting {
+                if image.isWaiting {
                     // Not on the server yet. Said by the label too, not by the mark alone.
                     Image(systemName: "arrow.up.circle.fill")
                         .symbolRenderingMode(.palette)
@@ -97,7 +63,7 @@ struct ItemImageTile: View {
         }
         // A removed image does not come back, so this asks.
         .alert("Remove this image?", isPresented: $isAskingToRemove) {
-            Button("Remove", role: .destructive) { store.removeImage(image, from: itemID) }
+            Button("Remove", role: .destructive) { store.removeFile(image, from: itemID) }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("It is removed from the item on every device.")
@@ -107,19 +73,20 @@ struct ItemImageTile: View {
 
     private var accessibilityText: String {
         if hasFailed { return "\(label), could not be loaded. Try again" }
-        return isWaiting ? "\(label), not sent yet" : label
+        return image.isWaiting ? "\(label), not sent yet" : label
     }
 
     private func load() async {
         hasFailed = false
-        guard let source = await store.imageFile(image, of: itemID) else {
+        guard let source = await store.file(image, of: itemID) else {
             hasFailed = true
             return
         }
         // Three times the points, so the thumbnail stays sharp on every display.
-        picture = await ImageFiles.thumbnail(of: source, side: Int(Self.side * 3))
+        picture = await Pictures.thumbnail(of: source, side: Int(Self.side * 3))
         hasFailed = picture == nil
-        file = store.namedImageFile(source, name)
+        // Under its own name, which the preview and a share show and tell the type by.
+        file = store.namedFile(source, image.name)
     }
 }
 

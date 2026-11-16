@@ -65,12 +65,10 @@ pub struct Item {
     pub archived: bool,
     pub trashed: bool,
     pub completed_at: Option<String>,
-    // Changed only by the image routes. An edit of the item cannot write it.
+    // Changed only by the file routes. An edit of the item cannot write it.
     #[sqlx(json)]
-    pub images: Vec<ImageRef>,
-    // Changed only by the file routes, like the images.
-    #[sqlx(json)]
-    pub files: Vec<FileRef>,
+    #[serde(flatten)]
+    pub files: Attachments,
     pub version: i64,
     pub seq: i64,
     pub created_by: String,
@@ -79,21 +77,11 @@ pub struct Item {
     pub updated_at: String,
 }
 
-// An image on an item, without its bytes. The ID addresses it under its item, and the hash lets
-// a client keep a copy that stays right when a restored server gives the ID to another image.
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ImageRef {
-    pub id: i64,
-    pub mime: String,
-    pub width: i64,
-    pub height: i64,
-    pub bytes: i64,
-    pub sha256: String,
-}
-
-// A file on an item, without its bytes. Looked up by its ID under its item, as an image is.
+// A file on an item, without its bytes. The ID addresses it under its item, and the hash lets
+// a client keep a copy that stays right when a restored server gives the ID to another file.
 // `upload_id` is the uploader's own name for the upload, so it can tell its file from another
-// with the same bytes when an answer was lost.
+// with the same bytes when an answer was lost. A picture the server could measure carries its
+// `width` and `height`.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct FileRef {
     pub id: i64,
@@ -103,6 +91,58 @@ pub struct FileRef {
     pub sha256: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub upload_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<i64>,
+}
+
+impl FileRef {
+    // A JPEG or PNG with its size: what the apps of 0.2.0 know as an image.
+    pub fn is_legacy_image(&self) -> bool {
+        self.width.is_some()
+            && self.height.is_some()
+            && LEGACY_IMAGE_TYPES.contains(&self.mime.as_str())
+    }
+}
+
+const LEGACY_IMAGE_TYPES: [&str; 2] = ["image/jpeg", "image/png"];
+
+// The files on an item. Written out as `files`, and the pictures among them once more as
+// `images`, in the shape the apps of 0.2.0 read; they knew images only. Remove `images` and
+// the routes in images.rs together, once no 0.2.0 app is left.
+#[derive(Clone, Default)]
+pub struct Attachments(pub Vec<FileRef>);
+
+impl<'de> Deserialize<'de> for Attachments {
+    fn deserialize<D: serde::Deserializer<'de>>(from: D) -> std::result::Result<Self, D::Error> {
+        Vec::deserialize(from).map(Self)
+    }
+}
+
+impl Serialize for Attachments {
+    fn serialize<S: serde::Serializer>(&self, to: S) -> std::result::Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let images: Vec<Value> = self
+            .0
+            .iter()
+            .filter(|file| file.is_legacy_image())
+            .map(|file| {
+                serde_json::json!({
+                    "id": file.id,
+                    "mime": file.mime,
+                    "width": file.width,
+                    "height": file.height,
+                    "bytes": file.bytes,
+                    "sha256": file.sha256,
+                })
+            })
+            .collect();
+        let mut map = to.serialize_map(Some(2))?;
+        map.serialize_entry("files", &self.0)?;
+        map.serialize_entry("images", &images)?;
+        map.end()
+    }
 }
 
 #[derive(Serialize, FromRow)]

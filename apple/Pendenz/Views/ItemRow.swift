@@ -94,8 +94,7 @@ struct ItemRow: View {
         let project = style.showsProject ? store.projectName(item.projectId) : nil
         let ticked = item.checklist.count { $0.done }
         // Pictures and files together, as the detail lists them under Attachments.
-        let attachments = item.images.count + (store.waitingImages[item.id]?.count ?? 0)
-            + item.files.count + (store.waitingFiles[item.id]?.count ?? 0)
+        let attachments = item.files.count + (store.waitingFiles[item.id]?.count ?? 0)
         let hasDetails = due != nil || project != nil || item.repeatRule != nil
             || !item.checklist.isEmpty || !item.description.isEmpty || item.hiddenFromAgents || attachments > 0
         if hasDetails {

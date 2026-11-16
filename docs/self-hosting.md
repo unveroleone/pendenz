@@ -248,7 +248,7 @@ docker compose --profile backup run --rm -e RESTIC_CACHE_DIR=/tmp/restic-cache -
 docker compose --profile backup run --rm backup
 ```
 
-The backup uses SQLite's online backup and `PRAGMA integrity_check`, uploads the snapshot and keeps 30 days in restic. Images on items are rows in the same database, so they are in every snapshot, and they are what makes the database grow. Keep the restic password somewhere outside the server: the archive cannot supply its own password.
+The backup uses SQLite's online backup and `PRAGMA integrity_check`, uploads the snapshot and keeps 30 days in restic. Files on items, pictures among them, are rows in the same database, so they are in every snapshot, and they are what makes the database grow. Keep the restic password somewhere outside the server: the archive cannot supply its own password.
 
 For a nightly run, copy `deploy/pendenz-backup.service` and `deploy/pendenz-backup.timer` to `/etc/systemd/system`, then:
 

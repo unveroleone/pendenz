@@ -477,148 +477,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Look at one image of an item. get_item lists the images of an item with their ids, sizes and types. Returns the image itself.",
-    "inputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "anyOf": [
-            {
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991,
-              "type": "integer"
-            },
-            {
-              "pattern": "^([Pp]-)?[1-9]\\d*$",
-              "type": "string"
-            }
-          ],
-          "description": "Item ID, as P-12 or 12."
-        },
-        "image": {
-          "anyOf": [
-            {
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991,
-              "type": "integer"
-            },
-            {
-              "pattern": "^[1-9]\\d*$",
-              "type": "string"
-            }
-          ],
-          "description": "Image ID from the item's images list in get_item."
-        }
-      },
-      "required": ["id", "image"],
-      "type": "object"
-    },
-    "name": "get_item_image"
-  },
-  {
-    "annotations": {
-      "destructiveHint": false,
-      "idempotentHint": false,
-      "openWorldHint": false,
-      "readOnlyHint": false
-    },
-    "description": "Attach an image file from this machine to an item: a JPEG or PNG of at most 5 MB and 40 million pixels. An item holds at most 20 images. Returns the item as a compact row with its new version.",
-    "inputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "anyOf": [
-            {
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991,
-              "type": "integer"
-            },
-            {
-              "pattern": "^([Pp]-)?[1-9]\\d*$",
-              "type": "string"
-            }
-          ],
-          "description": "Item ID, as P-12 or 12."
-        },
-        "key": {
-          "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
-          "maxLength": 128,
-          "minLength": 1,
-          "type": "string"
-        },
-        "path": {
-          "description": "Absolute path of the image file on this machine.",
-          "minLength": 1,
-          "type": "string"
-        }
-      },
-      "required": ["id", "path"],
-      "type": "object"
-    },
-    "name": "add_item_image"
-  },
-  {
-    "annotations": {
-      "destructiveHint": true,
-      "idempotentHint": false,
-      "openWorldHint": false,
-      "readOnlyHint": false
-    },
-    "description": "Remove one image from an item, only when the owner asks for it. This cannot be undone. Returns the item as a compact row with its new version.",
-    "inputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "anyOf": [
-            {
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991,
-              "type": "integer"
-            },
-            {
-              "pattern": "^([Pp]-)?[1-9]\\d*$",
-              "type": "string"
-            }
-          ],
-          "description": "Item ID, as P-12 or 12."
-        },
-        "image": {
-          "anyOf": [
-            {
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991,
-              "type": "integer"
-            },
-            {
-              "pattern": "^[1-9]\\d*$",
-              "type": "string"
-            }
-          ],
-          "description": "Image ID from the item's images list in get_item."
-        },
-        "key": {
-          "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
-          "maxLength": 128,
-          "minLength": 1,
-          "type": "string"
-        }
-      },
-      "required": ["id", "image"],
-      "type": "object"
-    },
-    "name": "remove_item_image"
-  },
-  {
-    "annotations": {
-      "destructiveHint": false,
-      "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": true
-    },
-    "description": "Read one file attached to an item. A text file up to 1 MB comes back as text, a PNG, JPEG, GIF or WebP image up to 5 MB as an image. Anything else comes back as its name, type and size only.",
+    "description": "Read one file attached to an item. A text file up to 1 MB comes back as text, a PNG, JPEG, GIF or WebP picture up to 5 MB as an image. Anything else comes back as its name, type and size only.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
@@ -664,7 +523,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Attach a file from this machine to an item, unchanged and under its own name. The owner sets the largest size in the app (workspace.settings.file_limit_mb). An item holds at most 20 files. Returns the item as a compact row with its new version.",
+    "description": "Attach a file from this machine to an item, unchanged and under its own name. A picture gets its width and height. The owner sets the largest size in the app (workspace.settings.file_limit_mb). An item holds at most 40 files. Returns the item as a compact row with its new version.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,

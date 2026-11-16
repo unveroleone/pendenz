@@ -556,7 +556,7 @@ async fn hosted_tools() {
             json!({"id": "P-1", "changes": {"status": "done"}}),
         ),
         ("add_comment", json!({"id": 1, "body": "  "})),
-        ("get_item_image", json!({"id": 1, "image": "abc"})),
+        ("get_item_file", json!({"id": 1, "file": "abc"})),
         ("create_project", json!({"name": "x", "icon": "rocket"})),
         ("create_note", json!({"note": {"body": ""}})),
         (
@@ -855,7 +855,7 @@ async fn hosted_tools() {
             .await,
     );
 
-    // Images, uploaded by the owner through the API.
+    // A picture sent by an app of 0.2.0 to the old image route is a file with a size.
     server
         .api(
             &server.owner,
@@ -865,39 +865,15 @@ async fn hosted_tools() {
         )
         .await;
     t.add(
-        "list shows the image count",
-        bot.call("list_items", json!({"project": "home-lab"})).await,
-    );
-    t.add(
-        "get item with image",
+        "get item with an old image",
         bot.call("get_item", json!({"id": 2, "activity": 1})).await,
     );
-    let image = bot
-        .call("get_item_image", json!({"id": 2, "image": 1}))
-        .await;
+    let image = bot.call("get_item_file", json!({"id": 2, "file": 1})).await;
     assert_eq!(image["content"][0]["data"], png_base64());
-    t.add("get image", image);
+    t.add("get an old image", image);
     t.add(
-        "get image as string",
-        bot.call("get_item_image", json!({"id": "P-2", "image": "1"}))
-            .await,
-    );
-    t.add(
-        "get missing image",
-        bot.call("get_item_image", json!({"id": 2, "image": 99}))
-            .await,
-    );
-    t.add(
-        "remove image",
-        bot.call(
-            "remove_item_image",
-            json!({"id": 2, "image": 1, "key": "r1"}),
-        )
-        .await,
-    );
-    t.add(
-        "remove image again",
-        bot.call("remove_item_image", json!({"id": 2, "image": 1}))
+        "remove an old image",
+        bot.call("remove_item_file", json!({"id": 2, "file": 1, "key": "r1"}))
             .await,
     );
 
@@ -930,14 +906,14 @@ async fn hosted_tools() {
     );
     t.add(
         "get a text file",
-        bot.call("get_item_file", json!({"id": 2, "file": 1})).await,
+        bot.call("get_item_file", json!({"id": 2, "file": 2})).await,
     );
     t.add(
         "get a file that cannot be shown",
-        bot.call("get_item_file", json!({"id": "P-2", "file": "2"}))
+        bot.call("get_item_file", json!({"id": "P-2", "file": "3"}))
             .await,
     );
-    let picture = bot.call("get_item_file", json!({"id": 2, "file": 3})).await;
+    let picture = bot.call("get_item_file", json!({"id": 2, "file": 4})).await;
     assert_eq!(picture["content"][0]["data"], png_base64());
     t.add("get an image file", picture);
     t.add(
@@ -949,13 +925,13 @@ async fn hosted_tools() {
         "remove file",
         bot.call(
             "remove_item_file",
-            json!({"id": 2, "file": 2, "key": "rf1"}),
+            json!({"id": 2, "file": 3, "key": "rf1"}),
         )
         .await,
     );
     t.add(
         "remove file again",
-        bot.call("remove_item_file", json!({"id": 2, "file": 2}))
+        bot.call("remove_item_file", json!({"id": 2, "file": 3}))
             .await,
     );
 
@@ -1318,60 +1294,29 @@ async fn stdio_server() {
     let png = server.dir.join("photo.png");
     std::fs::write(&png, PNG).unwrap();
     t.add(
-        "add image",
+        "add a picture",
         mcp.call(
-            "add_item_image",
+            "add_item_file",
             json!({"id": "P-1", "path": png.display().to_string(), "key": "img1"}),
         )
         .await,
     );
     t.add(
-        "add image again with the key",
+        "add a picture again with the key",
         mcp.call(
-            "add_item_image",
+            "add_item_file",
             json!({"id": "P-1", "path": png.display().to_string(), "key": "img1"}),
         )
         .await,
     );
-    let image = mcp
-        .call("get_item_image", json!({"id": 1, "image": 1}))
-        .await;
+    let image = mcp.call("get_item_file", json!({"id": 1, "file": 1})).await;
     assert_eq!(image["content"][0]["data"], png_base64());
-    t.add("get image", image);
-    let text = server.dir.join("note.txt");
-    std::fs::write(&text, "hello").unwrap();
-    t.add(
-        "add a text file",
-        mcp.call(
-            "add_item_image",
-            json!({"id": 1, "path": text.display().to_string()}),
-        )
-        .await,
-    );
-    let big = server.dir.join("big.png");
-    let mut data = PNG.to_vec();
-    data.resize(5 * 1024 * 1024 + 1, 0);
-    std::fs::write(&big, &data).unwrap();
-    t.add(
-        "add a large file",
-        mcp.call(
-            "add_item_image",
-            json!({"id": 1, "path": big.display().to_string()}),
-        )
-        .await,
-    );
-    let missing = mcp
-        .call(
-            "add_item_image",
-            json!({"id": 1, "path": server.dir.join("missing.png").display().to_string()}),
-        )
-        .await;
-    assert_eq!(missing["isError"], true, "{missing}");
+    t.add("get the picture", image);
     assert!(
         validation_error(
-            &mcp.call("add_item_image", json!({"id": 1, "path": ""}))
+            &mcp.call("add_item_file", json!({"id": 1, "path": ""}))
                 .await,
-            "add_item_image"
+            "add_item_file"
         ),
         "an empty path is a validation error"
     );
@@ -1395,7 +1340,7 @@ async fn stdio_server() {
     );
     t.add(
         "get file",
-        mcp.call("get_item_file", json!({"id": 1, "file": 1})).await,
+        mcp.call("get_item_file", json!({"id": 1, "file": 2})).await,
     );
     let gone = mcp
         .call(
@@ -1405,9 +1350,9 @@ async fn stdio_server() {
         .await;
     assert_eq!(gone["isError"], true, "{gone}");
     t.add(
-        "add image to a missing item",
+        "add a file to a missing item",
         mcp.call(
-            "add_item_image",
+            "add_item_file",
             json!({"id": 99, "path": png.display().to_string()}),
         )
         .await,
@@ -1636,35 +1581,39 @@ async fn cli() {
             vec!["comment", "P-1", "--body", "Called, no answer."],
         ),
         ("comment empty", vec!["comment", "P-1"]),
-        ("add-image", vec!["add-image", "P-1", &png, "--key", "i1"]),
-        ("add-image missing item", vec!["add-image", "P-99", &png]),
-        ("get-image", vec!["get-image", "P-1", "1", "--out", &out]),
-        ("get-image without out", vec!["get-image", "P-1", "1"]),
         (
-            "get-image bad image id",
-            vec!["get-image", "P-1", "x", "--out", &out],
+            "add-file picture",
+            vec!["add-file", "P-1", &png, "--key", "i1"],
+        ),
+        ("add-file missing item", vec!["add-file", "P-99", &png]),
+        (
+            "get-file picture",
+            vec!["get-file", "P-1", "1", "--out", &out],
         ),
         (
-            "get-image missing",
-            vec!["get-image", "P-1", "9", "--out", &out],
+            "get-file bad file id",
+            vec!["get-file", "P-1", "x", "--out", &out],
         ),
         (
-            "remove-image",
-            vec!["remove-image", "P-1", "1", "--key", "ri1"],
+            "get-file missing",
+            vec!["get-file", "P-1", "9", "--out", &out],
         ),
-        ("remove-image again", vec!["remove-image", "1", "1"]),
+        (
+            "remove-file picture",
+            vec!["remove-file", "P-1", "1", "--key", "ri1"],
+        ),
         ("add-file", vec!["add-file", "P-1", &txt, "--key", "f1"]),
         (
             "add-file again with the key",
             vec!["add-file", "P-1", &txt, "--key", "f1"],
         ),
-        ("get-file", vec!["get-file", "P-1", "1", "--out", &saved]),
-        ("get-file without out", vec!["get-file", "P-1", "1"]),
+        ("get-file", vec!["get-file", "P-1", "2", "--out", &saved]),
+        ("get-file without out", vec!["get-file", "P-1", "2"]),
         (
             "remove-file",
-            vec!["remove-file", "P-1", "1", "--key", "rf1"],
+            vec!["remove-file", "P-1", "2", "--key", "rf1"],
         ),
-        ("remove-file again", vec!["remove-file", "1", "1"]),
+        ("remove-file again", vec!["remove-file", "1", "2"]),
         (
             "note-create",
             vec![
@@ -1805,7 +1754,7 @@ async fn cli() {
     );
     let help = run_cli(&server.url(), &token, &["--help"], &[]);
     assert_eq!(help.code, 0);
-    for command in ["workspace", "note-append", "get-image", "reminders"] {
+    for command in ["workspace", "note-append", "get-file", "reminders"] {
         assert!(help.stdout.contains(command), "help lists {command}");
     }
     t.finish();

@@ -384,3 +384,112 @@ async fn names_that_look_like_paths_are_refused() {
         assert_eq!(response.status(), 400, "{name:?}");
     }
 }
+
+// A PNG that names its size in the header and holds nothing else. Enough for the server to
+// read the size, which is all it reads.
+fn png_of(width: u32, height: u32) -> Vec<u8> {
+    let mut data = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+    data.extend(width.to_be_bytes());
+    data.extend(height.to_be_bytes());
+    data.extend([8, 6, 0, 0, 0, 0, 0, 0, 0]);
+    data
+}
+
+#[tokio::test]
+async fn a_picture_gets_its_size_and_any_other_file_none() {
+    let server = Server::start().await;
+    let id = item(&server, json!({"title": "Receipts"})).await;
+    for (name, mime, data, key) in [
+        ("photo.png", "image/png", PNG.to_vec(), "p1"),
+        // The bytes decide, not the type the sender names.
+        ("scan", "application/octet-stream", png_of(300, 200), "p2"),
+        ("notes.txt", "text/plain", b"hello".to_vec(), "p3"),
+        // More pixels than anyone should have to draw: a file without a size.
+        ("huge.png", "image/png", png_of(10_000, 5_000), "p4"),
+    ] {
+        let response = server
+            .upload(&server.owner, id, (name, mime, data), key, None)
+            .await;
+        assert!(response.status().is_success(), "{name}");
+    }
+    let detail = server
+        .api(&server.owner, "GET", &format!("/items/{id}"), None)
+        .await;
+    let files = &detail["item"]["files"];
+    assert_eq!(
+        (files[0]["width"].clone(), files[0]["height"].clone()),
+        (json!(1), json!(1))
+    );
+    assert_eq!(
+        (files[1]["width"].clone(), files[1]["height"].clone()),
+        (json!(300), json!(200))
+    );
+    assert!(files[2].get("width").is_none());
+    assert!(files[3].get("width").is_none());
+    // Only a JPEG or PNG with its type named so is an image to an app of 0.2.0.
+    let images: Vec<i64> = detail["item"]["images"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|image| image["id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(images, [1]);
+}
+
+#[tokio::test]
+async fn the_old_image_routes_reach_pictures_only() {
+    let server = Server::start().await;
+    let id = item(&server, json!({"title": "Car"})).await;
+    let added = server
+        .api(
+            &server.owner,
+            "POST",
+            &format!("/items/{id}/images"),
+            Some(json!({"mime": "image/png", "data": png_base64()})),
+        )
+        .await;
+    assert_eq!(added["files"][0]["name"], "Image.png");
+    assert_eq!(added["files"][0]["width"], 1);
+    assert_eq!(added["images"][0]["id"], added["files"][0]["id"]);
+    let response = server
+        .upload(
+            &server.owner,
+            id,
+            ("Offer.pdf", "application/pdf", b"%PDF".to_vec()),
+            "f1",
+            None,
+        )
+        .await;
+    assert!(response.status().is_success());
+
+    let picture = get(&server, &server.owner, &format!("/items/{id}/images/1")).await;
+    assert_eq!(picture.status(), 200);
+    assert_eq!(picture.bytes().await.unwrap().to_vec(), PNG);
+    // The PDF is a file under ID 2, and no image.
+    assert_eq!(
+        get(&server, &server.owner, &format!("/items/{id}/images/2"))
+            .await
+            .status(),
+        404
+    );
+    let (status, _) = delete(
+        &server,
+        &server.owner,
+        &format!("/items/{id}/images/2"),
+        "d1",
+    )
+    .await;
+    assert_eq!(status, 404);
+
+    let (status, body) = delete(
+        &server,
+        &server.owner,
+        &format!("/items/{id}/images/1"),
+        "d2",
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(body["files"].as_array().unwrap().len(), 1);
+    assert_eq!(body["files"][0]["name"], "Offer.pdf");
+    assert_eq!(body["images"], json!([]));
+}

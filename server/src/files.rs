@@ -17,7 +17,10 @@ use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode
 use serde_json::{Map, Value, json};
 use sqlx::SqliteConnection;
 
-const PER_ITEM: usize = 20;
+const PER_ITEM: usize = 40;
+// A small file can announce a huge picture, and whoever shows it needs the memory for it. A
+// picture above this is kept as a file without a size.
+pub(crate) const PIXEL_LIMIT: u64 = 40_000_000;
 const CEILING: usize = (FILE_CEILING_MB as u64 * MB) as usize;
 // How many uploads may be read into memory at once. Each can hold up to the ceiling.
 pub const UPLOADS_AT_ONCE: usize = 2;
@@ -28,7 +31,46 @@ pub(crate) struct Upload {
     mime: String,
     upload_id: Option<String>,
     pub sha256: String,
+    size: Option<(i64, i64)>,
     data: Vec<u8>,
+}
+
+impl Upload {
+    // An image sent to the old image route, already checked and measured there.
+    pub(crate) fn picture(
+        name: &str,
+        mime: &str,
+        sha256: String,
+        size: (i64, i64),
+        data: Vec<u8>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            mime: mime.into(),
+            upload_id: None,
+            sha256,
+            size: Some(size),
+            data,
+        }
+    }
+}
+
+// The width and height of a picture the apps can draw, read from its first bytes whatever the
+// sender calls it. Any other file, or a picture too large to draw safely, has none.
+fn picture_size(data: &[u8]) -> Option<(i64, i64)> {
+    use imagesize::ImageType;
+    match imagesize::image_type(data).ok()? {
+        ImageType::Jpeg
+        | ImageType::Png
+        | ImageType::Gif
+        | ImageType::Webp
+        | ImageType::Heif(_) => {}
+        _ => return None,
+    }
+    let size = imagesize::blob_size(data).ok()?;
+    let (width, height) = (size.width as u64, size.height as u64);
+    (width > 0 && height > 0 && width.saturating_mul(height) <= PIXEL_LIMIT)
+        .then_some((width as i64, height as i64))
 }
 
 fn too_large(limit_mb: i64) -> ApiError {
@@ -156,9 +198,10 @@ pub async fn upload(
             return Err(ApiError::bad("The file did not arrive in full."));
         }
     };
-    let (sha256, data) = tokio::task::spawn_blocking(move || (sha256_hex(&data), data))
-        .await
-        .map_err(|_| ApiError::bad("The file could not be read."))?;
+    let (sha256, size, data) =
+        tokio::task::spawn_blocking(move || (sha256_hex(&data), picture_size(&data), data))
+            .await
+            .map_err(|_| ApiError::bad("The file could not be read."))?;
     let path = uri.path().to_owned();
     // Everything that ends up stored, so a key that comes back with another file is refused.
     let fingerprint = hash(
@@ -177,6 +220,7 @@ pub async fn upload(
         mime,
         upload_id,
         sha256,
+        size,
         data,
     };
     items::commit(
@@ -238,9 +282,9 @@ pub(crate) async fn add(
     id: i64,
     upload: Upload,
 ) -> Result<Written> {
-    let mut files = open_item(conn, identity, id).await?.files;
+    let mut files = open_item(conn, identity, id).await?.files.0;
     if files.len() >= PER_ITEM {
-        return Err(ApiError::bad("An item can hold at most 20 files."));
+        return Err(ApiError::bad("An item can hold at most 40 files."));
     }
     // Read in the transaction, so a limit lowered a moment ago already counts.
     let limit = settings::read(conn).await?.file_limit_mb;
@@ -261,6 +305,8 @@ pub(crate) async fn add(
         bytes,
         sha256: upload.sha256,
         upload_id: upload.upload_id,
+        width: upload.size.map(|(width, _)| width),
+        height: upload.size.map(|(_, height)| height),
     });
     let item = store_list(conn, identity, id, &files).await?;
     record(
@@ -284,7 +330,7 @@ pub(crate) async fn remove(
     if !fields.is_empty() {
         return Err(ApiError::bad("Removing a file takes no fields."));
     }
-    let mut files = open_item(conn, identity, id).await?.files;
+    let mut files = open_item(conn, identity, id).await?.files.0;
     // The file has to be one of this item's. Its ID under another item is not found.
     let Some(at) = files.iter().position(|entry| entry.id == file) else {
         return Err(ApiError::missing());
@@ -319,7 +365,7 @@ pub async fn download(
     let (id, file) = (item_id(&id)?, item_id(&file)?);
     let mut tx = state.db.begin().await?;
     let item = visible_item(&mut *tx, id, &identity).await?;
-    let Some(entry) = item.files.iter().find(|entry| entry.id == file) else {
+    let Some(entry) = item.files.0.iter().find(|entry| entry.id == file) else {
         return Err(ApiError::missing());
     };
     let data: Vec<u8> =

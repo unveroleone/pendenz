@@ -153,7 +153,7 @@ struct ItemDetailView: View {
             }
         }
         .formStyle(.grouped)
-        .modifier(ItemImageDrop(itemID: itemID))
+        .modifier(ItemAttachmentDrop(itemID: itemID))
         .onAppear { load(item) }
         .onDisappear(perform: saveText)
         .onChange(of: focus) { old, _ in save(old) }
