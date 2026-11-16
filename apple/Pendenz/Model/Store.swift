@@ -854,6 +854,12 @@ final class Store {
         update(item.id, ItemPatch(dueAt: .set(due), dueTz: TimeZone.current.identifier))
     }
 
+    // Marks an open item as being worked on, or takes that mark back to todo.
+    func toggleDoing(_ item: Item) {
+        guard item.isOpen else { return }
+        update(item.id, ItemPatch(status: item.status == .doing ? .todo : .doing))
+    }
+
     func move(_ item: Item, toProject id: String?) {
         guard item.projectId != id else { return }
         update(item.id, ItemPatch(projectId: id.map { .set($0) } ?? .clear))
