@@ -1005,7 +1005,6 @@ fn answer(identity: &Identity, resource: &str, body: Value) -> Value {
 // and checked before the writer lock.
 pub(crate) enum Payload {
     Fields(Map<String, Value>),
-    Image(images::Upload),
     File(files::Upload),
 }
 
@@ -1052,12 +1051,13 @@ pub async fn write(
         }
     };
     let key = idempotency_key(&headers)?;
-    // An image is decoded and checked here, before the writer lock: megabytes of base64 must
-    // not keep other writes waiting. Its hash stands for the body in the fingerprint.
+    // An image of the old route is decoded and checked here, before the writer lock: megabytes
+    // of base64 must not keep other writes waiting. Its hash stands for the body in the
+    // fingerprint.
     let (payload, fingerprint) = if is_upload {
         let upload = images::prepare(fields)?;
         let fingerprint = hash(&format!("{method} {path} {}", upload.sha256));
-        (Payload::Image(upload), fingerprint)
+        (Payload::File(upload), fingerprint)
     } else {
         let fingerprint = hash(&format!(
             "{method} {path} {}",
@@ -1101,25 +1101,21 @@ pub(crate) async fn commit(
         let body = replay(&mut tx, identity, &resource, &id).await?;
         return Ok(Json(answer(identity, &resource, body)));
     }
-    let (fields, image, file) = match payload {
-        Payload::Fields(fields) => (fields, None, None),
-        Payload::Image(upload) => (Map::new(), Some(upload), None),
-        Payload::File(upload) => (Map::new(), None, Some(upload)),
+    let (fields, file) = match payload {
+        Payload::Fields(fields) => (fields, None),
+        Payload::File(upload) => (Map::new(), Some(upload)),
     };
     let written = match segments.as_slice() {
         ["items"] => create_item(&mut tx, state, identity, fields).await?,
         ["items", id] => update_item(&mut tx, state, identity, item_id(id)?, fields).await?,
         ["items", id, "comments"] => add_comment(&mut tx, identity, item_id(id)?, fields).await?,
-        ["items", id, "images"] => {
-            let upload = image.ok_or_else(ApiError::missing)?;
-            images::add(&mut tx, identity, item_id(id)?, upload).await?
+        // The old image route stores a file too.
+        ["items", id, "images"] | ["items", id, "files"] => {
+            let upload = file.ok_or_else(ApiError::missing)?;
+            files::add(&mut tx, identity, item_id(id)?, upload).await?
         }
         ["items", id, "images", image] => {
             images::remove(&mut tx, identity, item_id(id)?, item_id(image)?, fields).await?
-        }
-        ["items", id, "files"] => {
-            let upload = file.ok_or_else(ApiError::missing)?;
-            files::add(&mut tx, identity, item_id(id)?, upload).await?
         }
         ["items", id, "files", file] => {
             files::remove(&mut tx, identity, item_id(id)?, item_id(file)?, fields).await?

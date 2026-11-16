@@ -7,8 +7,7 @@ use axum::{
     body::Body,
     http::{Method, Request, header},
 };
-use base64::{Engine, engine::general_purpose::STANDARD};
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 use std::time::Duration;
 use tower::ServiceExt;
 
@@ -134,11 +133,11 @@ impl Client {
     }
 
     pub async fn request(&self, path: &str, call: Call<'_>) -> Result<Reply, String> {
-        // An image or a file takes longer than a row, so it gets more time.
-        let limit = match attachment(path) {
-            Some("files") => Duration::from_secs(300),
-            Some(_) => Duration::from_secs(90),
-            None => Duration::from_secs(20),
+        // A file takes longer than a row, so it gets more time.
+        let limit = if is_file(path) {
+            Duration::from_secs(300)
+        } else {
+            Duration::from_secs(20)
         };
         let method = call.method.clone().unwrap_or(Method::GET);
         let mut body = call.body;
@@ -319,15 +318,15 @@ fn js_numbers(value: &mut Value) {
     }
 }
 
-// "images" or "files" for a route under an item that carries one.
-fn attachment(path: &str) -> Option<&'static str> {
-    let (id, rest) = path.strip_prefix("/items/")?.split_once('/')?;
-    if id.is_empty() || !id.bytes().all(|c| c.is_ascii_digit()) {
-        return None;
-    }
-    ["images", "files"]
-        .into_iter()
-        .find(|kind| rest.starts_with(kind))
+// Whether the route is about the files of an item.
+fn is_file(path: &str) -> bool {
+    let Some((id, rest)) = path
+        .strip_prefix("/items/")
+        .and_then(|rest| rest.split_once('/'))
+    else {
+        return false;
+    };
+    !id.is_empty() && id.bytes().all(|c| c.is_ascii_digit()) && rest.starts_with("files")
 }
 
 // The innermost cause, which says more than reqwest's own summary.
@@ -337,23 +336,6 @@ fn reason(error: &(dyn std::error::Error + 'static)) -> String {
         cause = source;
     }
     cause.to_string()
-}
-
-// A local image file as the upload route takes it. The first bytes decide the type, as they do
-// on the server, which also checks the size and refuses anything else.
-pub fn image_body(path: &str) -> Result<Value, String> {
-    let data = std::fs::read(path).map_err(|error| format!("Could not read {path}: {error}"))?;
-    let mime = if data.starts_with(&[0xFF, 0xD8]) {
-        "image/jpeg"
-    } else if data.starts_with(b"\x89PNG") {
-        "image/png"
-    } else {
-        return Err("Only JPEG and PNG images can be attached.".into());
-    };
-    if data.len() > 5 * 1024 * 1024 {
-        return Err("An image can be at most 5 MB.".into());
-    }
-    Ok(json!({"mime": mime, "data": STANDARD.encode(&data)}))
 }
 
 // A local file as the file route takes it: its bytes, its name and a type from its extension.
@@ -464,17 +446,6 @@ pub fn note_id(value: Option<&Value>) -> Result<String, String> {
         Ok(text.to_owned())
     } else {
         Err("Use a note ID like 12.".into())
-    }
-}
-
-// An image ID from the item's images list.
-pub fn image_id(value: Option<&Value>) -> Result<String, String> {
-    let text = js_string(value);
-    let text = crate::agent::schema::js_trim(&text);
-    if positive(text) {
-        Ok(text.to_owned())
-    } else {
-        Err("Use an image ID from the item's images list.".into())
     }
 }
 

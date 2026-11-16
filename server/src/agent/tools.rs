@@ -7,12 +7,9 @@
 // choose another one, and a name that is not a symbol draws as nothing.
 //
 // A tool with readOnlyHint needs the read scope, every other one the write scope.
-// add_item_image and add_item_file take a path on the agent's machine, so only the stdio server
-// offers them.
+// add_item_file takes a path on the agent's machine, so only the stdio server offers it.
 use super::{
-    client::{
-        Call, Client, Reply, file_body, file_id, image_body, image_id, item_id, project_id, query,
-    },
+    client::{Call, Client, Reply, file_body, file_id, item_id, project_id, query},
     schema::{self, js_space, js_trim, utf16_len},
 };
 use axum::http::Method;
@@ -23,7 +20,7 @@ use std::sync::OnceLock;
 pub const INSTRUCTIONS: &str = include_str!("instructions.txt");
 
 // Only offered where a path means a file next to the agent.
-const FILE_TOOLS: [&str; 2] = ["add_item_image", "add_item_file"];
+const FILE_TOOLS: [&str; 1] = ["add_item_file"];
 // What get_item_file shows to a model. Anything larger, or of another kind, is described only.
 const SHOWN_TEXT: i64 = 1_000_000;
 const SHOWN_IMAGE: i64 = 5 * 1024 * 1024;
@@ -180,13 +177,15 @@ async fn run(client: &Client, name: &str, args: Value) -> Result<Answer, String>
         "get_item" => {
             let mut params = Map::new();
             params.insert("activity".into(), args["activity"].clone());
-            client
+            let mut detail = client
                 .get(&format!(
                     "/items/{}{}",
                     item_id(args.get("id"))?,
                     query(&params)
                 ))
-                .await?
+                .await?;
+            without_old_images(&mut detail["item"]);
+            detail
         }
         "create_item" => {
             let item = &args["item"];
@@ -213,42 +212,6 @@ async fn run(client: &Client, name: &str, args: Value) -> Result<Answer, String>
                 .request(&path, write(Method::POST, json!({"body": args["body"]})))
                 .await?
                 .json()
-        }
-        "get_item_image" => {
-            let path = format!(
-                "/items/{}/images/{}",
-                item_id(args.get("id"))?,
-                image_id(args.get("image"))?
-            );
-            let call = Call {
-                binary: true,
-                ..Call::default()
-            };
-            return match client.request(&path, call).await? {
-                Reply::Binary { mime, data } => Ok(Answer::Image { mime, data }),
-                Reply::Json(value) => Ok(Answer::Json(value)),
-            };
-        }
-        "add_item_image" => {
-            let path = format!("/items/{}/images", item_id(args.get("id"))?);
-            let body = image_body(args["path"].as_str().unwrap_or(""))?;
-            let updated = client
-                .request(&path, write(Method::POST, body))
-                .await?
-                .json();
-            compact(&updated, false)
-        }
-        "remove_item_image" => {
-            let path = format!(
-                "/items/{}/images/{}",
-                item_id(args.get("id"))?,
-                image_id(args.get("image"))?
-            );
-            let updated = client
-                .request(&path, write(Method::DELETE, json!({})))
-                .await?
-                .json();
-            compact(&updated, false)
         }
         "get_item_file" => return show_file(client, &args).await,
         "add_item_file" => {
@@ -356,12 +319,23 @@ async fn run(client: &Client, name: &str, args: Value) -> Result<Answer, String>
             // Notes are context to search, not work to pick up, and a note can be long.
             if let Some(Value::Array(changes)) = page.get_mut("changes") {
                 changes.retain(|change| change["type"] != "note");
+                for change in changes.iter_mut() {
+                    without_old_images(&mut change["data"]);
+                }
             }
             page
         }
         _ => return Err(format!("MCP error -32602: Tool {name} not found")),
     };
     Ok(Answer::Json(value))
+}
+
+// An item carries its pictures twice: among its files, and as `images` for the apps of 0.2.0.
+// An agent reads the files only.
+fn without_old_images(item: &mut Value) {
+    if let Some(item) = item.as_object_mut() {
+        item.remove("images");
+    }
 }
 
 // A note ID that the schema already checked, as a number or a string of digits.
@@ -460,11 +434,6 @@ fn compact(item: &Value, with_position: bool) -> Value {
         && stage != "none"
     {
         row.insert("agent_stage".into(), stage.clone());
-    }
-    if let Some(Value::Array(images)) = item.get("images")
-        && !images.is_empty()
-    {
-        row.insert("images".into(), images.len().into());
     }
     if let Some(Value::Array(files)) = item.get("files")
         && !files.is_empty()

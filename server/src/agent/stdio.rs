@@ -1,5 +1,5 @@
 // The MCP server over stdio, for an agent on the same machine. It reads files the agent names,
-// so it offers add_item_image.
+// so it offers add_item_file.
 use super::{
     client::Client,
     server::{Caller, Pendenz},

@@ -1,9 +1,6 @@
 // The command line for agents and scripts: the same calls as the MCP tools, against the API at
 // PENDENZ_API_URL with PENDENZ_API_TOKEN. Each command prints the API's JSON answer.
-use super::client::{
-    Call, Client, Reply, file_body, file_id, image_body, image_id, item_id, note_id, project_id,
-    query,
-};
+use super::client::{Call, Client, Reply, file_body, file_id, item_id, note_id, project_id, query};
 use axum::http::Method;
 use clap::Subcommand;
 use serde_json::{Map, Value, json};
@@ -13,9 +10,9 @@ pub const NOTES: &str = "\
 Agent commands (workspace to reminders) need PENDENZ_API_URL and PENDENZ_API_TOKEN, and \
 print JSON. PENDENZ_SOURCE names where new items come from, such as telegram.
 
-Item IDs are written P-12 or 12, note IDs are plain numbers. An image is a JPEG or PNG of at \
-most 5 MB; its ID is in the item's images list. A file can be of any kind, up to the size the \
-owner set (workspace settings.file_limit_mb); its ID is in the item's files list. An item's place in the manual order of its \
+Item IDs are written P-12 or 12, note IDs are plain numbers. A file can be of any kind, up to \
+the size the owner set (workspace settings.file_limit_mb); its ID is in the item's files list, \
+and a picture there has a width and a height. An item's place in the manual order of its \
 list is its position, highest first: update it to a number between two neighbours.
 A note with \"locked\": true is private to the owner: use its text for the task at hand only, \
 and do not save or copy it anywhere. You can lock a note with \"locked\": true; only the owner \
@@ -41,12 +38,6 @@ pub enum Command {
     Update(Rest),
     /// Comment on an item: ID --body TEXT
     Comment(Rest),
-    /// Attach an image file: ID FILE
-    AddImage(Rest),
-    /// Save an image of an item: ID IMAGE --out FILE
-    GetImage(Rest),
-    /// Remove an image: ID IMAGE
-    RemoveImage(Rest),
     /// Attach a file of any kind: ID FILE
     AddFile(Rest),
     /// Save a file of an item: ID FILE_ID --out PATH
@@ -179,55 +170,6 @@ async fn execute(command: Command) -> Result<Value, String> {
                 format!("/items/{id}/comments"),
                 Method::POST,
                 body,
-                owned(&opts),
-            )
-            .await?
-        }
-        Command::AddImage(mut rest) => {
-            let id = item_id(shift(&mut rest.args).as_ref())?;
-            let path = shift(&mut rest.args)
-                .and_then(|v| v.as_str().map(str::to_owned))
-                .unwrap_or_default();
-            let body = image_body(&path)?;
-            let opts = options(&rest.args)?;
-            write(
-                format!("/items/{id}/images"),
-                Method::POST,
-                body,
-                owned(&opts),
-            )
-            .await?
-        }
-        Command::GetImage(mut rest) => {
-            let id = item_id(shift(&mut rest.args).as_ref())?;
-            let image = image_id(shift(&mut rest.args).as_ref())?;
-            let opts = options(&rest.args)?;
-            let Some(out) = opts.get("out").and_then(Value::as_str) else {
-                return Err("Pass --out with the file to write.".into());
-            };
-            let call = Call {
-                binary: true,
-                ..Call::default()
-            };
-            let (mime, data) = match client
-                .request(&format!("/items/{id}/images/{image}"), call)
-                .await?
-            {
-                Reply::Binary { mime, data } => (mime, data),
-                Reply::Json(_) => return Err("The API answered without an image.".into()),
-            };
-            std::fs::write(out, &data)
-                .map_err(|error| format!("Could not write {out}: {error}"))?;
-            json!({"file": out, "mime": mime, "bytes": data.len()})
-        }
-        Command::RemoveImage(mut rest) => {
-            let id = item_id(shift(&mut rest.args).as_ref())?;
-            let image = image_id(shift(&mut rest.args).as_ref())?;
-            let opts = options(&rest.args)?;
-            write(
-                format!("/items/{id}/images/{image}"),
-                Method::DELETE,
-                json!({}),
                 owned(&opts),
             )
             .await?

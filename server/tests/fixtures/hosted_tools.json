@@ -7,7 +7,7 @@
         "capabilities": {
           "tools": {}
         },
-        "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nImages: an item can carry images, listed under images in get_item with an id each. Look at one with get_item_image when it matters for the task. Remove one only when the owner asks for it; a removed image does not come back.\nFiles: an item can carry files of any kind, listed under files in get_item with an id, name, type and size. Read one with get_item_file when it matters for the task. Remove one only when the owner asks for it; a removed file does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
+        "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nFiles: an item can carry files of any kind, pictures too, listed under files in get_item with an id, name, type and size; a picture also has a width and a height. Read or look at one with get_item_file when it matters for the task. Remove one only when the owner asks for it; a removed file does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
         "protocolVersion": "2025-06-18",
         "serverInfo": {
           "name": "pendenz",
@@ -25,7 +25,7 @@
         "capabilities": {
           "tools": {}
         },
-        "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nImages: an item can carry images, listed under images in get_item with an id each. Look at one with get_item_image when it matters for the task. Remove one only when the owner asks for it; a removed image does not come back.\nFiles: an item can carry files of any kind, listed under files in get_item with an id, name, type and size. Read one with get_item_file when it matters for the task. Remove one only when the owner asks for it; a removed file does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
+        "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nFiles: an item can carry files of any kind, pictures too, listed under files in get_item with an id, name, type and size; a picture also has a width and a height. Read or look at one with get_item_file when it matters for the task. Remove one only when the owner asks for it; a removed file does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
         "protocolVersion": "2025-11-25",
         "serverInfo": {
           "name": "pendenz",
@@ -613,111 +613,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Look at one image of an item. get_item lists the images of an item with their ids, sizes and types. Returns the image itself.",
-        "inputSchema": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "anyOf": [
-                {
-                  "exclusiveMinimum": 0,
-                  "maximum": 9007199254740991,
-                  "type": "integer"
-                },
-                {
-                  "pattern": "^([Pp]-)?[1-9]\\d*$",
-                  "type": "string"
-                }
-              ],
-              "description": "Item ID, as P-12 or 12."
-            },
-            "image": {
-              "anyOf": [
-                {
-                  "exclusiveMinimum": 0,
-                  "maximum": 9007199254740991,
-                  "type": "integer"
-                },
-                {
-                  "pattern": "^[1-9]\\d*$",
-                  "type": "string"
-                }
-              ],
-              "description": "Image ID from the item's images list in get_item."
-            }
-          },
-          "required": [
-            "id",
-            "image"
-          ],
-          "type": "object"
-        },
-        "name": "get_item_image"
-      },
-      {
-        "annotations": {
-          "destructiveHint": true,
-          "idempotentHint": false,
-          "openWorldHint": false,
-          "readOnlyHint": false
-        },
-        "description": "Remove one image from an item, only when the owner asks for it. This cannot be undone. Returns the item as a compact row with its new version.",
-        "inputSchema": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "anyOf": [
-                {
-                  "exclusiveMinimum": 0,
-                  "maximum": 9007199254740991,
-                  "type": "integer"
-                },
-                {
-                  "pattern": "^([Pp]-)?[1-9]\\d*$",
-                  "type": "string"
-                }
-              ],
-              "description": "Item ID, as P-12 or 12."
-            },
-            "image": {
-              "anyOf": [
-                {
-                  "exclusiveMinimum": 0,
-                  "maximum": 9007199254740991,
-                  "type": "integer"
-                },
-                {
-                  "pattern": "^[1-9]\\d*$",
-                  "type": "string"
-                }
-              ],
-              "description": "Image ID from the item's images list in get_item."
-            },
-            "key": {
-              "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
-              "maxLength": 128,
-              "minLength": 1,
-              "type": "string"
-            }
-          },
-          "required": [
-            "id",
-            "image"
-          ],
-          "type": "object"
-        },
-        "name": "remove_item_image"
-      },
-      {
-        "annotations": {
-          "destructiveHint": false,
-          "idempotentHint": true,
-          "openWorldHint": false,
-          "readOnlyHint": true
-        },
-        "description": "Read one file attached to an item. A text file up to 1 MB comes back as text, a PNG, JPEG, GIF or WebP image up to 5 MB as an image. Anything else comes back as its name, type and size only.",
+        "description": "Read one file attached to an item. A text file up to 1 MB comes back as text, a PNG, JPEG, GIF or WebP picture up to 5 MB as an image. Anything else comes back as its name, type and size only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1276,7 +1172,6 @@
       "workspace",
       "list_items",
       "get_item",
-      "get_item_image",
       "get_item_file",
       "search_notes",
       "get_note",
@@ -1289,7 +1184,6 @@
       "create_item",
       "update_item",
       "add_comment",
-      "remove_item_image",
       "remove_item_file",
       "create_project",
       "update_project",
@@ -1308,8 +1202,6 @@
       "create_item",
       "update_item",
       "add_comment",
-      "get_item_image",
-      "remove_item_image",
       "get_item_file",
       "remove_item_file",
       "create_project",
@@ -2225,7 +2117,6 @@
               "files": [],
               "hidden_from_agents": false,
               "id": 2,
-              "images": [],
               "position": 5,
               "priority": 3,
               "project_id": "home-lab",
@@ -2283,7 +2174,6 @@
               "files": [],
               "hidden_from_agents": false,
               "id": 2,
-              "images": [],
               "position": 5,
               "priority": 3,
               "project_id": "home-lab",
@@ -2340,7 +2230,6 @@
               "files": [],
               "hidden_from_agents": false,
               "id": 1,
-              "images": [],
               "position": 5,
               "priority": 0,
               "project_id": null,
@@ -2394,7 +2283,6 @@
               "files": [],
               "hidden_from_agents": false,
               "id": 3,
-              "images": [],
               "position": 7,
               "priority": 1,
               "project_id": null,
@@ -2678,58 +2566,15 @@
       "content": [
         {
           "json": {
-            "has_more": false,
-            "items": [
-              {
-                "checklist": "0/1 done",
-                "id": 4,
-                "project_id": "home-lab",
-                "ref": "P-4",
-                "status": "todo",
-                "title": "Fix the kitchen shelf",
-                "version": 2
-              },
-              {
-                "checklist": "0/2 done",
-                "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (get_item for the rest)",
-                "due_at": "2030-01-22T09:00:00+01:00",
-                "due_tz": "Europe/Zurich",
-                "id": 2,
-                "images": 1,
-                "priority": 3,
-                "project_id": "home-lab",
-                "ref": "P-2",
-                "remind_at": "2030-01-22T08:00:00+01:00",
-                "repeat_rule": "FREQ=WEEKLY",
-                "source_url": "https://example.com/passport",
-                "status": "todo",
-                "tags": [
-                  "admin",
-                  "travel"
-                ],
-                "title": "Renew the passport",
-                "version": 3
-              }
-            ]
-          }
-        }
-      ]
-    },
-    "step": "list shows the image count"
-  },
-  {
-    "answer": {
-      "content": [
-        {
-          "json": {
             "activity": [
               {
-                "action": "image_added",
+                "action": "file_added",
                 "actor_id": "owner",
                 "created_at": "<time>",
                 "detail": {
                   "bytes": 67,
-                  "image_id": 1
+                  "file_id": 1,
+                  "name": "Image.png"
                 },
                 "id": 20
               }
@@ -2767,19 +2612,19 @@
               "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔑 end",
               "due_at": "2030-01-22T09:00:00+01:00",
               "due_tz": "Europe/Zurich",
-              "files": [],
-              "hidden_from_agents": false,
-              "id": 2,
-              "images": [
+              "files": [
                 {
                   "bytes": 67,
                   "height": 1,
                   "id": 1,
                   "mime": "image/png",
+                  "name": "Image.png",
                   "sha256": "2b1da20a14b97d8f01f0a809d9f7d53eeefc59df6312eaa5a0c8b5c1228d1d7f",
                   "width": 1
                 }
               ],
+              "hidden_from_agents": false,
+              "id": 2,
               "position": 5,
               "priority": 3,
               "project_id": "home-lab",
@@ -2802,7 +2647,7 @@
         }
       ]
     },
-    "step": "get item with image"
+    "step": "get item with an old image"
   },
   {
     "answer": {
@@ -2813,29 +2658,7 @@
         }
       ]
     },
-    "step": "get image"
-  },
-  {
-    "answer": {
-      "content": [
-        {
-          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==",
-          "image": "image/png"
-        }
-      ]
-    },
-    "step": "get image as string"
-  },
-  {
-    "answer": {
-      "content": [
-        {
-          "text": "404: Not found."
-        }
-      ],
-      "isError": true
-    },
-    "step": "get missing image"
+    "step": "get an old image"
   },
   {
     "answer": {
@@ -2864,18 +2687,7 @@
         }
       ]
     },
-    "step": "remove image"
-  },
-  {
-    "answer": {
-      "content": [
-        {
-          "text": "404: Not found."
-        }
-      ],
-      "isError": true
-    },
-    "step": "remove image again"
+    "step": "remove an old image"
   },
   {
     "answer": {
@@ -2933,7 +2745,7 @@
                 "created_at": "<time>",
                 "detail": {
                   "bytes": 67,
-                  "file_id": 3,
+                  "file_id": 4,
                   "name": "photo.png"
                 },
                 "id": 24
@@ -2975,29 +2787,30 @@
               "files": [
                 {
                   "bytes": 17,
-                  "id": 1,
+                  "id": 2,
                   "mime": "text/plain",
                   "name": "Packing list.txt",
                   "sha256": "6f2b99f807e33c4ae1a28921e7de9d3d0c261a792e6b0204a98610e2caef988d"
                 },
                 {
                   "bytes": 19,
-                  "id": 2,
+                  "id": 3,
                   "mime": "application/pdf",
                   "name": "Offer.pdf",
                   "sha256": "8820fe902eaf906fe74705c172cd13f73f68ef15c3df4638f906eccfca9b9523"
                 },
                 {
                   "bytes": 67,
-                  "id": 3,
+                  "height": 1,
+                  "id": 4,
                   "mime": "image/png",
                   "name": "photo.png",
-                  "sha256": "2b1da20a14b97d8f01f0a809d9f7d53eeefc59df6312eaa5a0c8b5c1228d1d7f"
+                  "sha256": "2b1da20a14b97d8f01f0a809d9f7d53eeefc59df6312eaa5a0c8b5c1228d1d7f",
+                  "width": 1
                 }
               ],
               "hidden_from_agents": false,
               "id": 2,
-              "images": [],
               "position": 5,
               "priority": 3,
               "project_id": "home-lab",
@@ -3029,7 +2842,7 @@
           "json": {
             "file": {
               "bytes": 17,
-              "id": 1,
+              "id": 2,
               "mime": "text/plain",
               "name": "Packing list.txt",
               "sha256": "6f2b99f807e33c4ae1a28921e7de9d3d0c261a792e6b0204a98610e2caef988d"
@@ -3048,7 +2861,7 @@
           "json": {
             "file": {
               "bytes": 19,
-              "id": 2,
+              "id": 3,
               "mime": "application/pdf",
               "name": "Offer.pdf",
               "sha256": "8820fe902eaf906fe74705c172cd13f73f68ef15c3df4638f906eccfca9b9523"
@@ -3595,7 +3408,6 @@
                   "files": [],
                   "hidden_from_agents": false,
                   "id": 1,
-                  "images": [],
                   "position": 5,
                   "priority": 0,
                   "project_id": null,
@@ -3635,7 +3447,6 @@
                   "files": [],
                   "hidden_from_agents": false,
                   "id": 4,
-                  "images": [],
                   "position": 100,
                   "priority": 0,
                   "project_id": "home-lab",
@@ -3669,7 +3480,6 @@
                   "files": [],
                   "hidden_from_agents": false,
                   "id": 3,
-                  "images": [],
                   "position": 250.5,
                   "priority": 1,
                   "project_id": null,
@@ -3728,22 +3538,23 @@
                   "files": [
                     {
                       "bytes": 17,
-                      "id": 1,
+                      "id": 2,
                       "mime": "text/plain",
                       "name": "Packing list.txt",
                       "sha256": "6f2b99f807e33c4ae1a28921e7de9d3d0c261a792e6b0204a98610e2caef988d"
                     },
                     {
                       "bytes": 67,
-                      "id": 3,
+                      "height": 1,
+                      "id": 4,
                       "mime": "image/png",
                       "name": "photo.png",
-                      "sha256": "2b1da20a14b97d8f01f0a809d9f7d53eeefc59df6312eaa5a0c8b5c1228d1d7f"
+                      "sha256": "2b1da20a14b97d8f01f0a809d9f7d53eeefc59df6312eaa5a0c8b5c1228d1d7f",
+                      "width": 1
                     }
                   ],
                   "hidden_from_agents": false,
                   "id": 2,
-                  "images": [],
                   "position": 5,
                   "priority": 3,
                   "project_id": "home-lab",
@@ -3812,7 +3623,6 @@
                   "files": [],
                   "hidden_from_agents": false,
                   "id": 1,
-                  "images": [],
                   "position": 5,
                   "priority": 0,
                   "project_id": null,
@@ -3890,7 +3700,6 @@
                   "files": [],
                   "hidden_from_agents": false,
                   "id": 1,
-                  "images": [],
                   "position": 5,
                   "priority": 0,
                   "project_id": null,
@@ -3930,7 +3739,6 @@
                   "files": [],
                   "hidden_from_agents": false,
                   "id": 4,
-                  "images": [],
                   "position": 100,
                   "priority": 0,
                   "project_id": "home-lab",
@@ -3964,7 +3772,6 @@
                   "files": [],
                   "hidden_from_agents": false,
                   "id": 3,
-                  "images": [],
                   "position": 250.5,
                   "priority": 1,
                   "project_id": null,
@@ -4023,22 +3830,23 @@
                   "files": [
                     {
                       "bytes": 17,
-                      "id": 1,
+                      "id": 2,
                       "mime": "text/plain",
                       "name": "Packing list.txt",
                       "sha256": "6f2b99f807e33c4ae1a28921e7de9d3d0c261a792e6b0204a98610e2caef988d"
                     },
                     {
                       "bytes": 67,
-                      "id": 3,
+                      "height": 1,
+                      "id": 4,
                       "mime": "image/png",
                       "name": "photo.png",
-                      "sha256": "2b1da20a14b97d8f01f0a809d9f7d53eeefc59df6312eaa5a0c8b5c1228d1d7f"
+                      "sha256": "2b1da20a14b97d8f01f0a809d9f7d53eeefc59df6312eaa5a0c8b5c1228d1d7f",
+                      "width": 1
                     }
                   ],
                   "hidden_from_agents": false,
                   "id": 2,
-                  "images": [],
                   "position": 5,
                   "priority": 3,
                   "project_id": "home-lab",
@@ -4395,7 +4203,6 @@
               "files": [],
               "hidden_from_agents": false,
               "id": 1,
-              "images": [],
               "position": 5,
               "priority": 0,
               "project_id": null,
@@ -4518,7 +4325,7 @@
           "capabilities": {
             "tools": {}
           },
-          "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nImages: an item can carry images, listed under images in get_item with an id each. Look at one with get_item_image when it matters for the task. Remove one only when the owner asks for it; a removed image does not come back.\nFiles: an item can carry files of any kind, listed under files in get_item with an id, name, type and size. Read one with get_item_file when it matters for the task. Remove one only when the owner asks for it; a removed file does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
+          "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nFiles: an item can carry files of any kind, pictures too, listed under files in get_item with an id, name, type and size; a picture also has a width and a height. Read or look at one with get_item_file when it matters for the task. Remove one only when the owner asks for it; a removed file does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
           "resultType": "complete",
           "supportedVersions": [
             "2024-11-05",
@@ -4544,7 +4351,6 @@
       "workspace",
       "list_items",
       "get_item",
-      "get_item_image",
       "get_item_file",
       "search_notes",
       "get_note",
@@ -4560,7 +4366,7 @@
         "result": {
           "content": [
             {
-              "text": "{\"activity\":[],\"activity_has_more\":true,\"comments\":[{\"author_id\":\"writer\",\"body\":\"seen\",\"created_at\":\"<time>\",\"id\":2,\"item_id\":1,\"seq\":41}],\"item\":{\"agent_stage\":\"none\",\"archived\":false,\"checklist\":[],\"completed_at\":null,\"created_at\":\"<time>\",\"created_by\":\"bot\",\"created_via\":\"mcp\",\"description\":\"\",\"due_at\":null,\"due_tz\":null,\"files\":[],\"hidden_from_agents\":false,\"id\":1,\"images\":[],\"position\":5,\"priority\":0,\"project_id\":null,\"remind_at\":null,\"repeat_rule\":null,\"seq\":38,\"source_url\":null,\"status\":\"todo\",\"tags\":[],\"title\":\"Call the dentist\",\"trashed\":false,\"updated_at\":\"<time>\",\"updated_by\":\"writer\",\"version\":3}}",
+              "text": "{\"activity\":[],\"activity_has_more\":true,\"comments\":[{\"author_id\":\"writer\",\"body\":\"seen\",\"created_at\":\"<time>\",\"id\":2,\"item_id\":1,\"seq\":41}],\"item\":{\"agent_stage\":\"none\",\"archived\":false,\"checklist\":[],\"completed_at\":null,\"created_at\":\"<time>\",\"created_by\":\"bot\",\"created_via\":\"mcp\",\"description\":\"\",\"due_at\":null,\"due_tz\":null,\"files\":[],\"hidden_from_agents\":false,\"id\":1,\"position\":5,\"priority\":0,\"project_id\":null,\"remind_at\":null,\"repeat_rule\":null,\"seq\":38,\"source_url\":null,\"status\":\"todo\",\"tags\":[],\"title\":\"Call the dentist\",\"trashed\":false,\"updated_at\":\"<time>\",\"updated_by\":\"writer\",\"version\":3}}",
               "type": "text"
             }
           ],

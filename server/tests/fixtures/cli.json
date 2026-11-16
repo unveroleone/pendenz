@@ -685,7 +685,17 @@
         "description": "",
         "due_at": "2030-01-15T09:00:00+01:00",
         "due_tz": "Europe/Zurich",
-        "files": [],
+        "files": [
+          {
+            "bytes": 67,
+            "height": 1,
+            "id": 1,
+            "mime": "image/png",
+            "name": "photo.png",
+            "sha256": "2b1da20a14b97d8f01f0a809d9f7d53eeefc59df6312eaa5a0c8b5c1228d1d7f",
+            "width": 1
+          }
+        ],
         "hidden_from_agents": false,
         "id": 1,
         "images": [
@@ -714,7 +724,7 @@
         "version": 3
       }
     },
-    "step": "add-image"
+    "step": "add-file picture"
   },
   {
     "answer": {
@@ -722,7 +732,7 @@
       "stderr": "404: Not found.",
       "stdout": ""
     },
-    "step": "add-image missing item"
+    "step": "add-file missing item"
   },
   {
     "answer": {
@@ -734,23 +744,15 @@
         "mime": "image/png"
       }
     },
-    "step": "get-image"
+    "step": "get-file picture"
   },
   {
     "answer": {
       "code": 1,
-      "stderr": "Pass --out with the file to write.",
+      "stderr": "Use a file ID from the item's files list.",
       "stdout": ""
     },
-    "step": "get-image without out"
-  },
-  {
-    "answer": {
-      "code": 1,
-      "stderr": "Use an image ID from the item's images list.",
-      "stdout": ""
-    },
-    "step": "get-image bad image id"
+    "step": "get-file bad file id"
   },
   {
     "answer": {
@@ -758,7 +760,7 @@
       "stderr": "404: Not found.",
       "stdout": ""
     },
-    "step": "get-image missing"
+    "step": "get-file missing"
   },
   {
     "answer": {
@@ -795,15 +797,7 @@
         "version": 4
       }
     },
-    "step": "remove-image"
-  },
-  {
-    "answer": {
-      "code": 1,
-      "stderr": "404: Not found.",
-      "stdout": ""
-    },
-    "step": "remove-image again"
+    "step": "remove-file picture"
   },
   {
     "answer": {
@@ -823,7 +817,7 @@
         "files": [
           {
             "bytes": 11,
-            "id": 1,
+            "id": 2,
             "mime": "text/plain",
             "name": "list.txt",
             "sha256": "38f90b066affd29a237eb6afd056241aabf928b04be21714e20a4ac3f8bbf9c6"
@@ -868,7 +862,7 @@
         "files": [
           {
             "bytes": 11,
-            "id": 1,
+            "id": 2,
             "mime": "text/plain",
             "name": "list.txt",
             "sha256": "38f90b066affd29a237eb6afd056241aabf928b04be21714e20a4ac3f8bbf9c6"
