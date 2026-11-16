@@ -130,7 +130,7 @@ final class Store {
             || !snapshot.notes.isEmpty
         if !disk.isDurable { reportStorageProblem() }
         // After the load, which took over the photos an older build left waiting.
-        AttachmentFiles.removeOldImageFolders()
+        AttachmentFiles.removeOldImageFolders(keepingWaiting: snapshot.keepsOldImages)
         attachments.discardWaiting(except: outbox.compactMap { entry in
             if case .addFile(_, let file) = entry.write { file } else { nil }
         })

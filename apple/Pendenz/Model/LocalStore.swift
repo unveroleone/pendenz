@@ -84,6 +84,8 @@ final class LocalStore {
         var notes: [Note] = []
         var cursor = 0
         var outbox: [PendingEntry] = []
+        // A photo an older build left waiting could not be moved yet. Its folder has to stay.
+        var keepsOldImages = false
     }
 
     // Raised when rows on disk need a pass before this build can use them.
@@ -171,8 +173,17 @@ final class LocalStore {
         for row in writes {
             var write = try? decoder.decode(PendingWrite.self, from: row.payload)
             if write == nil, let old = try? decoder.decode(OldImageWrite.self, from: row.payload) {
-                write = carryOver(old, in: row)
-                hasCarriedOver = true
+                switch carryOver(old, in: row) {
+                case .write(let carried):
+                    write = carried
+                    hasCarriedOver = true
+                case .later:
+                    // Left on disk as it is, for the next launch.
+                    snapshot.keepsOldImages = true
+                    continue
+                case .drop:
+                    break
+                }
             }
             if let write {
                 snapshot.outbox.append(PendingEntry(
@@ -217,13 +228,30 @@ final class LocalStore {
         return snapshot
     }
 
+    private enum CarriedOver {
+        case write(PendingWrite)
+        case later
+        case drop
+    }
+
     // A waiting change to an image, from a build that kept images apart from files, as the change
     // to a file it is now. The row on disk is rewritten to match.
-    private func carryOver(_ old: OldImageWrite, in row: StoredWrite) -> PendingWrite? {
+    private func carryOver(_ old: OldImageWrite, in row: StoredWrite) -> CarriedOver {
         let write: PendingWrite
         switch old {
         case .addImage(let itemID, let image):
-            let bytes = AttachmentFiles.takeOverWaitingImage(image.id) ?? 0
+            // Sent, then removed here before the answer came. Sent again it would only be
+            // removed again, and the first request, if it got through, cannot be told apart
+            // from here: such a photo shows on the item after the next sync and can be removed
+            // there.
+            if image.isSent, image.isUnwanted { return .drop }
+            let bytes: Int
+            switch AttachmentFiles.takeOverWaitingImage(image.id) {
+            case .moved(let size): bytes = size
+            // Sent, it finds no file and says so.
+            case .gone: bytes = 0
+            case .failed: return .later
+            }
             write = .addFile(itemID: itemID, file: PendingFile(
                 id: image.id, name: Pictures.sentName, mime: "image/jpeg", bytes: bytes,
                 width: image.width, height: image.height, isSent: image.isSent, isUnwanted: image.isUnwanted,
@@ -233,12 +261,14 @@ final class LocalStore {
             // twice when the first request got through; that is better than losing it.
             if image.isSent { row.key = UUID().uuidString }
         case .removeImage(let itemID, let imageID):
-            // An image kept its ID when it became a file.
+            // An image kept its ID when it became a file. A new key, as above: a removal that
+            // got through then finds no file, which ends it without a message.
             write = .removeFile(itemID: itemID, fileID: imageID)
+            row.key = UUID().uuidString
         }
-        guard let payload = try? JSONEncoder().encode(write) else { return nil }
+        guard let payload = try? JSONEncoder().encode(write) else { return .later }
         row.payload = payload
-        return write
+        return .write(write)
     }
 
     // Stages rows and the cursor. Nothing is on disk until `commit`.
