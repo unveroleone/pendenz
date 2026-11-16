@@ -334,6 +334,8 @@ The hosted endpoint runs in the API's process, but it does not touch the databas
 
 The protocol is the official Rust SDK's, [rmcp](https://crates.io/crates/rmcp) ([`server.rs`](../server/src/agent/server.rs)). It handles the `initialize` handshake of the versions up to `2025-11-25` and the per-request flow of `2026-07-28` (no handshake, `server/discover`, the method in a header), stdio framing and stateless Streamable HTTP with JSON answers. Pendenz keeps three things of its own in front of and behind it: the door of the hosted endpoint (host, origin, rate and concurrency limits, the token check and the body size, in `hosted.rs`), the tool definitions in `tools.json`, which are served as they are written, and the argument checks in `schema.rs`, which fill in defaults and trim text before a tool runs. The first version of the tools ran on Node with the official TypeScript SDK; the regression tests in `server/tests/` were recorded from it and hold every tool to the same answers.
 
+The door checks the token before it counts anything. The rate limit is then 180 requests a minute per token, with at most 32 requests served at once. A request without a valid token costs one lookup, as it does on `/api`, and is never counted, so it cannot use up an agent's budget. The endpoint trusts no header that names the client's address, so it works the same behind Cloudflare, Caddy or any other proxy.
+
 | Tool | Does | Scope |
 |---|---|---|
 | `workspace` | Who the agent is, its scopes, the time zone, the actors, the projects and the allowed values | read |
