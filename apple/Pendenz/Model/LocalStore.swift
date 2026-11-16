@@ -92,7 +92,8 @@ final class LocalStore {
     // 3: an item's row says when it was completed.
     // 4: a note's row says whether it is locked.
     // 5: an item's row lists its files.
-    private static let format = 5
+    // 6: an item's pictures are among its files.
+    private static let format = 6
 
     // Kept alive here: a context whose container is gone traps on its first fetch.
     private let container: ModelContainer
@@ -145,11 +146,12 @@ final class LocalStore {
             for row in closed where (try? decoder.decode(Item.self, from: row.payload))?.trashed == true {
                 row.isTrashed = true
             }
-            if state.format < 5 {
+            if state.format < 6 {
                 // Rows stored by an older build lack a field: when a project was made, when an
-                // item was completed, whether a note is locked, which files an item has. Such a
-                // build stored a row without a list it did not know, and its cursor has passed
-                // that row. The server sends every row again from the start, and each replaces
+                // item was completed, whether a note is locked, which files an item has, its
+                // pictures among them. Such a build stored a row without a list it did not know,
+                // and its cursor has passed that row. The server sends every row again from the start, and each
+                // replaces
                 // the one kept here. The waiting changes stay.
                 state.cursor = 0
                 snapshot.cursor = 0
@@ -165,8 +167,14 @@ final class LocalStore {
         }
         // A waiting change that cannot be read is dropped by itself. The others stay.
         let writes = (try? context.fetch(FetchDescriptor<StoredWrite>(sortBy: [SortDescriptor(\.order)]))) ?? []
+        var hasCarriedOver = false
         for row in writes {
-            if let write = try? decoder.decode(PendingWrite.self, from: row.payload) {
+            var write = try? decoder.decode(PendingWrite.self, from: row.payload)
+            if write == nil, let old = try? decoder.decode(OldImageWrite.self, from: row.payload) {
+                write = carryOver(old, in: row)
+                hasCarriedOver = true
+            }
+            if let write {
                 snapshot.outbox.append(PendingEntry(
                     key: row.key,
                     order: row.order,
@@ -178,13 +186,13 @@ final class LocalStore {
                 context.delete(row)
             }
         }
+        if hasCarriedOver { try? context.save() }
         do {
             // The open rows, and any row a waiting change is about: reopening a done item has
             // to find it.
             let targets = snapshot.outbox.compactMap { entry -> Int? in
                 switch entry.write {
-                case .update(let id, _), .addImage(let id, _), .removeImage(let id, _), .addFile(let id, _),
-                     .removeFile(let id, _): id
+                case .update(let id, _), .addFile(let id, _), .removeFile(let id, _): id
                 default: nil
                 }
             }
@@ -207,6 +215,30 @@ final class LocalStore {
             snapshot.cursor = 0
         }
         return snapshot
+    }
+
+    // A waiting change to an image, from a build that kept images apart from files, as the change
+    // to a file it is now. The row on disk is rewritten to match.
+    private func carryOver(_ old: OldImageWrite, in row: StoredWrite) -> PendingWrite? {
+        let write: PendingWrite
+        switch old {
+        case .addImage(let itemID, let image):
+            let bytes = AttachmentFiles.takeOverWaitingImage(image.id) ?? 0
+            write = .addFile(itemID: itemID, file: PendingFile(
+                id: image.id, name: Pictures.sentName, mime: "image/jpeg", bytes: bytes,
+                width: image.width, height: image.height, isSent: image.isSent, isUnwanted: image.isUnwanted,
+            ))
+            // A request to the image route may have left with this key, and the file route
+            // refuses a key that was used for another request. A new key may store the photo
+            // twice when the first request got through; that is better than losing it.
+            if image.isSent { row.key = UUID().uuidString }
+        case .removeImage(let itemID, let imageID):
+            // An image kept its ID when it became a file.
+            write = .removeFile(itemID: itemID, fileID: imageID)
+        }
+        guard let payload = try? JSONEncoder().encode(write) else { return nil }
+        row.payload = payload
+        return write
     }
 
     // Stages rows and the cursor. Nothing is on disk until `commit`.
@@ -315,5 +347,19 @@ final class LocalStore {
         try context.delete(model: StoredState.self)
         context.insert(StoredState(server: server, cursor: 0, format: Self.format))
         try context.save()
+    }
+}
+
+// A waiting change of a build that kept images apart from files, as that build wrote it.
+nonisolated enum OldImageWrite: Decodable {
+    case addImage(itemID: Int, image: OldImage)
+    case removeImage(itemID: Int, imageID: Int)
+
+    struct OldImage: Decodable {
+        var id: String
+        var width: Int
+        var height: Int
+        var isSent: Bool
+        var isUnwanted: Bool
     }
 }

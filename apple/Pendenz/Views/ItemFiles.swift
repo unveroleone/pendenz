@@ -113,10 +113,37 @@ struct ItemFileRow: View {
     }
 }
 
-// A file dropped onto an item's detail from another app or window, which is not a picture:
-// pictures become images. The system lends the dropped file only while it is handed over, so it
-// is copied aside at once and added from there.
-enum ItemFileDrop {
+// Lets pictures and files be dropped onto an item's detail from another app or window. A picture
+// is scaled and sent as a photo, anything else is kept byte for byte.
+struct ItemAttachmentDrop: ViewModifier {
+    @Environment(Store.self) private var store
+    let itemID: Int
+
+    func body(content: Content) -> some View {
+        content.onDrop(of: [.image, .data, .package], isTargeted: nil) { providers in
+            let pictures = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }
+            let files = providers.filter { provider in
+                !pictures.contains(provider) && ItemFileDrop.accepts(provider)
+            }
+            for provider in pictures {
+                _ = provider.loadDataRepresentation(for: .image) { data, _ in
+                    guard let data else { return }
+                    Task { @MainActor in
+                        if let problem = await store.addImage(data, to: itemID) { store.rejection = problem }
+                    }
+                }
+            }
+            for provider in files {
+                ItemFileDrop.add(provider, to: itemID, in: store)
+            }
+            return !pictures.isEmpty || !files.isEmpty
+        }
+    }
+}
+
+// A file dropped onto an item's detail, which is not a picture. The system lends the dropped
+// file only while it is handed over, so it is copied aside at once and added from there.
+private enum ItemFileDrop {
     // Whether a dropped thing is a file to add, and not text or a link dropped onto the detail.
     static func accepts(_ provider: NSItemProvider) -> Bool {
         provider.suggestedName != nil && dataType(of: provider) != nil

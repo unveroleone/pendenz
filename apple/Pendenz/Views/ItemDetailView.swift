@@ -148,7 +148,7 @@ struct ItemDetailView: View {
         .formStyle(.grouped)
         // The app tint is black or white, which hides the knob of a switch that is on.
         .tint(Color(.selection))
-        .modifier(ItemImageDrop(itemID: itemID))
+        .modifier(ItemAttachmentDrop(itemID: itemID))
         .onAppear { load(item) }
         .onDisappear(perform: saveText)
         .onChange(of: focus) { old, _ in save(old) }

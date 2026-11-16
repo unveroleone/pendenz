@@ -127,11 +127,6 @@ private nonisolated struct PairRequest: Encodable {
     let name: String
 }
 
-private nonisolated struct ImageUpload: Encodable {
-    let mime: String
-    let data: String
-}
-
 private nonisolated struct PushRegistration: Encodable {
     let token: String
     let environment: String
@@ -202,28 +197,6 @@ nonisolated struct APIClient: Sendable {
     @concurrent
     func update(_ id: Int, patch: ItemPatch, version: Int, key: String) async throws -> Item {
         try await send(write("PATCH", "api/items/\(id)", key: key, body: Versioned(version: version, patch: patch)))
-    }
-
-    // Answers with the item, which lists the new image. No version: an image is added to the
-    // item as it is, like a comment.
-    @concurrent
-    func addImage(_ jpeg: Data, to id: Int, key: String) async throws -> Item {
-        let body = ImageUpload(mime: "image/jpeg", data: jpeg.base64EncodedString())
-        return try await send(write("POST", "api/items/\(id)/images", key: key, body: body))
-    }
-
-    @concurrent
-    func removeImage(_ image: Int, from id: Int, key: String) async throws -> Item {
-        var request = URLRequest(url: baseURL.appending(path: "api/items/\(id)/images/\(image)"))
-        request.httpMethod = "DELETE"
-        request.setValue(key, forHTTPHeaderField: "Idempotency-Key")
-        return try await send(request)
-    }
-
-    // The bytes of one image.
-    @concurrent
-    func image(_ image: Int, of id: Int) async throws -> Data {
-        try await load(URLRequest(url: baseURL.appending(path: "api/items/\(id)/images/\(image)")))
     }
 
     // Sends a file as it is, from the disk: the body is the bytes, the name and the upload ID

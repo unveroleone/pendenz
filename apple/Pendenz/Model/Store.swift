@@ -59,8 +59,6 @@ final class Store {
     private(set) var completions = 0
     // Set when the server refused a waiting change for good. The root view shows it once.
     var rejection: String?
-    // The images that wait to be sent, by their item.
-    private(set) var waitingImages: [Int: [PendingImage]] = [:]
     // The files that wait to be sent, by their item.
     private(set) var waitingFiles: [Int: [PendingFile]] = [:]
     // The server's settings as it last confirmed them, kept per server on this device. Missing
@@ -108,9 +106,6 @@ final class Store {
     @ObservationIgnored private var wakeAt: Date?
     @ObservationIgnored private let api: APIClient
     @ObservationIgnored private let disk: LocalStore
-    @ObservationIgnored private let files = ImageFiles()
-    // One request per image, however many views ask for it.
-    @ObservationIgnored private var downloads: [String: Task<URL?, Never>] = [:]
     @ObservationIgnored private let attachments = AttachmentFiles()
     // One request per file, however many views ask for it.
     @ObservationIgnored private var fileDownloads: [String: Task<URL?, Never>] = [:]
@@ -134,9 +129,8 @@ final class Store {
         hasLoaded = snapshot.cursor > 0 || !snapshot.items.isEmpty || !snapshot.projects.isEmpty
             || !snapshot.notes.isEmpty
         if !disk.isDurable { reportStorageProblem() }
-        files.discardWaiting(except: outbox.compactMap { entry in
-            if case .addImage(_, let image) = entry.write { image } else { nil }
-        })
+        // After the load, which took over the photos an older build left waiting.
+        AttachmentFiles.removeOldImageFolders()
         attachments.discardWaiting(except: outbox.compactMap { entry in
             if case .addFile(_, let file) = entry.write { file } else { nil }
         })
@@ -215,8 +209,7 @@ final class Store {
                 unsavedNotes.removeAll()
                 disk.dropRows()
                 // The copies are named by their content, so they would stay right. They go
-                // anyway: the restored server may no longer hold these images at all.
-                files.emptyCache()
+                // anyway: the restored server may no longer hold these files at all.
                 attachments.emptyCache()
             }
             if let settings = page.settings { keep(settings) }
@@ -254,10 +247,7 @@ final class Store {
     // a row only replaces one with a lower sequence number.
     private func merge(_ item: Item) {
         if let known = items[item.id], known.seq > item.seq { return }
-        // The copy of an image the item no longer has is not kept.
-        for image in items[item.id]?.images ?? [] where !item.images.contains(where: { $0.sha256 == image.sha256 }) {
-            files.forget(image)
-        }
+        // The copy of a file the item no longer has is not kept.
         for file in items[item.id]?.files ?? [] where !item.files.contains(where: { $0.sha256 == file.sha256 }) {
             attachments.forget(file)
         }
@@ -307,7 +297,6 @@ final class Store {
         wakeUp?.cancel()
         outbox.removeAll()
         disk.erase()
-        files.erase()
         attachments.erase()
         Self.keptSettings[api.baseURL.absoluteString] = nil
     }
@@ -377,59 +366,13 @@ final class Store {
                 case .deleteProject(let id):
                     // Its items and notes follow in the changes feed, each without the project.
                     try await merge(api.delete(project: id, key: entry.key))
-                case .addImage(let id, var image):
-                    // Below zero: the item was added here and its create was refused.
-                    if id > 0 {
-                        guard let jpeg = files.data(of: image) else {
-                            // Without its file the entry can never be sent. It must not hold
-                            // back the changes behind it.
-                            finish(entry)
-                            if !image.isUnwanted {
-                                rejection = "An image could not be sent, because its file is gone from this device. Add it again."
-                            }
-                            continue
-                        }
-                        if !image.isSent {
-                            // On disk before the request leaves. An answer that gets lost, or
-                            // an app that is ended, leaves the server holding an image this
-                            // device has no ID for; the mark says that removing it then needs
-                            // the server.
-                            image.isSent = true
-                            if let index = outbox.firstIndex(where: { $0.key == entry.key }) {
-                                outbox[index].write = .addImage(itemID: id, image: image)
-                                disk.put(outbox[index])
-                                if !disk.commit() { reportStorageProblem() }
-                            }
-                        }
-                        let item = try await api.addImage(jpeg, to: id, key: entry.key)
-                        if isClosed { return }
-                        merge(item)
-                        let hash = ImageFiles.hash(jpeg)
-                        let stored = item.images.last { $0.sha256 == hash }
-                        if isUnwanted(entry) {
-                            // Removed here while the server may already have had it. Now it
-                            // has an ID there, and the removal takes the upload's place in the
-                            // same step: before later changes to the item, since an image of a
-                            // trashed item cannot be removed, and with no moment in between
-                            // where neither is queued.
-                            finish(entry, replacingWith: stored.map { .removeImage(itemID: id, imageID: $0.id) })
-                            rebases = 0
-                            continue
-                        }
-                        // The same bytes the server now holds: kept as its copy, so the
-                        // image is not fetched again right after it was sent.
-                        if let stored { _ = files.keep(jpeg, as: stored) }
-                    }
-                case .removeImage(let id, let imageID):
-                    if id > 0 {
-                        try await merge(api.removeImage(imageID, from: id, key: entry.key))
-                    }
                 case .addFile(let id, var file):
                     // Below zero: the item was added here and its create was refused.
                     if id > 0 {
                         let source = attachments.waitingFile(file)
                         guard FileManager.default.fileExists(atPath: source.path(percentEncoded: false)) else {
-                            // Without its bytes the entry can never be sent, as for an image.
+                            // Without its bytes the entry can never be sent. It must not hold
+                            // back the changes behind it.
                             finish(entry)
                             if !file.isUnwanted {
                                 rejection = "“\(file.name)” could not be sent, because it is gone from this device. Add it again."
@@ -437,7 +380,10 @@ final class Store {
                             continue
                         }
                         if !file.isSent {
-                            // On disk before the request leaves, as for an image.
+                            // On disk before the request leaves. An answer that gets lost, or
+                            // an app that is ended, leaves the server holding a file this
+                            // device has no ID for; the mark says that removing it then needs
+                            // the server.
                             file.isSent = true
                             if let index = outbox.firstIndex(where: { $0.key == entry.key }) {
                                 outbox[index].write = .addFile(itemID: id, file: file)
@@ -453,12 +399,17 @@ final class Store {
                         // must not take the other one.
                         let stored = item.files.last { $0.uploadId == file.id }
                         if isUnwanted(entry) {
-                            // Removed here while the server may already have had it, as for an
-                            // image: the removal takes the upload's place in the same step.
+                            // Removed here while the server may already have had it. Now it has
+                            // an ID there, and the removal takes the upload's place in the same
+                            // step: before later changes to the item, since a file of a trashed
+                            // item cannot be removed, and with no moment in between where
+                            // neither is queued.
                             finish(entry, replacingWith: stored.map { .removeFile(itemID: id, fileID: $0.id) })
                             rebases = 0
                             continue
                         }
+                        // The same bytes the server now holds: kept as its copy, so the file is
+                        // not fetched again right after it was sent.
                         if let stored { attachments.adopt(file, as: stored) }
                     }
                 case .removeFile(let id, let fileID):
@@ -492,8 +443,7 @@ final class Store {
                     notesByID[id] = note
                     unsavedNotes[id] = note
                     rekey(entry)
-                case .create, .createNote, .createProject, .updateProject, .deleteProject, .addImage,
-                     .removeImage, .addFile, .removeFile:
+                case .create, .createNote, .createProject, .updateProject, .deleteProject, .addFile, .removeFile:
                     finish(entry)
                 }
             } catch APIError.status(404, _?) {
@@ -504,7 +454,7 @@ final class Store {
                 // the API (a proxy in between, a wrong address), and one with 401 means this
                 // device is no longer paired: the change then stays where it is.
                 if case .createProject(let project) = entry.write { detach(project.id) }
-                // Nobody waits for an image or a file that was removed again.
+                // Nobody waits for a file that was removed again.
                 let isSilent = isUnwanted(entry)
                 finish(entry)
                 if !isSilent { rejection = Self.describe(entry, reason: message) }
@@ -596,14 +546,11 @@ final class Store {
         return note
     }
 
-    // Whether a waiting image or file was removed here after its upload had started. Read from
-    // the outbox, not from the entry a request was made with: the removal can come in between.
+    // Whether a waiting file was removed here after its upload had started. Read from the
+    // outbox, not from the entry a request was made with: the removal can come in between.
     private func isUnwanted(_ entry: PendingEntry) -> Bool {
-        switch outbox.first(where: { $0.key == entry.key })?.write {
-        case .addImage(_, let image): image.isUnwanted
-        case .addFile(_, let file): file.isUnwanted
-        default: false
-        }
+        if case .addFile(_, let file) = outbox.first(where: { $0.key == entry.key })?.write { file.isUnwanted }
+        else { false }
     }
 
     private func finish(_ entry: PendingEntry, replacingWith next: PendingWrite? = nil) {
@@ -616,9 +563,8 @@ final class Store {
         }
         disk.remove(key: entry.key)
         let isSaved = save()
-        // The file of a waiting image goes only once its entry is gone from the disk. An entry
-        // that came back after a restart would otherwise find no file.
-        if isSaved, case .addImage(_, let image) = entry.write { files.discard(image) }
+        // A waiting file goes only once its entry is gone from the disk. An entry that came back
+        // after a restart would otherwise find no file.
         if isSaved, case .addFile(_, let file) = entry.write { attachments.discard(file) }
         // The screens follow each confirmed change, not only the end of the sync.
         publish()
@@ -638,8 +584,6 @@ final class Store {
         for index in outbox.indices {
             switch outbox[index].write {
             case .update(localID, let patch): outbox[index].write = .update(itemID: id, patch: patch)
-            case .addImage(localID, let image): outbox[index].write = .addImage(itemID: id, image: image)
-            case .removeImage(localID, let imageID): outbox[index].write = .removeImage(itemID: id, imageID: imageID)
             case .addFile(localID, let file): outbox[index].write = .addFile(itemID: id, file: file)
             case .removeFile(localID, let fileID): outbox[index].write = .removeFile(itemID: id, fileID: fileID)
             default: continue
@@ -696,8 +640,7 @@ final class Store {
             "The project “\(project.name)” was not saved. \(reason) What was filed into it is in the inbox."
         case .updateProject: "A change to a project was not saved. \(reason)"
         case .deleteProject: "A project was not deleted. \(reason)"
-        case .addImage: "An image was not saved. \(reason)"
-        case .removeImage: "An image was not removed. \(reason)"
+        case .addFile(_, let file) where file.width != nil: "An image was not saved. \(reason)"
         case .addFile(_, let file): "“\(file.name)” was not saved. \(reason)"
         case .removeFile: "A file was not removed. \(reason)"
         }
@@ -837,97 +780,35 @@ final class Store {
         update(item.id, patch)
     }
 
-    // MARK: Images
-
-    // The images of an item as its detail shows them: the server's, without those a waiting
-    // change removes, then the ones that wait to be sent.
-    func images(of item: Item) -> [ShownImage] {
-        item.images.map(ShownImage.stored) + (waitingImages[item.id] ?? []).map(ShownImage.waiting)
-    }
-
-    // Adds an image to an item from the bytes of any picture: a photo, a file, the clipboard.
-    // What is queued and sent is a scaled copy. False when the bytes are no picture.
-    @discardableResult
-    func addImage(_ data: Data, to id: Int) async -> Bool {
-        guard let scaled = await ImageFiles.scaled(data), !isClosed else { return false }
-        // Read after the wait: the server may have answered the item's create in between.
-        guard let item = item(id) else { return false }
-        guard images(of: item).count < ImageFiles.perItem else {
-            rejection = "An item can hold at most \(ImageFiles.perItem) images."
-            return false
-        }
-        let image = PendingImage(id: UUID().uuidString, width: scaled.width, height: scaled.height)
-        // The file first: an entry in the outbox must never name a file that is not there.
-        guard files.keep(scaled.jpeg, for: image) else {
-            reportStorageProblem()
-            return false
-        }
-        enqueue(.addImage(itemID: item.id, image: image))
-        return true
-    }
-
-    func removeImage(_ image: ShownImage, from id: Int) {
-        switch image {
-        case .stored(let stored):
-            guard let item = item(id) else { return }
-            enqueue(.removeImage(itemID: item.id, imageID: stored.id))
-        case .waiting(let waiting):
-            guard let index = outbox.firstIndex(where: { entry in
-                if case .addImage(_, let image) = entry.write { image.id == waiting.id } else { false }
-            }), case .addImage(let itemID, var image) = outbox[index].write else { return }
-            if image.isSent || outbox[index].key == inFlightKey {
-                // A request for it has left, so the server may hold it. The entry stays and is
-                // sent again with its key, which answers with the item as the first request
-                // left it; the removal follows from there.
-                image.isUnwanted = true
-                outbox[index].write = .addImage(itemID: itemID, image: image)
-                disk.put(outbox[index])
-                if !disk.commit() { reportStorageProblem() }
-                Task { await sync() }
-            } else {
-                // Never sent, so there is nothing to tell the server: the entry and its file go.
-                let key = outbox.remove(at: index).key
-                disk.remove(key: key)
-                if disk.commit() { files.discard(image) } else { reportStorageProblem() }
-            }
-            publish()
-        }
-    }
-
-    // The file of an image under a readable name, for the full view and for sharing.
-    func namedImageFile(_ file: URL, _ name: String) -> URL {
-        files.named(file, name)
-    }
-
-    // The file of an image, to draw it or to open it. A waiting image is read from its own
-    // file. One the server holds is fetched once and kept. Missing when it cannot be had.
-    func imageFile(_ image: ShownImage, of id: Int) async -> URL? {
-        switch image {
-        case .waiting(let waiting):
-            let file = files.waitingFile(waiting)
-            return FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) ? file : nil
-        case .stored(let stored):
-            if let file = files.file(of: stored) { return file }
-            guard !isClosed, let itemID = item(id)?.id, itemID > 0 else { return nil }
-            if let running = downloads[stored.sha256] { return await running.value }
-            let task = Task { () -> URL? in
-                guard let data = try? await api.image(stored.id, of: itemID) else { return nil }
-                // The pairing ended while the request was on its way: nothing is kept.
-                return isClosed ? nil : files.keep(data, as: stored)
-            }
-            downloads[stored.sha256] = task
-            let file = await task.value
-            downloads[stored.sha256] = nil
-            return file
-        }
-    }
-
     // MARK: Files
 
     // The files of an item as its detail shows them: the server's, without those a waiting
     // change removes, then the ones that wait to be sent.
     func files(of item: Item) -> [ShownFile] {
         item.files.map(ShownFile.stored) + (waitingFiles[item.id] ?? []).map(ShownFile.waiting)
+    }
+
+    private static let fullItem = "An item can hold at most \(AttachmentFiles.perItem) attachments."
+
+    // Adds a picture to an item from the bytes of any image: a photo, the camera, the clipboard,
+    // a drop. What is queued and sent is a scaled JPEG without the original's EXIF data. Nil when
+    // it was queued, otherwise what went wrong, to be said next to the attachments.
+    func addImage(_ data: Data, to id: Int) async -> String? {
+        guard let scaled = await Pictures.scaled(data) else { return "That is not a picture Pendenz can read." }
+        // Read after the wait: the server may have answered the item's create in between.
+        guard !isClosed, let item = item(id) else { return nil }
+        guard files(of: item).count < AttachmentFiles.perItem else { return Self.fullItem }
+        let file = PendingFile(
+            id: UUID().uuidString, name: Pictures.sentName, mime: "image/jpeg", bytes: scaled.jpeg.count,
+            width: scaled.width, height: scaled.height,
+        )
+        // The file first: an entry in the outbox must never name a file that is not there.
+        guard attachments.keep(scaled.jpeg, for: file) else {
+            reportStorageProblem()
+            return nil
+        }
+        enqueue(.addFile(itemID: item.id, file: file))
+        return nil
     }
 
     // Adds a file to an item byte for byte: one that was picked, dropped or handed over. It is
@@ -944,9 +825,7 @@ final class Store {
         if values?.isDirectory == true { return "“\(name)” is a folder. Only single files can be added." }
         if let refusal = refusal(forFileOf: Self.size(of: source), named: name) { return refusal }
         guard let item = item(id) else { return nil }
-        guard files(of: item).count < AttachmentFiles.perItem else {
-            return "An item can hold at most \(AttachmentFiles.perItem) files."
-        }
+        guard files(of: item).count < AttachmentFiles.perItem else { return Self.fullItem }
         var file = PendingFile(id: UUID().uuidString, name: name, mime: AttachmentFiles.mime(forName: name), bytes: 0)
         let copy = attachments.waitingFile(file)
         // The file first: an entry in the outbox must never name a file that is not there.
@@ -960,8 +839,7 @@ final class Store {
             return nil
         }
         if let refusal = refusal(forFileOf: file.bytes, named: name) ?? (
-            files(of: item).count < AttachmentFiles.perItem
-                ? nil : "An item can hold at most \(AttachmentFiles.perItem) files."
+            files(of: item).count < AttachmentFiles.perItem ? nil : Self.fullItem
         ) {
             attachments.discard(file)
             return refusal
@@ -992,8 +870,9 @@ final class Store {
                 if case .addFile(_, let file) = entry.write { file.id == waiting.id } else { false }
             }), case .addFile(let itemID, var file) = outbox[index].write else { return }
             if file.isSent || outbox[index].key == inFlightKey {
-                // A request for it has left, so the server may hold it. As for an image, the
-                // entry stays and the removal follows from the answer.
+                // A request for it has left, so the server may hold it. The entry stays and is
+                // sent again with its key, which answers with the item as the first request
+                // left it; the removal follows from there.
                 file.isUnwanted = true
                 outbox[index].write = .addFile(itemID: itemID, file: file)
                 disk.put(outbox[index])
@@ -1380,7 +1259,6 @@ final class Store {
         // the last ones moved there, whatever their sequence number says.
         var trashedHere: [Int: Int] = [:]
         var notesTrashedHere: [Int: Int] = [:]
-        var waiting: [Int: [PendingImage]] = [:]
         var waitingAttachments: [Int: [PendingFile]] = [:]
         for entry in outbox {
             switch entry.write {
@@ -1417,10 +1295,6 @@ final class Store {
             case .deleteProject(let id):
                 projectView[id]?.deleted = true
                 unfile([id])
-            case .addImage(let id, let image):
-                if !image.isUnwanted { waiting[id, default: []].append(image) }
-            case .removeImage(let id, let imageID):
-                view[id]?.images.removeAll { $0.id == imageID }
             case .addFile(let id, let file):
                 if !file.isUnwanted { waitingAttachments[id, default: []].append(file) }
             case .removeFile(let id, let fileID):
@@ -1460,7 +1334,6 @@ final class Store {
         if finished != completedItems { completedItems = finished }
         if binned != trashedItems { trashedItems = binned }
         if binnedNotes != trashedNotes { trashedNotes = binnedNotes }
-        if waiting != waitingImages { waitingImages = waiting }
         if waitingAttachments != waitingFiles { waitingFiles = waitingAttachments }
         if outbox.count != pendingCount { pendingCount = outbox.count }
         let held = outbox.contains(where: { $0.heldFor != nil }) ? waitingForUpdate().count : 0

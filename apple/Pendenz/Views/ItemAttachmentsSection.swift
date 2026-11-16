@@ -20,18 +20,17 @@ struct ItemAttachmentsSection: View {
     @State private var failure: String?
 
     var body: some View {
-        let images = store.images(of: item)
-        let files = store.files(of: item)
-        let imageRoom = ImageFiles.perItem - images.count
-        let fileRoom = AttachmentFiles.perItem - files.count
+        let all = store.files(of: item)
+        let pictures = all.filter(\.isPicture)
+        let files = all.filter { !$0.isPicture }
+        let room = AttachmentFiles.perItem - all.count
         Section {
-            if !images.isEmpty {
+            if !pictures.isEmpty {
                 ScrollView(.horizontal) {
                     HStack(spacing: 8) {
-                        ForEach(Array(images.enumerated()), id: \.element.id) { index, image in
+                        ForEach(Array(pictures.enumerated()), id: \.element.id) { index, picture in
                             ItemImageTile(
-                                image: image, itemID: item.id, name: "Image \(index + 1)",
-                                label: "Image \(index + 1) of \(images.count)",
+                                image: picture, itemID: item.id, label: "Image \(index + 1) of \(pictures.count)",
                             ) { preview = $0 }
                         }
                     }
@@ -42,8 +41,8 @@ struct ItemAttachmentsSection: View {
             ForEach(files) { file in
                 ItemFileRow(file: file, itemID: item.id, failure: $failure) { preview = $0 }
             }
-            if imageRoom > 0 || fileRoom > 0 {
-                addMenu(imageRoom: imageRoom, fileRoom: fileRoom)
+            if room > 0 {
+                addMenu(room: room)
             }
         } header: {
             // The preview hangs from the header, the one view of the section that is always
@@ -57,20 +56,16 @@ struct ItemAttachmentsSection: View {
         }
     }
 
-    private func addMenu(imageRoom: Int, fileRoom: Int) -> some View {
+    private func addMenu(room: Int) -> some View {
         Menu {
-            if imageRoom > 0 {
-                Button("Photo Library", systemImage: "photo.on.rectangle") { isPickingPhotos = true }
-                #if os(iOS)
-                if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                    Button("Take Photo", systemImage: "camera") { isTakingPhoto = true }
-                }
-                #endif
+            Button("Photo Library", systemImage: "photo.on.rectangle") { isPickingPhotos = true }
+            #if os(iOS)
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button("Take Photo", systemImage: "camera") { isTakingPhoto = true }
             }
-            if fileRoom > 0 {
-                Button("Choose File", systemImage: "folder") { isPickingFile = true }
-            }
-            if imageRoom > 0, canPaste {
+            #endif
+            Button("Choose File", systemImage: "folder") { isPickingFile = true }
+            if canPaste {
                 Button("Paste", systemImage: "doc.on.clipboard") {
                     Task { await addImage(Clipboard.image()) }
                 }
@@ -85,7 +80,7 @@ struct ItemAttachmentsSection: View {
         .photosPicker(
             isPresented: $isPickingPhotos,
             selection: $picked,
-            maxSelectionCount: max(imageRoom, 1),
+            maxSelectionCount: room,
             matching: .images,
         )
         .onChange(of: picked) { _, chosen in
@@ -103,7 +98,7 @@ struct ItemAttachmentsSection: View {
             allowsMultipleSelection: true,
         ) { result in
             guard case .success(let chosen) = result else { return }
-            addFiles(Array(chosen.prefix(fileRoom)))
+            addFiles(Array(chosen.prefix(room)))
         }
         #if os(iOS)
         .fullScreenCover(isPresented: $isTakingPhoto) {
@@ -116,11 +111,11 @@ struct ItemAttachmentsSection: View {
     }
 
     private func addImage(_ data: Data?) async {
-        if let data, await store.addImage(data, to: item.id) {
-            failure = nil
-        } else if store.rejection == nil {
+        guard let data else {
             failure = "That is not a picture Pendenz can read."
+            return
         }
+        failure = await store.addImage(data, to: item.id)
     }
 
     private func addFiles(_ chosen: [URL]) {
