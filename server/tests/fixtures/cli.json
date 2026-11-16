@@ -77,6 +77,10 @@
           "read",
           "write"
         ],
+        "settings": {
+          "file_limit_ceiling_mb": 100,
+          "file_limit_mb": 25
+        },
         "timezone": "Europe/Zurich"
       }
     },
@@ -166,6 +170,7 @@
         "description": "",
         "due_at": "2030-01-15T09:00:00+01:00",
         "due_tz": "Europe/Zurich",
+        "files": [],
         "hidden_from_agents": false,
         "id": 1,
         "images": [],
@@ -202,6 +207,7 @@
         "description": "",
         "due_at": "2030-01-15T09:00:00+01:00",
         "due_tz": "Europe/Zurich",
+        "files": [],
         "hidden_from_agents": false,
         "id": 1,
         "images": [],
@@ -238,6 +244,7 @@
         "description": "",
         "due_at": "2030-01-10T18:00:00+01:00",
         "due_tz": "Europe/Zurich",
+        "files": [],
         "hidden_from_agents": false,
         "id": 2,
         "images": [],
@@ -311,6 +318,7 @@
             "description": "",
             "due_at": "2030-01-10T18:00:00+01:00",
             "due_tz": "Europe/Zurich",
+            "files": [],
             "hidden_from_agents": false,
             "id": 2,
             "images": [],
@@ -342,6 +350,7 @@
             "description": "",
             "due_at": "2030-01-15T09:00:00+01:00",
             "due_tz": "Europe/Zurich",
+            "files": [],
             "hidden_from_agents": false,
             "id": 1,
             "images": [],
@@ -383,6 +392,7 @@
             "description": "",
             "due_at": "2030-01-15T09:00:00+01:00",
             "due_tz": "Europe/Zurich",
+            "files": [],
             "hidden_from_agents": false,
             "id": 1,
             "images": [],
@@ -424,6 +434,7 @@
             "description": "",
             "due_at": "2030-01-10T18:00:00+01:00",
             "due_tz": "Europe/Zurich",
+            "files": [],
             "hidden_from_agents": false,
             "id": 2,
             "images": [],
@@ -502,6 +513,7 @@
           "description": "",
           "due_at": "2030-01-15T09:00:00+01:00",
           "due_tz": "Europe/Zurich",
+          "files": [],
           "hidden_from_agents": false,
           "id": 1,
           "images": [],
@@ -543,6 +555,7 @@
           "description": "",
           "due_at": "2030-01-15T09:00:00+01:00",
           "due_tz": "Europe/Zurich",
+          "files": [],
           "hidden_from_agents": false,
           "id": 1,
           "images": [],
@@ -604,6 +617,7 @@
         "description": "",
         "due_at": "2030-01-15T09:00:00+01:00",
         "due_tz": "Europe/Zurich",
+        "files": [],
         "hidden_from_agents": false,
         "id": 1,
         "images": [],
@@ -671,6 +685,7 @@
         "description": "",
         "due_at": "2030-01-15T09:00:00+01:00",
         "due_tz": "Europe/Zurich",
+        "files": [],
         "hidden_from_agents": false,
         "id": 1,
         "images": [
@@ -760,6 +775,7 @@
         "description": "",
         "due_at": "2030-01-15T09:00:00+01:00",
         "due_tz": "Europe/Zurich",
+        "files": [],
         "hidden_from_agents": false,
         "id": 1,
         "images": [],
@@ -794,6 +810,161 @@
       "code": 0,
       "stderr": "",
       "stdout": {
+        "agent_stage": "none",
+        "archived": false,
+        "checklist": [],
+        "completed_at": null,
+        "created_at": "<time>",
+        "created_by": "bot",
+        "created_via": "mcp",
+        "description": "",
+        "due_at": "2030-01-15T09:00:00+01:00",
+        "due_tz": "Europe/Zurich",
+        "files": [
+          {
+            "bytes": 11,
+            "id": 1,
+            "mime": "text/plain",
+            "name": "list.txt",
+            "sha256": "38f90b066affd29a237eb6afd056241aabf928b04be21714e20a4ac3f8bbf9c6"
+          }
+        ],
+        "hidden_from_agents": false,
+        "id": 1,
+        "images": [],
+        "position": 3,
+        "priority": 0,
+        "project_id": "home-lab",
+        "remind_at": null,
+        "repeat_rule": null,
+        "seq": 9,
+        "source_url": null,
+        "status": "doing",
+        "tags": [],
+        "title": "Call the dentist",
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 5
+      }
+    },
+    "step": "add-file"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "agent_stage": "none",
+        "archived": false,
+        "checklist": [],
+        "completed_at": null,
+        "created_at": "<time>",
+        "created_by": "bot",
+        "created_via": "mcp",
+        "description": "",
+        "due_at": "2030-01-15T09:00:00+01:00",
+        "due_tz": "Europe/Zurich",
+        "files": [
+          {
+            "bytes": 11,
+            "id": 1,
+            "mime": "text/plain",
+            "name": "list.txt",
+            "sha256": "38f90b066affd29a237eb6afd056241aabf928b04be21714e20a4ac3f8bbf9c6"
+          }
+        ],
+        "hidden_from_agents": false,
+        "id": 1,
+        "images": [],
+        "position": 3,
+        "priority": 0,
+        "project_id": "home-lab",
+        "remind_at": null,
+        "repeat_rule": null,
+        "seq": 9,
+        "source_url": null,
+        "status": "doing",
+        "tags": [],
+        "title": "Call the dentist",
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 5
+      }
+    },
+    "step": "add-file again with the key"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "bytes": 11,
+        "file": "<dir>/saved.txt",
+        "mime": "text/plain"
+      }
+    },
+    "step": "get-file"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Pass --out with the path to write.",
+      "stdout": ""
+    },
+    "step": "get-file without out"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "agent_stage": "none",
+        "archived": false,
+        "checklist": [],
+        "completed_at": null,
+        "created_at": "<time>",
+        "created_by": "bot",
+        "created_via": "mcp",
+        "description": "",
+        "due_at": "2030-01-15T09:00:00+01:00",
+        "due_tz": "Europe/Zurich",
+        "files": [],
+        "hidden_from_agents": false,
+        "id": 1,
+        "images": [],
+        "position": 3,
+        "priority": 0,
+        "project_id": "home-lab",
+        "remind_at": null,
+        "repeat_rule": null,
+        "seq": 10,
+        "source_url": null,
+        "status": "doing",
+        "tags": [],
+        "title": "Call the dentist",
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 6
+      }
+    },
+    "step": "remove-file"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "404: Not found.",
+      "stdout": ""
+    },
+    "step": "remove-file again"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
         "body": "Wifi\n\nPassword on the router",
         "created_at": "<time>",
         "created_by": "bot",
@@ -802,7 +973,7 @@
         "locked": false,
         "pinned": false,
         "project_id": null,
-        "seq": 9,
+        "seq": 11,
         "trashed": false,
         "updated_at": "<time>",
         "updated_by": "bot",
@@ -824,7 +995,7 @@
         "locked": true,
         "pinned": false,
         "project_id": null,
-        "seq": 10,
+        "seq": 12,
         "trashed": false,
         "updated_at": "<time>",
         "updated_by": "bot",
@@ -849,7 +1020,7 @@
             "locked": true,
             "pinned": false,
             "project_id": null,
-            "seq": 10,
+            "seq": 12,
             "trashed": false,
             "updated_at": "<time>",
             "updated_by": "bot",
@@ -864,7 +1035,7 @@
             "locked": false,
             "pinned": false,
             "project_id": null,
-            "seq": 9,
+            "seq": 11,
             "trashed": false,
             "updated_at": "<time>",
             "updated_by": "bot",
@@ -891,7 +1062,7 @@
             "locked": false,
             "pinned": false,
             "project_id": null,
-            "seq": 9,
+            "seq": 11,
             "trashed": false,
             "updated_at": "<time>",
             "updated_by": "bot",
@@ -918,7 +1089,7 @@
           "locked": false,
           "pinned": false,
           "project_id": null,
-          "seq": 9,
+          "seq": 11,
           "trashed": false,
           "updated_at": "<time>",
           "updated_by": "bot",
@@ -944,7 +1115,7 @@
           "locked": true,
           "pinned": false,
           "project_id": null,
-          "seq": 10,
+          "seq": 12,
           "trashed": false,
           "updated_at": "<time>",
           "updated_by": "bot",
@@ -975,7 +1146,7 @@
         "locked": false,
         "pinned": true,
         "project_id": null,
-        "seq": 11,
+        "seq": 13,
         "trashed": false,
         "updated_at": "<time>",
         "updated_by": "bot",
@@ -997,7 +1168,7 @@
         "locked": false,
         "pinned": true,
         "project_id": null,
-        "seq": 12,
+        "seq": 14,
         "trashed": false,
         "updated_at": "<time>",
         "updated_by": "bot",
@@ -1044,6 +1215,7 @@
               "description": "",
               "due_at": "2030-01-10T18:00:00+01:00",
               "due_tz": "Europe/Zurich",
+              "files": [],
               "hidden_from_agents": false,
               "id": 2,
               "images": [],
@@ -1091,6 +1263,7 @@
               "description": "",
               "due_at": "2030-01-15T09:00:00+01:00",
               "due_tz": "Europe/Zurich",
+              "files": [],
               "hidden_from_agents": false,
               "id": 1,
               "images": [],
@@ -1099,7 +1272,7 @@
               "project_id": "home-lab",
               "remind_at": null,
               "repeat_rule": null,
-              "seq": 8,
+              "seq": 10,
               "source_url": null,
               "status": "doing",
               "tags": [],
@@ -1107,9 +1280,9 @@
               "trashed": false,
               "updated_at": "<time>",
               "updated_by": "bot",
-              "version": 4
+              "version": 6
             },
-            "seq": 8,
+            "seq": 10,
             "type": "item"
           },
           {
@@ -1122,13 +1295,13 @@
               "locked": true,
               "pinned": false,
               "project_id": null,
-              "seq": 10,
+              "seq": 12,
               "trashed": false,
               "updated_at": "<time>",
               "updated_by": "bot",
               "version": 1
             },
-            "seq": 10,
+            "seq": 12,
             "type": "note"
           },
           {
@@ -1141,19 +1314,23 @@
               "locked": false,
               "pinned": true,
               "project_id": null,
-              "seq": 12,
+              "seq": 14,
               "trashed": false,
               "updated_at": "<time>",
               "updated_by": "bot",
               "version": 3
             },
-            "seq": 12,
+            "seq": 14,
             "type": "note"
           }
         ],
-        "cursor": 12,
+        "cursor": 14,
         "has_more": false,
-        "reset": false
+        "reset": false,
+        "settings": {
+          "file_limit_ceiling_mb": 100,
+          "file_limit_mb": 25
+        }
       }
     },
     "step": "changes"
@@ -1176,6 +1353,7 @@
               "description": "",
               "due_at": "2030-01-10T18:00:00+01:00",
               "due_tz": "Europe/Zurich",
+              "files": [],
               "hidden_from_agents": false,
               "id": 2,
               "images": [],
@@ -1214,7 +1392,11 @@
         ],
         "cursor": 6,
         "has_more": true,
-        "reset": false
+        "reset": false,
+        "settings": {
+          "file_limit_ceiling_mb": 100,
+          "file_limit_mb": 25
+        }
       }
     },
     "step": "changes page"
@@ -1272,7 +1454,7 @@
         "icon": "server.rack",
         "id": "home-lab",
         "name": "Homelab",
-        "seq": 14
+        "seq": 16
       }
     },
     "step": "project-delete"
@@ -1324,15 +1506,16 @@
         "description": "",
         "due_at": null,
         "due_tz": null,
+        "files": [],
         "hidden_from_agents": false,
         "id": 3,
         "images": [],
-        "position": 15,
+        "position": 17,
         "priority": 0,
         "project_id": null,
         "remind_at": null,
         "repeat_rule": null,
-        "seq": 15,
+        "seq": 17,
         "source_url": null,
         "status": "todo",
         "tags": [],
@@ -1360,15 +1543,16 @@
         "description": "",
         "due_at": null,
         "due_tz": null,
+        "files": [],
         "hidden_from_agents": false,
         "id": 4,
         "images": [],
-        "position": 16,
+        "position": 18,
         "priority": 0,
         "project_id": null,
         "remind_at": null,
         "repeat_rule": null,
-        "seq": 16,
+        "seq": 18,
         "source_url": null,
         "status": "todo",
         "tags": [],

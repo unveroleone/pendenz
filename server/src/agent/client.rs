@@ -45,12 +45,15 @@ enum Transport {
 
 pub struct Client(Transport);
 
-// A request as the tools describe it. A body makes it a write, which gets an idempotency key:
-// the caller's key when it gave one, otherwise a fresh one, so each call is its own action.
+// A request as the tools describe it. A body or a file makes it a write, which gets an
+// idempotency key: the caller's key when it gave one, otherwise a fresh one, so each call is its
+// own action.
 #[derive(Default)]
 pub struct Call<'a> {
     pub method: Option<Method>,
     pub body: Option<Value>,
+    // A file sent as it is, for the file upload route.
+    pub file: Option<RawFile>,
     pub key: Option<&'a str>,
     // A successful answer comes back as bytes with its type instead of parsed JSON.
     pub binary: bool,
@@ -62,8 +65,41 @@ impl<'a> Call<'a> {
             method: Some(method),
             body: Some(body),
             key,
-            binary: false,
+            ..Self::default()
         }
+    }
+
+    pub fn upload(file: RawFile, key: Option<&'a str>) -> Self {
+        Self {
+            method: Some(Method::POST),
+            file: Some(file),
+            key,
+            ..Self::default()
+        }
+    }
+}
+
+pub struct RawFile {
+    pub name: String,
+    pub mime: String,
+    pub data: Vec<u8>,
+}
+
+impl RawFile {
+    // The headers that carry what the body cannot: its type and its name, percent-encoded
+    // because a header holds ASCII only.
+    fn headers(&self) -> [(&'static str, String); 2] {
+        [
+            (header::CONTENT_TYPE.as_str(), self.mime.clone()),
+            (
+                "Pendenz-File-Name",
+                percent_encoding::utf8_percent_encode(
+                    &self.name,
+                    percent_encoding::NON_ALPHANUMERIC,
+                )
+                .to_string(),
+            ),
+        ]
     }
 }
 
@@ -98,11 +134,11 @@ impl Client {
     }
 
     pub async fn request(&self, path: &str, call: Call<'_>) -> Result<Reply, String> {
-        // An image takes longer than a row, so it gets more time.
-        let limit = if is_image(path) {
-            Duration::from_secs(90)
-        } else {
-            Duration::from_secs(20)
+        // An image or a file takes longer than a row, so it gets more time.
+        let limit = match attachment(path) {
+            Some("files") => Duration::from_secs(300),
+            Some(_) => Duration::from_secs(90),
+            None => Duration::from_secs(20),
         };
         let method = call.method.clone().unwrap_or(Method::GET);
         let mut body = call.body;
@@ -112,7 +148,8 @@ impl Client {
             js_numbers(body);
         }
         // HTTP drops the white space around a header value, and an empty key meant none.
-        let key = body.as_ref().map(|_| {
+        let file = call.file;
+        let key = (body.is_some() || file.is_some()).then(|| {
             call.key
                 .map(|key| key.trim_matches([' ', '\t']))
                 .filter(|key| !key.is_empty())
@@ -149,6 +186,12 @@ impl Client {
                         .header(header::CONTENT_TYPE, "application/json")
                         .header("Idempotency-Key", key)
                         .body(body.to_string());
+                }
+                if let (Some(file), Some(key)) = (file, &key) {
+                    for (name, value) in file.headers() {
+                        request = request.header(name, value);
+                    }
+                    request = request.header("Idempotency-Key", key).body(file.data);
                 }
                 let response = request.send().await.map_err(|error| {
                     if error.is_timeout() {
@@ -187,12 +230,19 @@ impl Client {
                     // machine.
                     .header(header::HOST, "127.0.0.1")
                     .header(header::AUTHORIZATION, format!("Bearer {token}"));
-                let body = match (&body, &key) {
-                    (Some(body), Some(key)) => {
+                let body = match (&body, file, &key) {
+                    (Some(body), _, Some(key)) => {
                         request = request
                             .header(header::CONTENT_TYPE, "application/json")
                             .header("Idempotency-Key", key);
                         Body::from(body.to_string())
+                    }
+                    (None, Some(file), Some(key)) => {
+                        for (name, value) in file.headers() {
+                            request = request.header(name, value);
+                        }
+                        request = request.header("Idempotency-Key", key);
+                        Body::from(file.data)
                     }
                     _ => Body::empty(),
                 };
@@ -269,12 +319,15 @@ fn js_numbers(value: &mut Value) {
     }
 }
 
-fn is_image(path: &str) -> bool {
-    path.strip_prefix("/items/")
-        .and_then(|rest| rest.split_once('/'))
-        .is_some_and(|(id, rest)| {
-            !id.is_empty() && id.bytes().all(|c| c.is_ascii_digit()) && rest.starts_with("images")
-        })
+// "images" or "files" for a route under an item that carries one.
+fn attachment(path: &str) -> Option<&'static str> {
+    let (id, rest) = path.strip_prefix("/items/")?.split_once('/')?;
+    if id.is_empty() || !id.bytes().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    ["images", "files"]
+        .into_iter()
+        .find(|kind| rest.starts_with(kind))
 }
 
 // The innermost cause, which says more than reqwest's own summary.
@@ -301,6 +354,73 @@ pub fn image_body(path: &str) -> Result<Value, String> {
         return Err("An image can be at most 5 MB.".into());
     }
     Ok(json!({"mime": mime, "data": STANDARD.encode(&data)}))
+}
+
+// A local file as the file route takes it: its bytes, its name and a type from its extension.
+pub fn file_body(path: &str) -> Result<RawFile, String> {
+    let read = |error: std::io::Error| format!("Could not read {path}: {error}");
+    let meta = std::fs::metadata(path).map_err(read)?;
+    if !meta.is_file() {
+        return Err(format!("{path} is not a file."));
+    }
+    // The server's own limit may be lower; it says so then.
+    let ceiling = crate::settings::FILE_CEILING_MB;
+    if meta.len() > ceiling as u64 * crate::settings::MB {
+        return Err(format!("A file can be at most {ceiling} MB."));
+    }
+    let data = std::fs::read(path).map_err(read)?;
+    let file = std::path::Path::new(path);
+    let name = file
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("{path} has no file name."))?
+        .to_owned();
+    let extension = file
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    Ok(RawFile {
+        name,
+        mime: mime_for(extension.as_deref()).into(),
+        data,
+    })
+}
+
+fn mime_for(extension: Option<&str>) -> &'static str {
+    match extension {
+        Some("pdf") => "application/pdf",
+        Some("txt" | "log") => "text/plain",
+        Some("md" | "markdown") => "text/markdown",
+        Some("csv") => "text/csv",
+        Some("html" | "htm") => "text/html",
+        Some("json") => "application/json",
+        Some("xml") => "application/xml",
+        Some("yaml" | "yml") => "application/yaml",
+        Some("ics") => "text/calendar",
+        Some("vcf") => "text/vcard",
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("heic") => "image/heic",
+        Some("svg") => "image/svg+xml",
+        Some("zip") => "application/zip",
+        Some("doc") => "application/msword",
+        Some("docx") => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        Some("xls") => "application/vnd.ms-excel",
+        Some("xlsx") => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        Some("ppt") => "application/vnd.ms-powerpoint",
+        Some("pptx") => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        Some("pages") => "application/vnd.apple.pages",
+        Some("numbers") => "application/vnd.apple.numbers",
+        Some("key") => "application/vnd.apple.keynote",
+        Some("mp3") => "audio/mpeg",
+        Some("m4a") => "audio/mp4",
+        Some("wav") => "audio/wav",
+        Some("mp4") => "video/mp4",
+        Some("mov") => "video/quicktime",
+        _ => "application/octet-stream",
+    }
 }
 
 fn positive(text: &str) -> bool {
@@ -355,6 +475,17 @@ pub fn image_id(value: Option<&Value>) -> Result<String, String> {
         Ok(text.to_owned())
     } else {
         Err("Use an image ID from the item's images list.".into())
+    }
+}
+
+// A file ID from the item's files list.
+pub fn file_id(value: Option<&Value>) -> Result<String, String> {
+    let text = js_string(value);
+    let text = crate::agent::schema::js_trim(&text);
+    if positive(text) {
+        Ok(text.to_owned())
+    } else {
+        Err("Use a file ID from the item's files list.".into())
     }
 }
 

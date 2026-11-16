@@ -7,9 +7,12 @@
 // choose another one, and a name that is not a symbol draws as nothing.
 //
 // A tool with readOnlyHint needs the read scope, every other one the write scope.
-// add_item_image takes a path on the agent's machine, so only the stdio server offers it.
+// add_item_image and add_item_file take a path on the agent's machine, so only the stdio server
+// offers them.
 use super::{
-    client::{Call, Client, Reply, image_body, image_id, item_id, project_id, query},
+    client::{
+        Call, Client, Reply, file_body, file_id, image_body, image_id, item_id, project_id, query,
+    },
     schema::{self, js_space, js_trim, utf16_len},
 };
 use axum::http::Method;
@@ -20,7 +23,10 @@ use std::sync::OnceLock;
 pub const INSTRUCTIONS: &str = include_str!("instructions.txt");
 
 // Only offered where a path means a file next to the agent.
-const FILE_TOOLS: [&str; 1] = ["add_item_image"];
+const FILE_TOOLS: [&str; 2] = ["add_item_image", "add_item_file"];
+// What get_item_file shows to a model. Anything larger, or of another kind, is described only.
+const SHOWN_TEXT: i64 = 1_000_000;
+const SHOWN_IMAGE: i64 = 5 * 1024 * 1024;
 
 fn definitions() -> &'static [Value] {
     static TOOLS: OnceLock<Vec<Value>> = OnceLock::new();
@@ -243,6 +249,28 @@ async fn run(client: &Client, name: &str, args: Value) -> Result<Answer, String>
                 .json();
             compact(&updated, false)
         }
+        "get_item_file" => return show_file(client, &args).await,
+        "add_item_file" => {
+            let path = format!("/items/{}/files", item_id(args.get("id"))?);
+            let file = file_body(args["path"].as_str().unwrap_or(""))?;
+            let updated = client
+                .request(&path, Call::upload(file, key(&args)))
+                .await?
+                .json();
+            compact(&updated, false)
+        }
+        "remove_item_file" => {
+            let path = format!(
+                "/items/{}/files/{}",
+                item_id(args.get("id"))?,
+                file_id(args.get("file"))?
+            );
+            let updated = client
+                .request(&path, write(Method::DELETE, json!({})))
+                .await?
+                .json();
+            compact(&updated, false)
+        }
         "create_project" => {
             let mut body = json!({"name": args["name"]});
             if let Some(icon) = args.get("icon") {
@@ -437,6 +465,11 @@ fn compact(item: &Value, with_position: bool) -> Value {
     {
         row.insert("images".into(), images.len().into());
     }
+    if let Some(Value::Array(files)) = item.get("files")
+        && !files.is_empty()
+    {
+        row.insert("files".into(), files.len().into());
+    }
     if let Some(Value::Array(lines)) = item.get("checklist")
         && !lines.is_empty()
     {
@@ -455,6 +488,76 @@ fn compact(item: &Value, with_position: bool) -> Value {
         );
     }
     Value::Object(row)
+}
+
+// One file of an item, shown to the model when it can read it: text as text, a picture as an
+// image. The item's list is read first, so nothing larger than that is ever fetched.
+async fn show_file(client: &Client, args: &Value) -> Result<Answer, String> {
+    let id = item_id(args.get("id"))?;
+    let file = file_id(args.get("file"))?;
+    let detail = client.get(&format!("/items/{id}?activity=0")).await?;
+    let Some(meta) = detail["item"]["files"]
+        .as_array()
+        .and_then(|files| {
+            files
+                .iter()
+                .find(|f| f["id"].as_i64().map(|n| n.to_string()).as_deref() == Some(&file))
+        })
+        .cloned()
+    else {
+        return Err(format!("404: Item P-{id} has no file {file}."));
+    };
+    let mime = meta["mime"].as_str().unwrap_or("");
+    let bytes = meta["bytes"].as_i64().unwrap_or(i64::MAX);
+    let textual = mime.starts_with("text/")
+        || mime == "application/octet-stream"
+        || ["json", "xml", "yaml", "javascript", "csv"]
+            .iter()
+            .any(|kind| mime.contains(kind));
+    let picture = ["image/png", "image/jpeg", "image/gif", "image/webp"].contains(&mime);
+    let not_shown = |reason: &str| {
+        Ok(Answer::Json(
+            json!({"file": meta, "shown": false, "reason": reason}),
+        ))
+    };
+    if !(textual && bytes <= SHOWN_TEXT || picture && bytes <= SHOWN_IMAGE) {
+        return not_shown(
+            "Only text files up to 1 MB and PNG, JPEG, GIF or WebP images up to 5 MB can be shown here.",
+        );
+    }
+    let call = Call {
+        binary: true,
+        ..Call::default()
+    };
+    let data = match client
+        .request(&format!("/items/{id}/files/{file}"), call)
+        .await?
+    {
+        Reply::Binary { data, .. } => data,
+        Reply::Json(_) => return Err("The API answered without the file.".into()),
+    };
+    if picture {
+        // The bytes decide, not the type the uploader named.
+        let found = if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            "image/jpeg"
+        } else if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+            "image/png"
+        } else if data.starts_with(b"GIF8") {
+            "image/gif"
+        } else if data.len() > 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+            "image/webp"
+        } else {
+            return not_shown("The file is not the image its type says.");
+        };
+        return Ok(Answer::Image {
+            mime: found.into(),
+            data,
+        });
+    }
+    match String::from_utf8(data) {
+        Ok(text) => Ok(Answer::Json(json!({"file": meta, "text": text}))),
+        Err(_) => not_shown("The file is not UTF-8 text."),
+    }
 }
 
 // A list row for a note: its first line as the title and the start of the rest. A locked note
