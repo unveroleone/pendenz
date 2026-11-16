@@ -3,6 +3,25 @@
     <channel>
         <title>Pendenz</title>
         <item>
+            <title>0.3.0</title>
+            <pubDate>Mon, 16 Nov 2026 15:03:47 +0100</pubDate>
+            <sparkle:version>31</sparkle:version>
+            <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>27.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[Download `Pendenz-0.3.0.dmg` below, open it and drag Pendenz into Applications. It needs macOS 27. A copy you already have updates itself.
+
+This version needs a server on 0.3.0. Until yours is updated, new changes wait on the Mac and go out once it is.
+
+- Attach files of any kind to an item. Photos and files share one Attachments section, a click opens one in Quick Look, and Share and Remove are in its menu. Settings has the largest file the server takes.
+- Mark an item as doing from its menu or with a swipe to the right, and back to to do the same way.
+- A reminder's notification says when the item is due and in which project, and shows the start of its description.
+- Text in forms, menus and pickers is black or white again where it had turned gray.
+- A long description no longer holds up the app when its reminders are scheduled.
+- The app ignores the development argument `-apiURL`. Another program could use it to point the app at a different server, which emptied its local data.
+]]></description>
+            <enclosure url="https://github.com/unveroleone/pendenz/releases/download/v0.3.0/Pendenz-0.3.0.dmg" length="3771787" type="application/octet-stream" sparkle:edSignature="RXwAUmTeehd30HkFYy3bmkW8ie0ucmzfirMsQ7AK+9g7fKHfkn8KQaUX9RuX0DhIthZcZLCM3z2tXCNwT8oUAg=="/>
+        </item>
+        <item>
             <title>0.2.0</title>
             <pubDate>Sun, 15 Nov 2026 17:33:28 +0100</pubDate>
             <sparkle:version>19</sparkle:version>
