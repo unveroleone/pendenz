@@ -304,6 +304,7 @@ Reminders are local notifications that the app schedules from synced data ([`Rem
 
 - The app schedules the nearest 60 reminders (iOS keeps 64 per app) and works out the difference whenever the items change and when it comes to the front.
 - A notification counts the seconds to its moment, so a change of time zone on the device does not move it.
+- Under the item's title a notification shows the due date and the project, then the start of the description as plain text, line by line ([`ReminderText.swift`](../apple/Pendenz/Model/ReminderText.swift)). The due date is worded for the moment the notification fires: a reminder set for the evening before says "Due tomorrow, 18:00". One that stays on the lock screen keeps that wording, next to the time the system prints for its arrival. An edit of anything it shows replaces a waiting notification.
 - It removes a notification already shown when its item was completed or its reminder moved, but only once a sync in this launch has brought the store up to date (`isCurrent`). Before that, an item may only be missing because its rows are still loading.
 - A notification has the actions Done, In 1 Hour and Tomorrow. They go through the outbox like any change, so they reach the other devices. `Session` carries them out, not a view, because the system may start the app in the background for an action.
 
