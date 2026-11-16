@@ -182,9 +182,14 @@ struct AppCommands: Commands {
 enum Settings {
     // For development: the launch argument `-apiURL http://127.0.0.1:8080` points the app at a
     // server in local mode, which asks for no token, and skips pairing. Without it the app
-    // uses the server it is paired with.
+    // uses the server it is paired with. A release build ignores it: on the Mac any process
+    // can launch the app with arguments, and this one would empty the store and the outbox.
     static var apiURL: URL? {
+        #if DEBUG
         UserDefaults.standard.string(forKey: "apiURL").flatMap(URL.init(string:))
+        #else
+        nil
+        #endif
     }
 
     // The launch argument `-item 12` opens the app with that item's detail on screen.
