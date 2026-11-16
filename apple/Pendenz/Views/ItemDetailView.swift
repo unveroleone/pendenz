@@ -81,8 +81,7 @@ struct ItemDetailView: View {
                         .onSubmit(addLine)
                 }
             }
-            ItemImagesSection(item: item)
-            ItemFilesSection(item: item)
+            ItemAttachmentsSection(item: item)
             Section {
                 Toggle("Date", isOn: hasDate(item))
                 if let due = item.dueAt {

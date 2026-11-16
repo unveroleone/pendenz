@@ -1,119 +1,5 @@
-import PhotosUI
-import QuickLook
 import SwiftUI
 import UniformTypeIdentifiers
-
-// The images of an item in its detail: a row of thumbnails and the ways to add one. A tap
-// opens an image in full, a long press or a right click offers to share or remove it.
-struct ItemImagesSection: View {
-    @Environment(Store.self) private var store
-    let item: Item
-
-    @State private var picked: [PhotosPickerItem] = []
-    @State private var isPickingPhotos = false
-    @State private var isPickingFile = false
-    @State private var isTakingPhoto = false
-    @State private var canPaste = false
-    @State private var preview: URL?
-    @State private var failure: String?
-
-    var body: some View {
-        let images = store.images(of: item)
-        Section {
-            if !images.isEmpty {
-                ScrollView(.horizontal) {
-                    HStack(spacing: 8) {
-                        ForEach(Array(images.enumerated()), id: \.element.id) { index, image in
-                            ItemImageTile(
-                                image: image, itemID: item.id, name: "Image \(index + 1)",
-                                label: "Image \(index + 1) of \(images.count)",
-                            ) { preview = $0 }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-                .scrollIndicators(.hidden)
-                .quickLookPreview($preview)
-            }
-            if images.count < ImageFiles.perItem {
-                addMenu(room: ImageFiles.perItem - images.count)
-            }
-        } header: {
-            Text("Images")
-        } footer: {
-            if let failure {
-                Label(failure, systemImage: "exclamationmark.circle")
-            }
-        }
-    }
-
-    private func addMenu(room: Int) -> some View {
-        Menu {
-            Button("Photo Library", systemImage: "photo.on.rectangle") { isPickingPhotos = true }
-            #if os(iOS)
-            if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                Button("Take Photo", systemImage: "camera") { isTakingPhoto = true }
-            }
-            #endif
-            Button("Choose File", systemImage: "folder") { isPickingFile = true }
-            if canPaste {
-                Button("Paste", systemImage: "doc.on.clipboard") {
-                    Task { await add(Clipboard.image()) }
-                }
-            }
-        } label: {
-            Label("Add Image", systemImage: "plus")
-                // In the gray of the form's tint the row read as switched off.
-                .foregroundStyle(.primary)
-        }
-        .onAppear { canPaste = Clipboard.hasImage }
-        .onReceive(NotificationCenter.default.publisher(for: Clipboard.changed)) { _ in
-            canPaste = Clipboard.hasImage
-        }
-        .photosPicker(isPresented: $isPickingPhotos, selection: $picked, maxSelectionCount: room, matching: .images)
-        .onChange(of: picked) { _, chosen in
-            guard !chosen.isEmpty else { return }
-            picked = []
-            Task {
-                for photo in chosen {
-                    await add(try? photo.loadTransferable(type: Data.self))
-                }
-            }
-        }
-        .fileImporter(
-            isPresented: $isPickingFile,
-            allowedContentTypes: [.image],
-            allowsMultipleSelection: true,
-        ) { result in
-            guard case .success(let files) = result else { return }
-            Task {
-                for file in files.prefix(room) {
-                    // A file chosen outside the app's own folders is only readable in between.
-                    let isScoped = file.startAccessingSecurityScopedResource()
-                    let data = try? Data(contentsOf: file)
-                    if isScoped { file.stopAccessingSecurityScopedResource() }
-                    await add(data)
-                }
-            }
-        }
-        #if os(iOS)
-        .fullScreenCover(isPresented: $isTakingPhoto) {
-            CameraView { data in
-                Task { await add(data) }
-            }
-            .ignoresSafeArea()
-        }
-        #endif
-    }
-
-    private func add(_ data: Data?) async {
-        if let data, await store.addImage(data, to: item.id) {
-            failure = nil
-        } else if store.rejection == nil {
-            failure = "That is not a picture Pendenz can read."
-        }
-    }
-}
 
 // Lets images and files be dropped onto an item's detail from another app or window. A picture
 // becomes an image, anything else a file.
@@ -145,7 +31,7 @@ struct ItemImageDrop: ViewModifier {
 
 // One image in the row. It shows a spinner until its file is here, which for an image the
 // server holds can take a request.
-private struct ItemImageTile: View {
+struct ItemImageTile: View {
     @Environment(Store.self) private var store
     @Environment(\.displayScale) private var displayScale
     let image: ShownImage
@@ -238,7 +124,7 @@ private struct ItemImageTile: View {
 }
 
 // Whether the clipboard holds a picture, and its bytes.
-private enum Clipboard {
+enum Clipboard {
     #if os(macOS)
     // The Mac sends no notice when the clipboard changes; the app coming to the front is the
     // moment something new can be in it.
@@ -267,7 +153,7 @@ private enum Clipboard {
 
 #if os(iOS)
 // The system camera, for one photo.
-private struct CameraView: UIViewControllerRepresentable {
+struct CameraView: UIViewControllerRepresentable {
     @Environment(\.dismiss) private var dismiss
     let onPhoto: (Data) -> Void
 

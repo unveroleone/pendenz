@@ -192,6 +192,8 @@ An item can carry up to 20 files of any kind, kept byte for byte under their nam
 
 All three check the item with the hidden filter and look the file up by its ID and the item's ID together, as for images.
 
+The app shows both lists in one Attachments section: the pictures as thumbnails, then the files, then one menu to add either. A photo from the library or the camera becomes an image; a chosen file is kept as it is, even when it is a picture. A list row marks both with one paperclip. Merging the two lists on the server too is left for later: it would mean less code, but no faster app, and it needs a migration of the images already stored.
+
 ### Settings
 
 `GET /api/settings` answers `{"file_limit_mb", "file_limit_ceiling_mb"}`. Every page of the changes feed and the bootstrap carry the same object, so a device learns a new limit with its next sync. `PATCH /api/settings` with `{"file_limit_mb": n}` is for the owner's devices only, like the device routes: it takes the writer lock and `BEGIN IMMEDIATE` itself, needs no idempotency key because it sets a value, records the change in the activity log and wakes the push sender.

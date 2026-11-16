@@ -93,9 +93,11 @@ struct ItemRow: View {
         }
         let project = style.showsProject ? store.projectName(item.projectId) : nil
         let ticked = item.checklist.count { $0.done }
-        let images = item.images.count + (store.waitingImages[item.id]?.count ?? 0)
+        // Pictures and files together, as the detail lists them under Attachments.
+        let attachments = item.images.count + (store.waitingImages[item.id]?.count ?? 0)
+            + item.files.count + (store.waitingFiles[item.id]?.count ?? 0)
         let hasDetails = due != nil || project != nil || item.repeatRule != nil
-            || !item.checklist.isEmpty || !item.description.isEmpty || item.hiddenFromAgents || images > 0
+            || !item.checklist.isEmpty || !item.description.isEmpty || item.hiddenFromAgents || attachments > 0
         if hasDetails {
             HStack(spacing: 10) {
                 if let (due, text) = due {
@@ -123,8 +125,8 @@ struct ItemRow: View {
                     Label("Has notes", systemImage: "text.alignleft")
                         .labelStyle(.iconOnly)
                 }
-                if images > 0 {
-                    Label(images == 1 ? "1 image" : "\(images) images", systemImage: "photo")
+                if attachments > 0 {
+                    Label(attachments == 1 ? "1 attachment" : "\(attachments) attachments", systemImage: "paperclip")
                         .labelStyle(.iconOnly)
                 }
                 if item.hiddenFromAgents {

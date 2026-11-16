@@ -1,62 +1,9 @@
-import QuickLook
 import SwiftUI
 import UniformTypeIdentifiers
 
-// The files of an item in its detail: one row per file and a way to add more. A tap opens a
-// file in the preview, a long press or a right click offers to share or remove it.
-struct ItemFilesSection: View {
-    @Environment(Store.self) private var store
-    let item: Item
-
-    @State private var isPicking = false
-    @State private var preview: URL?
-    @State private var failure: String?
-
-    var body: some View {
-        let files = store.files(of: item)
-        Section {
-            ForEach(files) { file in
-                ItemFileRow(file: file, itemID: item.id, failure: $failure) { preview = $0 }
-            }
-            if files.count < AttachmentFiles.perItem {
-                Button("Add File", systemImage: "plus") { isPicking = true }
-                    // In the black or white of the text, not in a tint the form may set.
-                    .formAction(.primary)
-                    .fileImporter(
-                        isPresented: $isPicking,
-                        allowedContentTypes: [.item],
-                        allowsMultipleSelection: true,
-                    ) { result in
-                        guard case .success(let picked) = result else { return }
-                        add(Array(picked.prefix(AttachmentFiles.perItem - files.count)))
-                    }
-            }
-        } header: {
-            // The preview hangs from the header, the one view of the section that is always
-            // there, so a single preview serves every row.
-            Text("Files")
-                .quickLookPreview($preview)
-        } footer: {
-            if let failure {
-                Label(failure, systemImage: "exclamationmark.circle")
-            }
-        }
-    }
-
-    private func add(_ picked: [URL]) {
-        Task {
-            var problems: [String] = []
-            for url in picked {
-                if let problem = await store.addFile(from: url, to: item.id) { problems.append(problem) }
-            }
-            failure = problems.isEmpty ? nil : problems.joined(separator: "\n")
-        }
-    }
-}
-
 // One file in the list. It is fetched when it is opened or shared, not before: a file can be
 // large, and most are never opened on most devices.
-private struct ItemFileRow: View {
+struct ItemFileRow: View {
     @Environment(Store.self) private var store
     let file: ShownFile
     let itemID: Int
