@@ -84,11 +84,15 @@ struct ItemDetailView: View {
             ItemImagesSection(item: item)
             Section {
                 Toggle("Date", isOn: hasDate(item))
+                    .selectionTint()
                 if let due = item.dueAt {
                     DatePicker("Day", selection: day(item, due), displayedComponents: .date)
+                        .selectionTint()
                     Toggle("Time", isOn: hasTime(item, due))
+                        .selectionTint()
                     if due.time != nil {
                         DatePicker("At", selection: time(item, due), displayedComponents: .hourAndMinute)
+                            .selectionTint()
                     }
                     Picker("Repeat", selection: repeatRule(item)) {
                         ForEach(repeatChoices(item), id: \.self) { rule in
@@ -101,8 +105,10 @@ struct ItemDetailView: View {
                 // The due time is when the item is due and when it reminds. This moves the
                 // reminder, usually to before: the item then says nothing at its due time.
                 Toggle(item.dueAt?.time == nil ? "Reminder" : "Remind me earlier", isOn: hasReminder(item))
+                    .selectionTint()
                 if let remindAt = item.remindAt {
                     DatePicker("Remind me", selection: reminder(remindAt))
+                        .selectionTint()
                 }
             } footer: {
                 if let due = item.dueAt?.time {
@@ -141,13 +147,12 @@ struct ItemDetailView: View {
                     LabeledContent("Number", value: "Not sent yet")
                 }
                 Toggle("Hide from agent", isOn: hidden(item))
+                    .selectionTint()
                 Button("Move to Trash", systemImage: "trash", role: .destructive, action: trash)
                     .formAction(.red)
             }
         }
         .formStyle(.grouped)
-        // The app tint is black or white, which hides the knob of a switch that is on.
-        .tint(Color(.selection))
         .modifier(ItemImageDrop(itemID: itemID))
         .onAppear { load(item) }
         .onDisappear(perform: saveText)

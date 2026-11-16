@@ -59,8 +59,6 @@ struct SettingsView: View {
             versionSection
         }
         .formStyle(.grouped)
-        // The app tint is black or white, which hides a control that is on.
-        .tint(Color(.selection))
         .navigationTitle("Settings")
         .navigationDestination(for: SettingsPage.self) { page in
             switch page {
