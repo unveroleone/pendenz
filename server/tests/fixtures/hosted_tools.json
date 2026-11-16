@@ -11,7 +11,7 @@
         "protocolVersion": "2025-06-18",
         "serverInfo": {
           "name": "pendenz",
-          "version": "0.2.0"
+          "version": "0.3.0"
         }
       }
     },
@@ -29,7 +29,7 @@
         "protocolVersion": "2025-11-25",
         "serverInfo": {
           "name": "pendenz",
-          "version": "0.2.0"
+          "version": "0.3.0"
         }
       }
     },
@@ -4511,7 +4511,7 @@
           "_meta": {
             "io.modelcontextprotocol/serverInfo": {
               "name": "pendenz",
-              "version": "0.2.0"
+              "version": "0.3.0"
             }
           },
           "cacheScope": "private",

@@ -27,6 +27,7 @@ const FILE_TOOLS: [&str; 2] = ["add_item_image", "add_item_file"];
 // What get_item_file shows to a model. Anything larger, or of another kind, is described only.
 const SHOWN_TEXT: i64 = 1_000_000;
 const SHOWN_IMAGE: i64 = 5 * 1024 * 1024;
+const SHOWN_PIXELS: u64 = 40_000_000;
 
 fn definitions() -> &'static [Value] {
     static TOOLS: OnceLock<Vec<Value>> = OnceLock::new();
@@ -549,6 +550,13 @@ async fn show_file(client: &Client, args: &Value) -> Result<Answer, String> {
         } else {
             return not_shown("The file is not the image its type says.");
         };
+        // A small file can announce a huge picture, as on upload: the same cap on its pixels.
+        let pixels = imagesize::blob_size(&data)
+            .map(|size| (size.width as u64).saturating_mul(size.height as u64))
+            .unwrap_or(u64::MAX);
+        if pixels > SHOWN_PIXELS {
+            return not_shown("The image has too many pixels to be shown here.");
+        }
         return Ok(Answer::Image {
             mime: found.into(),
             data,
