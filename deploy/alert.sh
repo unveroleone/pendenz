@@ -9,7 +9,9 @@ log=$(journalctl -u "$unit" -n 20 --no-pager -o cat 2>/dev/null | tail -c 3000 |
 text="Pendenz on $(hostname): $unit failed.
 
 $log"
-curl --fail --silent --show-error --max-time 20 --retry 3 \
-    --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
-    --data-urlencode "text=$text" \
-    "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" >/dev/null
+# The URL holds the bot token, so it goes to curl on stdin and not on its command line, where
+# every user on the host can read it. printf is built into the shell and starts no process.
+printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TELEGRAM_BOT_TOKEN" |
+    curl --config - --fail --silent --show-error --max-time 20 --retry 3 \
+        --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+        --data-urlencode "text=$text" >/dev/null
