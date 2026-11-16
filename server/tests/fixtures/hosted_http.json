@@ -711,6 +711,110 @@
             {
               "annotations": {
                 "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              },
+              "description": "Read one file attached to an item. A text file up to 1 MB comes back as text, a PNG, JPEG, GIF or WebP image up to 5 MB as an image. Anything else comes back as its name, type and size only.",
+              "inputSchema": {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "additionalProperties": false,
+                "properties": {
+                  "file": {
+                    "anyOf": [
+                      {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer"
+                      },
+                      {
+                        "pattern": "^[1-9]\\d*$",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "File ID from the item's files list in get_item."
+                  },
+                  "id": {
+                    "anyOf": [
+                      {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer"
+                      },
+                      {
+                        "pattern": "^([Pp]-)?[1-9]\\d*$",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "Item ID, as P-12 or 12."
+                  }
+                },
+                "required": [
+                  "id",
+                  "file"
+                ],
+                "type": "object"
+              },
+              "name": "get_item_file"
+            },
+            {
+              "annotations": {
+                "destructiveHint": true,
+                "idempotentHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": false
+              },
+              "description": "Remove one file from an item, only when the owner asks for it. This cannot be undone. Returns the item as a compact row with its new version.",
+              "inputSchema": {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "additionalProperties": false,
+                "properties": {
+                  "file": {
+                    "anyOf": [
+                      {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer"
+                      },
+                      {
+                        "pattern": "^[1-9]\\d*$",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "File ID from the item's files list in get_item."
+                  },
+                  "id": {
+                    "anyOf": [
+                      {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer"
+                      },
+                      {
+                        "pattern": "^([Pp]-)?[1-9]\\d*$",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "Item ID, as P-12 or 12."
+                  },
+                  "key": {
+                    "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "file"
+                ],
+                "type": "object"
+              },
+              "name": "remove_item_file"
+            },
+            {
+              "annotations": {
+                "destructiveHint": false,
                 "idempotentHint": false,
                 "openWorldHint": false,
                 "readOnlyHint": false
@@ -1399,11 +1503,11 @@
           "capabilities": {
             "tools": {}
           },
-          "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nImages: an item can carry images, listed under images in get_item with an id each. Look at one with get_item_image when it matters for the task. Remove one only when the owner asks for it; a removed image does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
+          "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nImages: an item can carry images, listed under images in get_item with an id each. Look at one with get_item_image when it matters for the task. Remove one only when the owner asks for it; a removed image does not come back.\nFiles: an item can carry files of any kind, listed under files in get_item with an id, name, type and size. Read one with get_item_file when it matters for the task. Remove one only when the owner asks for it; a removed file does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
           "protocolVersion": "2025-06-18",
           "serverInfo": {
             "name": "pendenz",
-            "version": "0.2.0"
+            "version": "0.3.0"
           }
         }
       },

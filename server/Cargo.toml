@@ -1,6 +1,6 @@
 [package]
 name = "pendenz"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 
 [dependencies]
@@ -12,6 +12,7 @@ chrono-tz = "0.10"
 clap = { version = "4", features = ["derive", "env"] }
 http-body-util = "0.1"
 imagesize = "0.15"
+percent-encoding = "2"
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls", "http2"] }
 rmcp = { version = "3.10", features = ["server", "transport-io", "transport-streamable-http-server"] }
 serde = { version = "1", features = ["derive"] }

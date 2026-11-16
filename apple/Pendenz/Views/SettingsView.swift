@@ -30,6 +30,13 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsPage.notifications) {
                         LabeledContent("Notifications", value: Reminders.shared.access.label)
                     }
+                    NavigationLink(value: SettingsPage.files) {
+                        if let settings = session.store?.settings {
+                            LabeledContent("Files", value: "Up to \(settings.fileLimitMb) MB")
+                        } else {
+                            Text("Files")
+                        }
+                    }
                 }
                 if session.isDevelopment {
                     Section {
@@ -63,6 +70,7 @@ struct SettingsView: View {
         .navigationDestination(for: SettingsPage.self) { page in
             switch page {
             case .notifications: NotificationSettingsView()
+            case .files: FileSettingsView()
             }
         }
         // Neither can be taken back, so both ask, in an alert: see "Questions before an
@@ -320,6 +328,7 @@ private struct CopyButton: View {
 // A group of settings with a page of its own, behind a row of the first page.
 enum SettingsPage: Hashable {
     case notifications
+    case files
 }
 
 // The gear that opens the settings on iPhone and iPad. The Mac has them in its app menu.

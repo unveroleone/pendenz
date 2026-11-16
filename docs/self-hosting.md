@@ -31,7 +31,7 @@ chown 10001:10001 /srv/pendenz/data /srv/pendenz/backups
 chmod 700 /srv/pendenz
 ```
 
-The containers run as the user 10001, which needs to write `data` and `backups`. Put `data` on a disk you trust, since it holds everything.
+The containers run as the user 10001, which needs to write `data` and `backups`. Put `data` on a disk you trust, since it holds everything. Images and files attached to items are stored in the database too, so it and its backups grow with them. The owner sets the largest file in the app (up to 100 MB); a reverse proxy in front of the server has to let request bodies of that size through.
 
 Copy these files from the repo into `/srv/pendenz`:
 
@@ -67,7 +67,7 @@ CLOUDFLARED_IMAGE=cloudflare/cloudflared@sha256:<digest>
 CLOUDFLARE_TUNNEL_TOKEN=<token of a tunnel made for Pendenz>
 ```
 
-In the Cloudflare dashboard, give the tunnel one public hostname that goes to `http://api:8080`. Do not put Cloudflare Access in front of it: the apps and the agents authenticate with their Pendenz token only.
+In the Cloudflare dashboard, give the tunnel one public hostname that goes to `http://api:8080`. Do not put Cloudflare Access in front of it: the apps and the agents authenticate with their Pendenz token only. Cloudflare refuses request bodies over 100 MB on its free plan, which is why the largest file cannot be set higher.
 
 The paths in `COMPOSE_FILE` start from the working directory, so run `docker compose` from `/srv/pendenz`. `update.sh` does that by itself.
 

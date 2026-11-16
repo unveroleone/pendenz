@@ -68,6 +68,9 @@ pub struct Item {
     // Changed only by the image routes. An edit of the item cannot write it.
     #[sqlx(json)]
     pub images: Vec<ImageRef>,
+    // Changed only by the file routes, like the images.
+    #[sqlx(json)]
+    pub files: Vec<FileRef>,
     pub version: i64,
     pub seq: i64,
     pub created_by: String,
@@ -86,6 +89,20 @@ pub struct ImageRef {
     pub height: i64,
     pub bytes: i64,
     pub sha256: String,
+}
+
+// A file on an item, without its bytes. Looked up by its ID under its item, as an image is.
+// `upload_id` is the uploader's own name for the upload, so it can tell its file from another
+// with the same bytes when an answer was lost.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct FileRef {
+    pub id: i64,
+    pub name: String,
+    pub mime: String,
+    pub bytes: i64,
+    pub sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upload_id: Option<String>,
 }
 
 #[derive(Serialize, FromRow)]

@@ -331,6 +331,26 @@ final class Session {
         try await call { try await $0.revoke(device: device.id) }
     }
 
+    // MARK: Settings of the server
+
+    // Also asked directly, like the devices: the server's settings belong to the server, and a
+    // limit set without a connection could not be checked against anything. What the server
+    // confirms is kept in the store for the checks made before a file is queued.
+    func serverSettings() async throws -> ServerSettings {
+        // The store of the pairing that asks. A closed one keeps nothing.
+        let store = store
+        let settings = try await call { try await $0.settings() }
+        store?.keep(settings)
+        return settings
+    }
+
+    func setFileLimit(_ megabytes: Int) async throws -> ServerSettings {
+        let store = store
+        let settings = try await call { try await $0.update(fileLimitMb: megabytes) }
+        store?.keep(settings)
+        return settings
+    }
+
     private func call<Value: Sendable>(_ request: (APIClient) async throws -> Value) async throws -> Value {
         guard let api, let asked = connection else { throw APIError.status(401, nil) }
         do {

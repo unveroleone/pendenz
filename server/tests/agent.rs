@@ -901,6 +901,64 @@ async fn hosted_tools() {
             .await,
     );
 
+    // Files, uploaded by the owner through the API.
+    for (name, mime, data) in [
+        (
+            "Packing list.txt",
+            "text/plain",
+            b"Passport\nCharger\n".to_vec(),
+        ),
+        (
+            "Offer.pdf",
+            "application/pdf",
+            b"%PDF-1.7 not really".to_vec(),
+        ),
+        ("photo.png", "image/png", PNG.to_vec()),
+    ] {
+        let response = server
+            .upload(&server.owner, 2, (name, mime, data), name, None)
+            .await;
+        assert!(response.status().is_success());
+    }
+    t.add(
+        "list shows the file count",
+        bot.call("list_items", json!({"project": "home-lab"})).await,
+    );
+    t.add(
+        "get item with files",
+        bot.call("get_item", json!({"id": 2, "activity": 1})).await,
+    );
+    t.add(
+        "get a text file",
+        bot.call("get_item_file", json!({"id": 2, "file": 1})).await,
+    );
+    t.add(
+        "get a file that cannot be shown",
+        bot.call("get_item_file", json!({"id": "P-2", "file": "2"}))
+            .await,
+    );
+    let picture = bot.call("get_item_file", json!({"id": 2, "file": 3})).await;
+    assert_eq!(picture["content"][0]["data"], png_base64());
+    t.add("get an image file", picture);
+    t.add(
+        "get a missing file",
+        bot.call("get_item_file", json!({"id": 2, "file": 99}))
+            .await,
+    );
+    t.add(
+        "remove file",
+        bot.call(
+            "remove_item_file",
+            json!({"id": 2, "file": 2, "key": "rf1"}),
+        )
+        .await,
+    );
+    t.add(
+        "remove file again",
+        bot.call("remove_item_file", json!({"id": 2, "file": 2}))
+            .await,
+    );
+
     // Hidden rows do not exist for an agent.
     let hidden = server
         .api(
@@ -1317,6 +1375,35 @@ async fn stdio_server() {
         ),
         "an empty path is a validation error"
     );
+    let letter = server.dir.join("Brief an die Bank.txt");
+    std::fs::write(&letter, "Sehr geehrte Damen und Herren").unwrap();
+    t.add(
+        "add file",
+        mcp.call(
+            "add_item_file",
+            json!({"id": "P-1", "path": letter.display().to_string(), "key": "file1"}),
+        )
+        .await,
+    );
+    t.add(
+        "add file again with the key",
+        mcp.call(
+            "add_item_file",
+            json!({"id": "P-1", "path": letter.display().to_string(), "key": "file1"}),
+        )
+        .await,
+    );
+    t.add(
+        "get file",
+        mcp.call("get_item_file", json!({"id": 1, "file": 1})).await,
+    );
+    let gone = mcp
+        .call(
+            "add_item_file",
+            json!({"id": 1, "path": server.dir.join("missing.pdf").display().to_string()}),
+        )
+        .await;
+    assert_eq!(gone["isError"], true, "{gone}");
     t.add(
         "add image to a missing item",
         mcp.call(
@@ -1426,6 +1513,10 @@ async fn cli() {
     std::fs::write(&png, PNG).unwrap();
     let png = png.display().to_string();
     let out = dir.join("out.png").display().to_string();
+    let txt = dir.join("list.txt");
+    std::fs::write(&txt, "Milk\nBread\n").unwrap();
+    let txt = txt.display().to_string();
+    let saved = dir.join("saved.txt").display().to_string();
 
     let steps: Vec<(&str, Vec<&str>)> = vec![
         ("workspace", vec!["workspace"]),
@@ -1562,6 +1653,18 @@ async fn cli() {
             vec!["remove-image", "P-1", "1", "--key", "ri1"],
         ),
         ("remove-image again", vec!["remove-image", "1", "1"]),
+        ("add-file", vec!["add-file", "P-1", &txt, "--key", "f1"]),
+        (
+            "add-file again with the key",
+            vec!["add-file", "P-1", &txt, "--key", "f1"],
+        ),
+        ("get-file", vec!["get-file", "P-1", "1", "--out", &saved]),
+        ("get-file without out", vec!["get-file", "P-1", "1"]),
+        (
+            "remove-file",
+            vec!["remove-file", "P-1", "1", "--key", "rf1"],
+        ),
+        ("remove-file again", vec!["remove-file", "1", "1"]),
         (
             "note-create",
             vec![

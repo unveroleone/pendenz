@@ -43,9 +43,13 @@ pub async fn changes(
         .await?;
     if cursor > head {
         // The server was restored from a backup that is older than this client's cursor.
-        return Ok(Json(
-            json!({"cursor": 0, "has_more": true, "reset": true, "changes": []}),
-        ));
+        return Ok(Json(json!({
+            "cursor": 0,
+            "has_more": true,
+            "reset": true,
+            "changes": [],
+            "settings": crate::settings::read(&mut tx).await?.json(),
+        })));
     }
     let human = identity.is_human();
     let items = sqlx::query_as::<_, Item>(
@@ -113,11 +117,14 @@ pub async fn changes(
         (true, Some((seq, _))) => *seq,
         _ => head,
     };
+    // Every answer carries the settings, so a device learns a changed limit with its next sync.
+    let settings = crate::settings::read(&mut tx).await?.json();
     Ok(Json(json!({
         "cursor": next,
         "has_more": has_more,
         "reset": false,
         "changes": changes.into_iter().map(|(_, change)| change).collect::<Vec<_>>(),
+        "settings": settings,
     })))
 }
 

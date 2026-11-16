@@ -2,7 +2,7 @@ use crate::{
     AppState,
     auth::{Actor, Identity, hash},
     error::{ApiError, Result},
-    images,
+    files, images,
     model::{
         AGENT_SOURCES, Activity, Comment, HUMAN_SOURCES, Item, ItemInput, Project, STAGES,
         STATUSES, bound_key,
@@ -36,6 +36,10 @@ pub async fn bootstrap(
             .await?;
     // Sorted here because SQLite only folds ASCII letters.
     projects.sort_by_cached_key(|(_, name, _)| fold(name));
+    let settings = {
+        let mut conn = state.db.acquire().await?;
+        crate::settings::read(&mut conn).await?.json()
+    };
     let sources: &[&str] = if identity.is_human() {
         &HUMAN_SOURCES
     } else {
@@ -47,6 +51,7 @@ pub async fn bootstrap(
         "timezone": state.tz.name(),
         "actors": actors,
         "projects": projects.into_iter().map(|(id, name, icon)| json!({"id": id, "name": name, "icon": icon})).collect::<Vec<_>>(),
+        "settings": settings,
         "options": {
             "statuses": STATUSES,
             "priorities": [
@@ -996,6 +1001,22 @@ fn answer(identity: &Identity, resource: &str, body: Value) -> Value {
     )
 }
 
+// What a write carries to the writer: the fields of a JSON body, or an upload that was read
+// and checked before the writer lock.
+pub(crate) enum Payload {
+    Fields(Map<String, Value>),
+    Image(images::Upload),
+    File(files::Upload),
+}
+
+pub(crate) fn idempotency_key(headers: &HeaderMap) -> Result<&str> {
+    headers
+        .get("idempotency-key")
+        .and_then(|v| v.to_str().ok())
+        .filter(|s| !s.is_empty() && s.len() <= 128)
+        .ok_or_else(|| ApiError::bad("Send an Idempotency-Key header of 1 to 128 characters."))
+}
+
 // Every write goes through here: one writer at a time, one transaction, and an idempotency key
 // so a retry does not write twice.
 pub async fn write(
@@ -1030,25 +1051,35 @@ pub async fn write(
             ));
         }
     };
-    let key = headers
-        .get("idempotency-key")
-        .and_then(|v| v.to_str().ok())
-        .filter(|s| !s.is_empty() && s.len() <= 128)
-        .ok_or_else(|| ApiError::bad("Send an Idempotency-Key header of 1 to 128 characters."))?;
+    let key = idempotency_key(&headers)?;
     // An image is decoded and checked here, before the writer lock: megabytes of base64 must
     // not keep other writes waiting. Its hash stands for the body in the fingerprint.
-    let (upload, fields) = if is_upload {
-        (Some(images::prepare(fields)?), Map::new())
+    let (payload, fingerprint) = if is_upload {
+        let upload = images::prepare(fields)?;
+        let fingerprint = hash(&format!("{method} {path} {}", upload.sha256));
+        (Payload::Image(upload), fingerprint)
     } else {
-        (None, fields)
-    };
-    let fingerprint = match &upload {
-        Some(upload) => hash(&format!("{method} {path} {}", upload.sha256)),
-        None => hash(&format!(
+        let fingerprint = hash(&format!(
             "{method} {path} {}",
             Value::Object(fields.clone())
-        )),
+        ));
+        (Payload::Fields(fields), fingerprint)
     };
+    commit(&state, &identity, &method, path, key, fingerprint, payload).await
+}
+
+// The writer itself, shared by the JSON routes and the file upload. A key that was used before
+// answers with what it wrote then, before anything else is checked.
+pub(crate) async fn commit(
+    state: &AppState,
+    identity: &Identity,
+    method: &Method,
+    path: &str,
+    key: &str,
+    fingerprint: String,
+    payload: Payload,
+) -> Result<Json<Value>> {
+    let segments: Vec<&str> = path.trim_start_matches("/api/").split('/').collect();
     let actor = &identity.actor.id;
     let _guard = state.writer.lock().await;
     // IMMEDIATE takes the write lock at the start. A deferred transaction that reads first can
@@ -1067,27 +1098,39 @@ pub async fn write(
                 "This idempotency key was already used for another request.",
             ));
         }
-        let body = replay(&mut tx, &identity, &resource, &id).await?;
-        return Ok(Json(answer(&identity, &resource, body)));
+        let body = replay(&mut tx, identity, &resource, &id).await?;
+        return Ok(Json(answer(identity, &resource, body)));
     }
+    let (fields, image, file) = match payload {
+        Payload::Fields(fields) => (fields, None, None),
+        Payload::Image(upload) => (Map::new(), Some(upload), None),
+        Payload::File(upload) => (Map::new(), None, Some(upload)),
+    };
     let written = match segments.as_slice() {
-        ["items"] => create_item(&mut tx, &state, &identity, fields).await?,
-        ["items", id] => update_item(&mut tx, &state, &identity, item_id(id)?, fields).await?,
-        ["items", id, "comments"] => add_comment(&mut tx, &identity, item_id(id)?, fields).await?,
+        ["items"] => create_item(&mut tx, state, identity, fields).await?,
+        ["items", id] => update_item(&mut tx, state, identity, item_id(id)?, fields).await?,
+        ["items", id, "comments"] => add_comment(&mut tx, identity, item_id(id)?, fields).await?,
         ["items", id, "images"] => {
-            let upload = upload.ok_or_else(ApiError::missing)?;
-            images::add(&mut tx, &identity, item_id(id)?, upload).await?
+            let upload = image.ok_or_else(ApiError::missing)?;
+            images::add(&mut tx, identity, item_id(id)?, upload).await?
         }
         ["items", id, "images", image] => {
-            images::remove(&mut tx, &identity, item_id(id)?, item_id(image)?, fields).await?
+            images::remove(&mut tx, identity, item_id(id)?, item_id(image)?, fields).await?
         }
-        ["projects"] => create_project(&mut tx, &identity, fields).await?,
-        ["projects", id] if method == Method::DELETE => {
-            delete_project(&mut tx, &identity, id, fields).await?
+        ["items", id, "files"] => {
+            let upload = file.ok_or_else(ApiError::missing)?;
+            files::add(&mut tx, identity, item_id(id)?, upload).await?
         }
-        ["projects", id] => update_project(&mut tx, &identity, id, fields).await?,
-        ["notes"] => notes::create(&mut tx, &identity, fields).await?,
-        ["notes", id] => notes::update(&mut tx, &identity, item_id(id)?, fields).await?,
+        ["items", id, "files", file] => {
+            files::remove(&mut tx, identity, item_id(id)?, item_id(file)?, fields).await?
+        }
+        ["projects"] => create_project(&mut tx, identity, fields).await?,
+        ["projects", id] if *method == Method::DELETE => {
+            delete_project(&mut tx, identity, id, fields).await?
+        }
+        ["projects", id] => update_project(&mut tx, identity, id, fields).await?,
+        ["notes"] => notes::create(&mut tx, identity, fields).await?,
+        ["notes", id] => notes::update(&mut tx, identity, item_id(id)?, fields).await?,
         _ => return Err(ApiError::missing()),
     };
     sqlx::query(
@@ -1104,5 +1147,5 @@ pub async fn write(
     // After the commit and not for a retry that wrote nothing: the other devices are asked to
     // sync what is now stored.
     state.push.changed(identity.device.as_deref());
-    Ok(Json(answer(&identity, written.resource, written.body)))
+    Ok(Json(answer(identity, written.resource, written.body)))
 }

@@ -167,6 +167,32 @@ impl Server {
         value
     }
 
+    // A file upload as the apps send it: the raw bytes, with the name and type in headers.
+    pub async fn upload(
+        &self,
+        token: &str,
+        item: i64,
+        (name, mime, data): (&str, &str, Vec<u8>),
+        key: &str,
+        upload_id: Option<&str>,
+    ) -> reqwest::Response {
+        let mut request = reqwest::Client::new()
+            .post(format!("{}/api/items/{item}/files", self.url()))
+            .bearer_auth(token)
+            .header("Idempotency-Key", key)
+            .header("Content-Type", mime)
+            .header(
+                "Pendenz-File-Name",
+                percent_encoding::utf8_percent_encode(name, percent_encoding::NON_ALPHANUMERIC)
+                    .to_string(),
+            )
+            .body(data);
+        if let Some(upload_id) = upload_id {
+            request = request.header("Pendenz-Upload-Id", upload_id);
+        }
+        request.send().await.unwrap()
+    }
+
     pub fn hosted(&self, token: &str) -> Hosted {
         Hosted {
             http: reqwest::Client::new(),

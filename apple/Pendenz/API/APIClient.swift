@@ -5,6 +5,24 @@ nonisolated struct ChangePage: Sendable, Decodable {
     let hasMore: Bool
     let reset: Bool
     let changes: [Change]
+    // Missing from a server older than files.
+    let settings: ServerSettings?
+}
+
+// The settings of the server, the same for every device.
+nonisolated struct ServerSettings: Equatable, Sendable, Codable {
+    // The largest file that can be added, in megabytes of a million bytes.
+    var fileLimitMb: Int
+    // The most the limit can be set to.
+    var fileLimitCeilingMb: Int
+
+    var fileLimitBytes: Int {
+        fileLimitMb * AttachmentFiles.megabyte
+    }
+}
+
+private nonisolated struct SettingsPatch: Encodable {
+    let fileLimitMb: Int
 }
 
 // One row of the changes feed in its current state. Comments are skipped until the item detail
@@ -208,6 +226,79 @@ nonisolated struct APIClient: Sendable {
         try await load(URLRequest(url: baseURL.appending(path: "api/items/\(id)/images/\(image)")))
     }
 
+    // Sends a file as it is, from the disk: the body is the bytes, the name and the upload ID
+    // travel in headers. A file can be large, so it is never read into memory. Answers with the
+    // item, which lists the new file under the upload ID.
+    @concurrent
+    func addFile(_ source: URL, _ file: PendingFile, to id: Int, key: String) async throws -> Item {
+        var request = URLRequest(url: baseURL.appending(path: "api/items/\(id)/files"))
+        request.httpMethod = "POST"
+        request.setValue(file.mime, forHTTPHeaderField: "Content-Type")
+        request.setValue(key, forHTTPHeaderField: "Idempotency-Key")
+        request.setValue(Self.headerValue(file.name), forHTTPHeaderField: "Pendenz-File-Name")
+        request.setValue(file.id, forHTTPHeaderField: "Pendenz-Upload-Id")
+        // The idle time between two packets, as for every request. A slow line that keeps
+        // moving is not cut off.
+        let (data, response) = try await Self.session.upload(for: authorized(request), fromFile: source)
+        _ = try check(request, response, data)
+        return try Self.decoder.decode(Item.self, from: data)
+    }
+
+    @concurrent
+    func removeFile(_ file: Int, from id: Int, key: String) async throws -> Item {
+        var request = URLRequest(url: baseURL.appending(path: "api/items/\(id)/files/\(file)"))
+        request.httpMethod = "DELETE"
+        request.setValue(key, forHTTPHeaderField: "Idempotency-Key")
+        return try await send(request)
+    }
+
+    // The bytes of one file, written to a file of the caller's: a temporary one that the caller
+    // moves or removes.
+    @concurrent
+    func file(_ file: Int, of id: Int) async throws -> URL {
+        let request = URLRequest(url: baseURL.appending(path: "api/items/\(id)/files/\(file)"))
+        let (download, response) = try await Self.session.download(for: authorized(request))
+        // The system removes its own file once this returns, so it is moved first.
+        let kept = FileManager.default.temporaryDirectory.appending(path: "Download-\(UUID().uuidString)")
+        try FileManager.default.moveItem(at: download, to: kept)
+        do {
+            // An error answer is small: its body is the API's message.
+            let isError = (response as? HTTPURLResponse)?.statusCode != 200
+            _ = try check(request, response, isError ? (try? Data(contentsOf: kept)) ?? Data() : Data())
+        } catch {
+            try? FileManager.default.removeItem(at: kept)
+            throw error
+        }
+        return kept
+    }
+
+    // A name in a header: percent-encoded UTF-8, as the server reads it.
+    private static func headerValue(_ name: String) -> String {
+        var allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+        allowed.insert(charactersIn: "-._~")
+        return name.addingPercentEncoding(withAllowedCharacters: allowed) ?? "File"
+    }
+
+    // MARK: Settings
+
+    @concurrent
+    func settings() async throws -> ServerSettings {
+        try await send(URLRequest(url: baseURL.appending(path: "api/settings")))
+    }
+
+    // Sets the largest file. Asked directly and never queued: a setting means nothing without
+    // the server. Sending the same value again does no harm.
+    @concurrent
+    func update(fileLimitMb: Int) async throws -> ServerSettings {
+        var request = URLRequest(url: baseURL.appending(path: "api/settings"))
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        request.httpBody = try encoder.encode(SettingsPatch(fileLimitMb: fileLimitMb))
+        return try await send(request)
+    }
+
     @concurrent
     func create(_ project: NewProject, key: String) async throws -> Project {
         try await send(write("POST", "api/projects", key: key, body: project))
@@ -303,11 +394,22 @@ nonisolated struct APIClient: Sendable {
     }
 
     private func exchange(_ request: URLRequest) async throws -> (Data, ServerVersion) {
+        let (data, response) = try await Self.session.data(for: authorized(request))
+        return try (data, check(request, response, data))
+    }
+
+    private func authorized(_ request: URLRequest) -> URLRequest {
         var request = request
         if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        let (data, response) = try await Self.session.data(for: request)
+        return request
+    }
+
+    // The version of the server, for an answer that succeeded. Anything else is thrown with the
+    // API's own message. Every request goes through here, whether its body came from memory or
+    // from a file.
+    private func check(_ request: URLRequest, _ response: URLResponse, _ data: Data) throws -> ServerVersion {
         let http = response as? HTTPURLResponse
         let status = http?.statusCode ?? 0
         let version = ServerVersion(header: http?.value(forHTTPHeaderField: "Pendenz-Version"))
@@ -323,7 +425,7 @@ nonisolated struct APIClient: Sendable {
             }
             throw APIError.status(status, message)
         }
-        return (data, version)
+        return version
     }
 
     private static var decoder: JSONDecoder {

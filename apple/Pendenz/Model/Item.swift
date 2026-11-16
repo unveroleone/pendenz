@@ -40,6 +40,8 @@ nonisolated struct Item: Identifiable, Hashable, Sendable, Codable {
     var completedAt: String?
     // The images the server holds for it. Missing in rows stored by a build without images.
     var images: [ItemImage] = []
+    // The files the server holds for it. Missing in rows stored by a build without files.
+    var files: [ItemFile] = []
 
     // The day it was completed, on this device's calendar.
     var completedDay: Day? {
@@ -66,8 +68,8 @@ nonisolated struct Item: Identifiable, Hashable, Sendable, Codable {
     }
 }
 
-// Written by hand for one reason: a row stored before images existed has no list of them and
-// has to read as an item without images. In an extension, so the memberwise initialiser stays.
+// Written by hand for one reason: a row stored before images or files existed has no list of
+// them and has to read as an item without any. In an extension, so the memberwise initialiser stays.
 nonisolated extension Item {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -94,6 +96,7 @@ nonisolated extension Item {
             seq: container.decode(Int.self, forKey: .seq),
             completedAt: container.decodeIfPresent(String.self, forKey: .completedAt),
             images: container.decodeIfPresent([ItemImage].self, forKey: .images) ?? [],
+            files: container.decodeIfPresent([ItemFile].self, forKey: .files) ?? [],
         )
     }
 }
@@ -139,6 +142,69 @@ nonisolated enum ShownImage: Identifiable, Hashable, Sendable {
         case .stored(let image): CGSize(width: image.width, height: image.height)
         case .waiting(let image): CGSize(width: image.width, height: image.height)
         }
+    }
+}
+
+// A file on an item, as the server lists it, byte for byte as it was added. The hash names the
+// copy kept on this device. The upload ID is the one the adding device sent along: it tells that
+// device which file its upload became, which the hash cannot when the same bytes are added twice.
+nonisolated struct ItemFile: Identifiable, Hashable, Sendable, Codable {
+    var id: Int
+    var name: String
+    var mime: String
+    var bytes: Int
+    var sha256: String
+    var uploadId: String?
+}
+
+// A file that waits to be sent. Its bytes lie in a file named by the ID, which is also the
+// upload ID the server keeps.
+nonisolated struct PendingFile: Identifiable, Hashable, Sendable, Codable {
+    var id: String
+    var name: String
+    var mime: String
+    var bytes: Int
+    // As for an image: set before the first request for it leaves.
+    var isSent = false
+    // As for an image: removed here after it was sent.
+    var isUnwanted = false
+}
+
+// One file as an item shows it: held by the server, or still waiting here.
+nonisolated enum ShownFile: Identifiable, Hashable, Sendable {
+    case stored(ItemFile)
+    case waiting(PendingFile)
+
+    var id: String {
+        switch self {
+        case .stored(let file): "s\(file.id)"
+        case .waiting(let file): "w\(file.id)"
+        }
+    }
+
+    var name: String {
+        switch self {
+        case .stored(let file): file.name
+        case .waiting(let file): file.name
+        }
+    }
+
+    var mime: String {
+        switch self {
+        case .stored(let file): file.mime
+        case .waiting(let file): file.mime
+        }
+    }
+
+    var bytes: Int {
+        switch self {
+        case .stored(let file): file.bytes
+        case .waiting(let file): file.bytes
+        }
+    }
+
+    var isWaiting: Bool {
+        if case .waiting = self { true } else { false }
     }
 }
 
@@ -305,6 +371,8 @@ nonisolated enum PendingWrite: Sendable, Codable {
     case deleteProject(projectID: String)
     case addImage(itemID: Int, image: PendingImage)
     case removeImage(itemID: Int, imageID: Int)
+    case addFile(itemID: Int, file: PendingFile)
+    case removeFile(itemID: Int, fileID: Int)
 }
 
 extension PendingWrite {
@@ -326,7 +394,8 @@ extension PendingWrite {
         case .updateNote(let id, let patch): Rows(notes: [id], filedInto: patch.projectId?.value)
         case .createProject(let project): Rows(project: project.id)
         case .updateProject(let id, _), .deleteProject(let id): Rows(project: id)
-        case .addImage(let id, _), .removeImage(let id, _): Rows(items: [id])
+        case .addImage(let id, _), .removeImage(let id, _), .addFile(let id, _), .removeFile(let id, _):
+            Rows(items: [id])
         }
     }
 }
