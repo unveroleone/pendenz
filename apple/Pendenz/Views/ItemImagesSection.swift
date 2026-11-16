@@ -115,14 +115,18 @@ struct ItemImagesSection: View {
     }
 }
 
-// Lets images be dropped onto an item's detail from another app or window.
+// Lets images and files be dropped onto an item's detail from another app or window. A picture
+// becomes an image, anything else a file.
 struct ItemImageDrop: ViewModifier {
     @Environment(Store.self) private var store
     let itemID: Int
 
     func body(content: Content) -> some View {
-        content.onDrop(of: [.image], isTargeted: nil) { providers in
+        content.onDrop(of: [.image, .data, .package], isTargeted: nil) { providers in
             let images = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }
+            let files = providers.filter { provider in
+                !images.contains(provider) && ItemFileDrop.accepts(provider)
+            }
             for provider in images {
                 _ = provider.loadDataRepresentation(for: .image) { data, _ in
                     guard let data else { return }
@@ -131,7 +135,10 @@ struct ItemImageDrop: ViewModifier {
                     }
                 }
             }
-            return !images.isEmpty
+            for provider in files {
+                ItemFileDrop.add(provider, to: itemID, in: store)
+            }
+            return !images.isEmpty || !files.isEmpty
         }
     }
 }

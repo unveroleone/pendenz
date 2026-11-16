@@ -7,7 +7,7 @@ nonisolated struct ServerVersion: Comparable, Hashable, Sendable, CustomStringCo
     // The oldest server this build works with. Raise it whenever the app starts to send a
     // route, a method or a field that an older server does not know: a change such a server
     // refuses then waits in the outbox instead of being dropped.
-    static let minimum = ServerVersion("0.1.0")!
+    static let minimum = ServerVersion("0.3.0")!
 
     // A server from before the header.
     static let legacy = ServerVersion("0.1.0")!

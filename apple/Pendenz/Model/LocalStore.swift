@@ -91,7 +91,8 @@ final class LocalStore {
     // 2: a project's row says when it was made.
     // 3: an item's row says when it was completed.
     // 4: a note's row says whether it is locked.
-    private static let format = 4
+    // 5: an item's row lists its files.
+    private static let format = 5
 
     // Kept alive here: a context whose container is gone traps on its first fetch.
     private let container: ModelContainer
@@ -144,12 +145,16 @@ final class LocalStore {
             for row in closed where (try? decoder.decode(Item.self, from: row.payload))?.trashed == true {
                 row.isTrashed = true
             }
-            if state.format < 4 {
+            if state.format < 5 {
                 // Rows stored by an older build lack a field: when a project was made, when an
-                // item was completed, whether a note is locked. The server sends every row
-                // again from the start, and each replaces the one kept here.
+                // item was completed, whether a note is locked, which files an item has. Such a
+                // build stored a row without a list it did not know, and its cursor has passed
+                // that row. The server sends every row again from the start, and each replaces
+                // the one kept here. The waiting changes stay.
                 state.cursor = 0
                 snapshot.cursor = 0
+            }
+            if state.format < 4 {
                 // The notes do not wait here for their replacement: one that was locked on
                 // another device would show its text until the sync is through, and without
                 // a connection that can be a long time. Waiting changes to them stay queued.
@@ -178,7 +183,8 @@ final class LocalStore {
             // to find it.
             let targets = snapshot.outbox.compactMap { entry -> Int? in
                 switch entry.write {
-                case .update(let id, _), .addImage(let id, _), .removeImage(let id, _): id
+                case .update(let id, _), .addImage(let id, _), .removeImage(let id, _), .addFile(let id, _),
+                     .removeFile(let id, _): id
                 default: nil
                 }
             }
