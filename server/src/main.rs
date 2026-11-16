@@ -11,12 +11,14 @@ mod auth;
 mod changes;
 mod devices;
 mod error;
+mod files;
 mod images;
 mod items;
 mod model;
 mod notes;
 mod push;
 mod repeat;
+mod settings;
 
 use axum::{
     Json, Router,
@@ -45,6 +47,8 @@ pub struct AppState {
     pub writer: Arc<Mutex<()>>,
     // Asks the paired devices to sync after a change. Does nothing without a relay.
     pub push: Arc<push::Push>,
+    // Room for the file uploads that are read into memory at the same time.
+    pub uploads: Arc<tokio::sync::Semaphore>,
 }
 
 #[derive(Parser)]
@@ -433,6 +437,7 @@ async fn main() -> anyhow::Result<()> {
         tz,
         writer: Arc::new(Mutex::new(())),
         push: Arc::new(push::Push::new(relay)),
+        uploads: Arc::new(tokio::sync::Semaphore::new(files::UPLOADS_AT_ONCE)),
     };
     if state.push.is_on() {
         tokio::spawn(push::run(state.clone()));
@@ -453,6 +458,16 @@ async fn main() -> anyhow::Result<()> {
             "/items/{id}/images/{image}",
             get(images::download).delete(items::write),
         )
+        // A file is read by its own handler, which sets its own limit (the ceiling).
+        .route(
+            "/items/{id}/files",
+            post(files::upload).layer(DefaultBodyLimit::disable()),
+        )
+        .route(
+            "/items/{id}/files/{file}",
+            get(files::download).delete(items::write),
+        )
+        .route("/settings", get(settings::get).patch(settings::update))
         .route("/projects", post(items::write))
         .route("/projects/{id}", patch(items::write).delete(items::write))
         .route("/notes", get(notes::list).post(items::write))
