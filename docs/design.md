@@ -76,7 +76,7 @@ These are three different things, and none of them deletes anything:
 - **Archived** means the owner decided not to do it.
 - **Trashed** is for mistakes and duplicates. Everything in the trash can be put back.
 
-Nothing is deleted for good and the trash is never emptied. The server keeps trashed rows, so a device that was offline for weeks still learns that a row went to the trash. Images are the one exception, see "Images".
+Nothing is deleted for good and the trash is never emptied. The server keeps trashed rows, so a device that was offline for weeks still learns that a row went to the trash. Images and files are the exceptions, see "Images" and "Files".
 
 ## The server
 
@@ -84,11 +84,13 @@ Nothing is deleted for good and the trash is never emptied. The server keeps tra
 
 | Table | Holds |
 |---|---|
-| `items` | Items, with the checklist, tags and image list as JSON columns |
+| `items` | Items, with the checklist, tags, image list and file list as JSON columns |
 | `comments` | Progress notes on an item, mostly from agents |
 | `notes` | Notes |
 | `projects` | Projects, including deleted ones (`deleted = 1`) |
 | `item_images` | The bytes of images, one row per image |
+| `item_files` | The bytes of files, one row per file |
+| `server_settings` | One row: the settings the owner changes in the app (the largest file) |
 | `activity` | The append-only history of every change |
 | `actors` | The owner and the agents |
 | `tokens` | Hashed bearer tokens with their scopes, and the device a token belongs to |
@@ -177,6 +179,25 @@ All three check the item with the hidden filter and look the image up by its ID 
 
 The app scales an image to 2048 pixels on its long side and writes it as JPEG before it is queued. That also drops the EXIF data, so no location reaches the server or an agent.
 
+### Files
+
+An item can carry up to 20 files of any kind, kept byte for byte under their name. They are a list of their own beside the images, because an image is changed before it is sent (scaled, its EXIF data dropped) and a file never is. As with images, the metadata (`id`, `name`, `mime`, `bytes`, `sha256`, `upload_id`) is a JSON list on the item row and the only copy, no PATCH can write it, and the bytes are in `item_files` in the same database. The code is in [`files.rs`](../server/src/files.rs).
+
+- `POST /api/items/<id>/files` takes the file itself as the body, not JSON: base64 would make it a third larger and hold it twice. The type is the `Content-Type` (anything that is not a plain `type/subtype` is stored as `application/octet-stream`), the name comes percent-encoded in `Pendenz-File-Name`, and `Pendenz-Upload-Id` is an optional name of the sender's own for this upload. A name with a slash, a backslash or a control character, `.`, `..` or more than 255 bytes is refused.
+- The body is read and hashed before the writer lock, which is never held while bytes still arrive, and at most two uploads are read into memory at once. Then it goes through the same writer as every other change (`items::commit`). The fingerprint covers the hash, the name, the type and the upload ID.
+- A retry with a used key is answered before the size is checked. A limit lowered between an upload and its retry must not refuse a file the server already holds. Only a new upload is checked, against the limit as it is inside the transaction.
+- The upload ID tells the app which file its upload became. The hash cannot: the same bytes can be on an item twice, and the app removes the file of an upload that was taken back while it was on its way.
+- `GET /api/items/<id>/files/<file>` returns the bytes with the stored type as a download (`Content-Disposition: attachment`), with `nosniff` and `Content-Security-Policy: sandbox`, so a web page among the files is never run in a browser. It works for a trashed item too.
+- `DELETE /api/items/<id>/files/<file>` removes the file for good. Backups made before keep it. A trashed item takes no new file and loses none.
+
+All three check the item with the hidden filter and look the file up by its ID and the item's ID together, as for images.
+
+### Settings
+
+`GET /api/settings` answers `{"file_limit_mb", "file_limit_ceiling_mb"}`. Every page of the changes feed and the bootstrap carry the same object, so a device learns a new limit with its next sync. `PATCH /api/settings` with `{"file_limit_mb": n}` is for the owner's devices only, like the device routes: it takes the writer lock and `BEGIN IMMEDIATE` itself, needs no idempotency key because it sets a value, records the change in the activity log and wakes the push sender.
+
+The largest file is 1 to 100 MB, 25 MB by default, counted in megabytes of a million bytes as the apps show sizes. The ceiling of 100 MB is fixed in the server: it is the body limit of the upload route, and a Cloudflare Tunnel refuses larger bodies anyway. A lower limit counts for files added from then on; files already attached stay.
+
 ### Deleting a project
 
 `DELETE /api/projects/<id>` moves every item and note of the project to the inbox in the same transaction, each with a write of its own (a new version and sequence number), so the changes feed tells every client. That includes done, archived, trashed and hidden rows. The agent that deletes gets the project's row back and nothing about the hidden rows.
@@ -197,10 +218,10 @@ Tokens are `pdz_` plus 64 hex characters, stored as a SHA-256 hash. They are iss
 
 | Scope | Allows |
 |---|---|
-| `read` | Lists, details, the changes feed, images |
+| `read` | Lists, details, the changes feed, images, files, the settings |
 | `write` | Every write that goes through `write` |
 | `propose` | Reserved; nothing uses it yet |
-| `approve` | Device routes: pairing codes, the device list, revoking |
+| `approve` | Device routes: pairing codes, the device list, revoking; changing the settings |
 | `telegram` | Only for the identity `telegram-bridge`, which gets no other scope. Items it adds are marked as captured through Telegram |
 
 A token without `read` gets only a receipt from a write (the ID and version), never the stored row. This is for capture-only tokens, such as a shortcut that adds items: it can write, also with the hide flag, but cannot read anything back.
@@ -214,19 +235,19 @@ A new device is paired with a one-time code:
 - `POST /api/pair` takes `{"code", "name"}`, uses the code up and answers once with the device's token: the owner's identity with the scopes `read`, `write`, `propose` and `approve`, without an expiry. It is the only API route without a token, added to the router after the auth layer on purpose.
 - `GET /api/devices` lists the devices with their last use, and `DELETE /api/devices/<id>` revokes one. Revoking removes its push token and the unused codes it created.
 
-The device routes need a human token with `approve` (`require_owner`). Nothing else in the API needs `approve` today.
+The device routes and `PATCH /api/settings` need a human token with `approve` (`require_owner`). Nothing else in the API needs `approve` today.
 
 ### What agents can never do
 
 These hold in the server, not in the tool instructions:
 
-- See, read or write a hidden item or note, or its comments and images.
+- See, read or write a hidden item or note, or its comments, images and files.
 - Set or clear `hidden_from_agents`.
 - Remove the lock of a note.
 - Get the `approve` scope. `issue-token` refuses it for an agent.
-- Make pairing codes, list or revoke devices, or register a push token.
+- Make pairing codes, list or revoke devices, register a push token, or change the largest file size.
 
-Everything else the app can do with items, notes and projects, an agent can do too: create, edit, complete, reorder, comment, add and remove images, make, rename and delete projects, write and append to notes.
+Everything else the app can do with items, notes and projects, an agent can do too: create, edit, complete, reorder, comment, add and remove images and files, make, rename and delete projects, write and append to notes.
 
 ### Local mode
 
@@ -244,7 +265,7 @@ The store has a format number. A build that needs something new from the stored 
 
 ### Outbox
 
-A change made in the app goes into the outbox (`enqueue`), shows at once and is sent in the order it was made, with one idempotency key for all its retries. What the screens show is the server's rows with the outbox laid over them. Nothing in the app writes to the API directly, so every change also works without a connection.
+A change made in the app goes into the outbox (`enqueue`), shows at once and is sent in the order it was made, with one idempotency key for all its retries. What the screens show is the server's rows with the outbox laid over them. Nothing else in the app writes to the API directly, so every change also works without a connection; the device routes and the largest file are the exceptions (see "Session and store"). A file waits for its upload as a copy in `Application Support/WaitingFiles`, made before its outbox entry and sent from the disk, so a large file is never read into memory. Copies of the server's files lie in `Caches/Files` under their SHA-256, checked against it after the download.
 
 A sync sends the outbox first, then pages through `GET /api/changes`. A row only replaces one with a lower `seq`. It runs at launch, when the app comes to the front, after a silent push, on pull to refresh and after every change made in the app. While the server cannot be reached the outbox waits and tries again every 20 seconds.
 
@@ -261,7 +282,7 @@ Answers are handled like this:
 
 The Mac app updates itself, so an app can be newer than the server it is paired with. Every answer of the server names its version in the header `Pendenz-Version`; a server from before the header counts as 0.1.0. The app knows the oldest server it works with (`ServerVersion.minimum`), raised whenever the app starts to send a route, a method or a field that an older server does not know. Versions are ordered as in semantic versioning, so a release candidate comes before its release.
 
-An older server answers what it does not know with 404 (a route), 405 (a method) or 400 (a field). From a server below the minimum such an answer to a write does not count as a refusal: the change is marked held (`heldFor`, kept on disk) and the outbox goes on with the changes that do not depend on it. Depending means the same item or note, a new or moved item or note filed into a project whose change waits, and any change to a project, because project names are unique across projects. A held change keeps its key, its place and its image file.
+An older server answers what it does not know with 404 (a route), 405 (a method) or 400 (a field). From a server below the minimum such an answer to a write does not count as a refusal: the change is marked held (`heldFor`, kept on disk) and the outbox goes on with the changes that do not depend on it. Depending means the same item or note, a new or moved item or note filed into a project whose change waits, and any change to a project, because project names are unique across projects. A held change keeps its key, its place and its image or file.
 
 When a sync sees a server at or above the minimum, the marks are cleared and the waiting changes go out in their old order in one more pass of the same sync. One that is refused then is handled like any other refusal. Until then the Tasks list and Settings say which version the server runs, which one the app needs and how many changes wait. Nothing in the app is hidden, and a proxy in front of the server has to pass the header on.
 
@@ -325,7 +346,9 @@ The protocol is the official Rust SDK's, [rmcp](https://crates.io/crates/rmcp) (
 | `create_item`, `update_item` | Create, and edit with the version | write |
 | `add_comment` | A progress note on an item | write |
 | `get_item_image`, `remove_item_image` | Show an image to the model; remove one | read, write |
-| `add_item_image` | Attach a local file (stdio only) | write |
+| `add_item_image` | Attach a local image (stdio only) | write |
+| `get_item_file`, `remove_item_file` | Show a file to the model (text up to 1 MB, an image up to 5 MB, otherwise its name, type and size); remove one | read, write |
+| `add_item_file` | Attach a local file of any kind (stdio only) | write |
 | `create_project`, `update_project`, `delete_project` | Make, rename, re-icon and delete a project | write |
 | `search_notes`, `get_note` | Notes as title and preview; one note in full | read |
 | `create_note`, `update_note`, `append_note` | Write a note; change it with its version; add to its end without one | write |
@@ -335,7 +358,8 @@ Some choices in them:
 
 - `changes` leaves notes out. Notes are context, not work to pick up, and they can be long. An agent finds them with `search_notes`.
 - `list_items` and the write tools return compact rows with descriptions cut at 200 characters. `get_item` returns the full item with its comments and only the latest changes from its history (`activity`, 10 by default), because the history is the bulky part.
-- `add_item_image` exists only over stdio, where a path means a file next to the agent. The hosted server would have to fetch an address or take megabytes of base64 from a model.
+- `add_item_image` and `add_item_file` exist only over stdio, where a path means a file next to the agent. The hosted server would have to fetch an address or take megabytes of base64 from a model.
+- `get_item_file` reads the item's list first and fetches the bytes only for what it can show, so a large file is never pulled through the hosted endpoint.
 - A locked note comes from `get_note` with a `notice` next to the text, and from the list tools with its title and no preview, as in the app.
 - Every write tool takes an optional `key`. An agent that retries after a timeout sends the same key and arguments, and the write cannot apply twice. Without one the adapter makes a fresh key per call.
 
@@ -343,7 +367,7 @@ The server instructions tell the agent how to write titles, dates and notes, how
 
 ### CLI
 
-The `pendenz` binary has the same calls as the tools ([`cli.rs`](../server/src/agent/cli.rs): `list`, `get`, `create`, `update`, `comment`, `add-image`, `notes`, `note-append`, `project-delete`, `changes` and so on) plus `reminders` for scripts. It reads `PENDENZ_API_URL` and `PENDENZ_API_TOKEN`, prints JSON and needs no database. A new tool goes into `tools.json` and `tools.rs`, with the same call in `cli.rs` and steps in `server/tests/agent.rs`.
+The `pendenz` binary has the same calls as the tools ([`cli.rs`](../server/src/agent/cli.rs): `list`, `get`, `create`, `update`, `comment`, `add-image`, `add-file`, `get-file`, `notes`, `note-append`, `project-delete`, `changes` and so on) plus `reminders` for scripts. It reads `PENDENZ_API_URL` and `PENDENZ_API_TOKEN`, prints JSON and needs no database. A new tool goes into `tools.json` and `tools.rs`, with the same call in `cli.rs` and steps in `server/tests/agent.rs`.
 
 ## App architecture
 
@@ -351,7 +375,7 @@ The `pendenz` binary has the same calls as the tools ([`cli.rs`](../server/src/a
 
 `Session` ([`Session.swift`](../apple/Pendenz/Model/Session.swift)) owns the pairing and the `Store`. No pairing means no store, and the app shows the pairing screen. The server address, the token and the device ID are one Keychain entry, readable after the first unlock and never part of a backup or iCloud. The app follows no redirect, so the token never goes to another host, and it takes only `https`, except for a server on the same device.
 
-Only `Session` and Settings talk to the device routes. The device list is the one screen that asks the server directly, because it means nothing without a connection.
+Only `Session` and Settings talk to the device routes and the settings route. The device list and the largest file are the two screens that ask the server directly, because they mean nothing without a connection. The file slider sends its value when it is let go; without an answer it asks the server what it holds and shows that, so it never shows a limit the server does not have. The last limit the server confirmed is kept per server, and the app refuses a file over it before it is queued. Without a known limit the server decides.
 
 Several system features start the app in the background with no window: a notification action, a widget tick, a Siri action, a silent push. So their handlers are set by `Session` in its `init` (`onAction`, `onPush`, `WidgetActions.complete`, `ControlActions.newItem`), never by a view. They schedule reminders before they sync, because the app may be ended right after the handler returns.
 
