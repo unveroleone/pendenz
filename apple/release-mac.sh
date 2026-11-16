@@ -233,12 +233,7 @@ gh release view "$tag" --repo "$repo" --json body --jq .body >"$work/release-not
 printf '\n\n## Mac app\n\n' >>"$work/release-notes.md"
 cat "$notes" >>"$work/release-notes.md"
 
-echo
-echo "Ready to publish Pendenz for Mac $version (build $build) from $commit:"
-echo "  - $(basename "$dmg") and the notes under \"Mac app\" on the release $tag in $repo"
-echo "  - the feed $feed, committed and pushed to main"
-read -r -p "Publish? [y/N] " answer
-[[ $answer == [yY] ]] || fail "nothing was published; the build is in $work"
+echo "==> Publishing Pendenz for Mac $version (build $build) from $commit"
 
 # The DMG goes up before the feed names it, so no copy of the app looks for a missing file.
 gh release upload "$tag" "$dmg" --repo "$repo"
