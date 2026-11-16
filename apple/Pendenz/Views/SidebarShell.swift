@@ -194,6 +194,9 @@ private struct SidebarFooter: View {
         }
         .buttonStyle(.borderless)
         .foregroundStyle(.secondary)
+        // The gray of the list is for its selected row. The menu of the order takes the tint
+        // into its choices, which have to read in black or white.
+        .tint(Color.accentColor)
         .padding(.leading, Self.leading)
         .padding(.trailing, Self.trailing)
         .padding(.vertical, 4)

@@ -63,8 +63,6 @@ struct ItemImagesSection: View {
             }
         } label: {
             Label("Add Image", systemImage: "plus")
-                // In the gray of the form's tint the row read as switched off.
-                .foregroundStyle(.primary)
         }
         .onAppear { canPaste = Clipboard.hasImage }
         .onReceive(NotificationCenter.default.publisher(for: Clipboard.changed)) { _ in
