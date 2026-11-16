@@ -23,10 +23,12 @@ struct FileSettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         LabeledContent("Largest file", value: "\(Int(value)) MB")
                             .accessibilityHidden(true)
+                        // Whole megabytes, rounded here rather than with a step: a slider with a
+                        // step draws a tick per step under its track, and a hundred of them read
+                        // as a second line.
                         Slider(
-                            value: $value,
+                            value: Binding(get: { value }, set: { value = $0.rounded() }),
                             in: 1 ... Double(max(confirmed.fileLimitCeilingMb, 1)),
-                            step: 1,
                         ) {
                             Text("Largest file")
                         } minimumValueLabel: {
