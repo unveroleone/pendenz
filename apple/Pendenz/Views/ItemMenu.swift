@@ -10,6 +10,14 @@ struct ItemMenu: View {
         Button(item.status == .done ? "Mark as Open" : "Complete", systemImage: "checkmark.circle") {
             store.toggleDone(item)
         }
+        if item.isOpen {
+            Button(
+                item.status == .doing ? "Mark as To Do" : "Mark as Doing",
+                systemImage: item.status == .doing ? "circle" : "smallcircle.filled.circle",
+            ) {
+                store.toggleDoing(item)
+            }
+        }
         Divider()
         Menu("Due", systemImage: "calendar") {
             Button("Today") { store.reschedule(item, to: store.today) }
@@ -45,7 +53,8 @@ struct ItemMenu: View {
     }
 }
 
-// The swipes and the menu of a row: right completes, left reschedules or trashes.
+// The swipes and the menu of a row: right completes or marks as doing, left reschedules or
+// trashes.
 struct ItemActions: ViewModifier {
     @Environment(Store.self) private var store
     @Environment(Navigation.self) private var navigation
@@ -63,6 +72,18 @@ struct ItemActions: ViewModifier {
                     Label(item.status == .done ? "Open" : "Complete", systemImage: "checkmark")
                 }
                 .tint(Color(.selection))
+                if item.isOpen {
+                    Button {
+                        store.toggleDoing(item)
+                    } label: {
+                        Label(
+                            item.status == .doing ? "To Do" : "Doing",
+                            // A swipe draws its symbol filled, so a plain circle would read as a dot.
+                            systemImage: item.status == .doing ? "arrow.uturn.backward" : "smallcircle.filled.circle",
+                        )
+                    }
+                    .tint(.gray)
+                }
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button {

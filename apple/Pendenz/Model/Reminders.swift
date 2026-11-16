@@ -118,7 +118,10 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         for (item, date) in upcoming {
             let content = UNMutableNotificationContent()
             content.title = item.title
-            content.body = projectName(item.projectId) ?? ""
+            content.subtitle = ReminderText.subtitle(
+                for: item, firing: date, project: projectName(item.projectId),
+            )
+            content.body = ReminderText.body(for: item)
             content.sound = .default
             content.userInfo = ["item": item.id, "server": server ?? ""]
             content.categoryIdentifier = Self.category
@@ -128,11 +131,13 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
                 timeInterval: max(date.timeIntervalSince(now), 1),
                 repeats: false,
             )
-            // The title and the time are part of the name, so an edit replaces the notification.
+            // Everything it shows and the time are part of the name, so an edit of the title,
+            // the description, the due date or the project replaces the notification.
             // The checksum is worked out here because hashValue differs from launch to launch.
             // The "a" marks a notification with actions: one scheduled by a build without them
             // has another name and is replaced.
-            let checksum = item.title.utf8.reduce(5381) { ($0 << 5) &+ $0 &+ Int($1) }
+            let shown = [content.title, content.subtitle, content.body].joined(separator: "\u{1F}")
+            let checksum = shown.utf8.reduce(5381) { ($0 << 5) &+ $0 &+ Int($1) }
             let name = "item-\(item.id)-\(Int(date.timeIntervalSince1970))-\(checksum)-a"
             wanted[name] = UNNotificationRequest(identifier: name, content: content, trigger: trigger)
         }
