@@ -178,8 +178,10 @@ nonisolated struct AttachmentFiles: Sendable {
         defer { try? handle.close() }
         var hasher = SHA256()
         while true {
-            guard let chunk = try? handle.read(upToCount: megabyte) else { return nil }
-            if chunk.isEmpty { break }
+            // Nil, or empty data, at the end of the file. Only a thrown error is a failure.
+            let chunk: Data?
+            do { chunk = try handle.read(upToCount: megabyte) } catch { return nil }
+            guard let chunk, !chunk.isEmpty else { break }
             hasher.update(data: chunk)
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
