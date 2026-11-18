@@ -1,6 +1,8 @@
 // The command line for agents and scripts: the same calls as the MCP tools, against the API at
 // PENDENZ_API_URL with PENDENZ_API_TOKEN. Each command prints the API's JSON answer.
-use super::client::{Call, Client, Reply, file_body, file_id, item_id, note_id, project_id, query};
+use super::client::{
+    Call, Client, Reply, comment_id, file_body, file_id, item_id, note_id, project_id, query,
+};
 use axum::http::Method;
 use clap::Subcommand;
 use serde_json::{Map, Value, json};
@@ -38,6 +40,10 @@ pub enum Command {
     Update(Rest),
     /// Comment on an item: ID --body TEXT
     Comment(Rest),
+    /// Change a comment: ID COMMENT_ID --json '{"version":1,"outdated":true}'
+    CommentUpdate(Rest),
+    /// Delete a comment: ID COMMENT_ID
+    CommentDelete(Rest),
     /// Attach a file of any kind: ID FILE
     AddFile(Rest),
     /// Save a file of an item: ID FILE_ID --out PATH
@@ -170,6 +176,31 @@ async fn execute(command: Command) -> Result<Value, String> {
                 format!("/items/{id}/comments"),
                 Method::POST,
                 body,
+                owned(&opts),
+            )
+            .await?
+        }
+        Command::CommentUpdate(mut rest) => {
+            let id = item_id(shift(&mut rest.args).as_ref())?;
+            let comment = comment_id(shift(&mut rest.args).as_ref())?;
+            let opts = options(&rest.args)?;
+            let body = json_object(opts.get("json"))?;
+            write(
+                format!("/items/{id}/comments/{comment}"),
+                Method::PATCH,
+                body,
+                owned(&opts),
+            )
+            .await?
+        }
+        Command::CommentDelete(mut rest) => {
+            let id = item_id(shift(&mut rest.args).as_ref())?;
+            let comment = comment_id(shift(&mut rest.args).as_ref())?;
+            let opts = options(&rest.args)?;
+            write(
+                format!("/items/{id}/comments/{comment}"),
+                Method::DELETE,
+                json!({}),
                 owned(&opts),
             )
             .await?

@@ -460,6 +460,17 @@ pub fn file_id(value: Option<&Value>) -> Result<String, String> {
     }
 }
 
+// A comment ID from the item's comments.
+pub fn comment_id(value: Option<&Value>) -> Result<String, String> {
+    let text = js_string(value);
+    let text = crate::agent::schema::js_trim(&text);
+    if positive(text) {
+        Ok(text.to_owned())
+    } else {
+        Err("Use a comment ID from the item's comments.".into())
+    }
+}
+
 // A project ID as the server makes it: lowercase letters, digits and hyphens.
 pub fn project_id(value: Option<&Value>) -> Result<String, String> {
     let text = js_string(value);

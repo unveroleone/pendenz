@@ -9,6 +9,7 @@ macro_rules! now {
 mod agent;
 mod auth;
 mod changes;
+mod comments;
 mod devices;
 mod error;
 mod files;
@@ -452,6 +453,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/items", get(items::list).post(items::write))
         .route("/items/{id}", get(items::detail).patch(items::write))
         .route("/items/{id}/comments", post(items::write))
+        .route(
+            "/items/{id}/comments/{comment}",
+            patch(items::write).delete(items::write),
+        )
         // An image is larger than anything else the API takes, so this route alone gets room.
         .route(
             "/items/{id}/images",

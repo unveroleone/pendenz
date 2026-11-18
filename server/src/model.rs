@@ -153,6 +153,10 @@ pub struct Comment {
     pub body: String,
     pub seq: i64,
     pub created_at: String,
+    pub version: i64,
+    pub outdated: bool,
+    pub deleted: bool,
+    pub edited_at: Option<String>,
 }
 
 #[derive(Serialize, FromRow)]

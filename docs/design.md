@@ -85,7 +85,7 @@ Nothing is deleted for good and the trash is never emptied. The server keeps tra
 | Table | Holds |
 |---|---|
 | `items` | Items, with the checklist, tags and file list as JSON columns |
-| `comments` | Progress notes on an item, mostly from agents |
+| `comments` | Progress notes on an item, mostly from agents, including deleted ones (`deleted = 1`) |
 | `notes` | Notes |
 | `projects` | Projects, including deleted ones (`deleted = 1`) |
 | `item_files` | The bytes of files, pictures among them, one row per file |
@@ -166,6 +166,20 @@ Anyone may lock a note, agents included, because an agent knows when it writes s
 
 The lock is a gate in the app, not encryption. The text sits in the database, the backups and every device's local store like any other note. A note that agents must not read should be hidden instead.
 
+### Comments
+
+A comment is a progress note on an item: a question, a plan, a result. Agents write most of them. A plan goes out of date, and an agent that reads its own old plan back takes it for the current one. So a comment can be edited, marked outdated and deleted. The code is in [`comments.rs`](../server/src/comments.rs).
+
+- `POST /api/items/<id>/comments` takes `{"body"}`, 1 to 10,000 characters.
+- `PATCH /api/items/<id>/comments/<comment>` takes the comment's `version` and `body`, `outdated` or both. A changed text sets `edited_at`. A stale version answers 409, like an item.
+- `DELETE /api/items/<id>/comments/<comment>` takes no fields. The row stays with `deleted: true` and an empty body, because the changes feed has no tombstones: that row is how the apps learn the comment is gone. `GET /api/items/<id>` leaves deleted comments out and lists the rest oldest first.
+
+The author owns a comment. An agent may change and delete only the comments its own actor wrote; one of another actor's answers 403. The owner's tokens may change any comment, since the owner decides what holds on their own list. This is the one place where an agent's write depends on who wrote the row: an item can be edited by any agent that sees it (see "Kept simple on purpose").
+
+The routes work like the file routes: they check the item with the hidden filter and look the comment up by its ID and the item's ID together, and a trashed item takes no change to its comments. The activity log records `comment_updated` with the comment's ID, whether the text changed and the new `outdated` value, and `comment_deleted` with the ID. It never holds the text, so a deleted comment leaves no text on the server, apart from the backups made before. Copies that a device or an agent already read stay where they are.
+
+`outdated` marks a comment that no longer holds. Nothing is hidden: `get_item` puts a `notice` next to it that tells the agent not to rely on it. The app does not show comments yet; it is to show an outdated one dimmed.
+
 ### Files
 
 An item can carry up to 40 files of any kind, pictures among them, kept byte for byte under their name. The metadata (`id`, `name`, `mime`, `bytes`, `sha256`, `upload_id`, and `width` and `height` for a picture) is a JSON list on the item row, the only copy, so every read of an item carries it without a join. No PATCH can write it. The bytes are in `item_files` in the same database, so the backup stays one file. The code is in [`files.rs`](../server/src/files.rs).
@@ -236,12 +250,13 @@ The device routes and `PATCH /api/settings` need a human token with `approve` (`
 These hold in the server, not in the tool instructions:
 
 - See, read or write a hidden item or note, or its comments and files.
+- Change or delete a comment that another actor wrote.
 - Set or clear `hidden_from_agents`.
 - Remove the lock of a note.
 - Get the `approve` scope. `issue-token` refuses it for an agent.
 - Make pairing codes, list or revoke devices, register a push token, or change the largest file size.
 
-Everything else the app can do with items, notes and projects, an agent can do too: create, edit, complete, reorder, comment, add and remove files, make, rename and delete projects, write and append to notes.
+Everything else the app can do with items, notes and projects, an agent can do too: create, edit, complete, reorder, comment and change its own comments, add and remove files, make, rename and delete projects, write and append to notes.
 
 ### Local mode
 
@@ -342,6 +357,7 @@ The door checks the token before it counts anything. The rate limit is then 180 
 | `list_items`, `get_item` | Compact rows with a filter and a sort (`manual` adds positions); one item in full | read |
 | `create_item`, `update_item` | Create, and edit with the version | write |
 | `add_comment` | A progress note on an item | write |
+| `update_comment`, `delete_comment` | Change the text of an own comment or mark it outdated; delete one | write |
 | `get_item_file`, `remove_item_file` | Show a file to the model (text up to 1 MB, a picture up to 5 MB, otherwise its name, type and size); remove one | read, write |
 | `add_item_file` | Attach a local file of any kind (stdio only) | write |
 | `create_project`, `update_project`, `delete_project` | Make, rename, re-icon and delete a project | write |
@@ -352,7 +368,7 @@ The door checks the token before it counts anything. The rate limit is then 180 
 Some choices in them:
 
 - `changes` leaves notes out. Notes are context, not work to pick up, and they can be long. An agent finds them with `search_notes`.
-- `list_items` and the write tools return compact rows with descriptions cut at 200 characters. `get_item` returns the full item with its comments and only the latest changes from its history (`activity`, 10 by default), because the history is the bulky part.
+- `list_items` and the write tools return compact rows with descriptions cut at 200 characters. `get_item` returns the full item with its comments, oldest first, and only the latest changes from its history (`activity`, 10 by default), because the history is the bulky part. An outdated comment carries a `notice` that it no longer holds.
 - `add_item_file` exists only over stdio, where a path means a file next to the agent. The hosted server would have to fetch an address or take megabytes of base64 from a model.
 - `get_item_file` reads the item's list first and fetches the bytes only for what it can show, so a large file is never pulled through the hosted endpoint.
 - A locked note comes from `get_note` with a `notice` next to the text, and from the list tools with its title and no preview, as in the app.
@@ -363,7 +379,7 @@ The server instructions tell the agent how to write titles, dates and notes, how
 
 ### CLI
 
-The `pendenz` binary has the same calls as the tools ([`cli.rs`](../server/src/agent/cli.rs): `list`, `get`, `create`, `update`, `comment`, `add-file`, `get-file`, `notes`, `note-append`, `project-delete`, `changes` and so on) plus `reminders` for scripts. It reads `PENDENZ_API_URL` and `PENDENZ_API_TOKEN`, prints JSON and needs no database. A new tool goes into `tools.json` and `tools.rs`, with the same call in `cli.rs` and steps in `server/tests/agent.rs`.
+The `pendenz` binary has the same calls as the tools ([`cli.rs`](../server/src/agent/cli.rs): `list`, `get`, `create`, `update`, `comment`, `comment-update`, `comment-delete`, `add-file`, `get-file`, `notes`, `note-append`, `project-delete`, `changes` and so on) plus `reminders` for scripts. It reads `PENDENZ_API_URL` and `PENDENZ_API_TOKEN`, prints JSON and needs no database. A new tool goes into `tools.json` and `tools.rs`, with the same call in `cli.rs` and steps in `server/tests/agent.rs`.
 
 ## App architecture
 
@@ -412,7 +428,7 @@ Pendenz is for one person and a few agents. Many protections that a multi-user s
 
 | Kept simple | What can happen | If it hurts |
 |---|---|---|
-| Agent tokens are plain read and write | An agent can edit any item it can see, not only its own | Narrower scopes with a check on every route |
+| Agent tokens are plain read and write | An agent can edit any item it can see, not only its own. Comments are the exception: an agent changes only its own | Narrower scopes with a check on every route |
 | Agents may complete items | An agent could close an item the owner had not reviewed. The activity log shows who | A rule that only a device completes an item an agent worked on |
 | The later edit wins per field | Two devices editing the same note offline: one text ends up only in the activity log | Show both versions and let the owner pick |
 | Reminders are local, and push only asks the app to sync | A reminder made elsewhere shortly before it is due can be late. With more than 60 pending and an app not opened for weeks, later ones wait | An alert push at the due time, with a notification extension that fetches the text so the relay never sees it |
