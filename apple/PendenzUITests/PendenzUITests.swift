@@ -1,7 +1,7 @@
 import XCTest
 
 // Flows that need a finger: swipes, drags, the notification prompt, typing a pairing code,
-// putting back from the trash and deleting a project.
+// searching, putting back from the trash and deleting a project.
 // They run against servers that `apple/uitest.sh` starts and seeds. Without its environment
 // every test is skipped.
 @MainActor
@@ -228,6 +228,27 @@ final class PendenzUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["settings-code"].waitForExistence(timeout: 10))
         unpairFromSettings(app)
         XCTAssertTrue(address.waitForExistence(timeout: 10), "Unpaired, and back on the pairing screen.")
+    }
+
+    func testSearchFindsItemByNumber() throws {
+        try XCTSkipIf(isSidebarLayout, "Runs on the iPhone layout.")
+        let id = try value("PENDENZ_SEARCH_ID")
+        let app = try launch(tab: "search")
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        let item = row(app, "Lighthouse keeper")
+        // The number in both forms, then a word of the title, the description and the tag.
+        for query in ["P-\(id)", id, "lighthouse", "lantern", "coastal"] {
+            field.tap()
+            if let text = field.value as? String, !text.isEmpty, text != field.placeholderValue {
+                field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: text.count))
+            }
+            field.typeText(query)
+            XCTAssertTrue(item.waitForExistence(timeout: 10), "\(query) finds the item.")
+        }
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "coastal".count))
+        field.typeText("P-999999")
+        XCTAssertTrue(item.waitForNonExistence(timeout: 10), "Another number does not find it.")
     }
 
     func testTrashPutsBack() throws {

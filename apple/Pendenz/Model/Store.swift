@@ -1534,7 +1534,7 @@ extension Store {
     func search(_ query: String) -> [Item] {
         let words = query.split(separator: " ")
         guard !words.isEmpty else { return [] }
-        return openItems
+        let matches = openItems
             .filter { item in
                 words.allSatisfy { word in
                     item.title.localizedStandardContains(word)
@@ -1543,6 +1543,22 @@ extension Store {
                 }
             }
             .sorted(by: Self.byPosition)
+        // "P-36" or "36" also finds item 36, ahead of the rows whose text holds the number.
+        guard let id = Self.itemNumber(query), let item = openItems.first(where: { $0.id == id }) else {
+            return matches
+        }
+        return [item] + matches.filter { $0.id != id }
+    }
+
+    // The item number in a query that is nothing else: "P-36", "p-36" or "36", as the agent
+    // tools take it. A local ID is below zero and never matches.
+    static func itemNumber(_ query: String) -> Int? {
+        var text = Substring(query.trimmingCharacters(in: .whitespaces))
+        if text.hasPrefix("P-") || text.hasPrefix("p-") { text = text.dropFirst(2) }
+        guard let first = text.first, first != "0", text.allSatisfy(\.isASCII), text.allSatisfy(\.isNumber) else {
+            return nil
+        }
+        return Int(text)
     }
 
     // The one section of Reminders that mixes days, so its rows name their day.
