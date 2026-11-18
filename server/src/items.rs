@@ -1,6 +1,7 @@
 use crate::{
     AppState,
     auth::{Actor, Identity, hash},
+    comments,
     error::{ApiError, Result},
     files, images,
     model::{
@@ -265,11 +266,12 @@ pub async fn detail(
     // One snapshot, so the item and its history belong to the same moment.
     let mut tx = state.db.begin().await?;
     let item = visible_item(&mut *tx, id, &identity).await?;
-    let comments =
-        sqlx::query_as::<_, Comment>("SELECT * FROM comments WHERE item_id = ? ORDER BY id")
-            .bind(id)
-            .fetch_all(&mut *tx)
-            .await?;
+    let comments = sqlx::query_as::<_, Comment>(
+        "SELECT * FROM comments WHERE item_id = ? AND deleted = 0 ORDER BY id",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await?;
     let mut activity = sqlx::query_as::<_, Activity>(
         "SELECT id, actor_id, action, detail, created_at FROM activity \
          WHERE item_id = ? ORDER BY id DESC LIMIT ?",
@@ -579,58 +581,6 @@ async fn update_item(
     )
     .await?;
     Ok(written(&item))
-}
-
-async fn add_comment(
-    conn: &mut SqliteConnection,
-    identity: &Identity,
-    id: i64,
-    fields: Map<String, Value>,
-) -> Result<Written> {
-    let trashed: Option<bool> = sqlx::query_scalar(
-        "SELECT trashed FROM items WHERE id = ? AND (? OR hidden_from_agents = 0)",
-    )
-    .bind(id)
-    .bind(identity.is_human())
-    .fetch_optional(&mut *conn)
-    .await?;
-    if trashed.ok_or_else(ApiError::missing)? {
-        return Err(ApiError::bad(
-            "This item is in the trash. Restore it before commenting.",
-        ));
-    }
-    let body = match (fields.len(), fields.get("body")) {
-        (1, Some(Value::String(body))) => body.replace("\r\n", "\n").trim().to_string(),
-        _ => return Err(ApiError::bad("Send only the comment body.")),
-    };
-    if body.is_empty() || body.chars().count() > 10_000 {
-        return Err(ApiError::bad(
-            "Write a comment between 1 and 10,000 characters.",
-        ));
-    }
-    let seq = next_seq(conn).await?;
-    let comment = sqlx::query_as::<_, Comment>(
-        "INSERT INTO comments(item_id, author_id, body, seq) VALUES (?, ?, ?, ?) RETURNING *",
-    )
-    .bind(id)
-    .bind(&identity.actor.id)
-    .bind(body)
-    .bind(seq)
-    .fetch_one(&mut *conn)
-    .await?;
-    record(
-        conn,
-        About::Item(id),
-        &identity.actor.id,
-        "commented",
-        json!({"comment_id": comment.id}),
-    )
-    .await?;
-    Ok(Written {
-        resource: "comment",
-        id: comment.id.to_string(),
-        body: json!(comment),
-    })
 }
 
 const SLUG_LENGTH: usize = 40;
@@ -1108,7 +1058,13 @@ pub(crate) async fn commit(
     let written = match segments.as_slice() {
         ["items"] => create_item(&mut tx, state, identity, fields).await?,
         ["items", id] => update_item(&mut tx, state, identity, item_id(id)?, fields).await?,
-        ["items", id, "comments"] => add_comment(&mut tx, identity, item_id(id)?, fields).await?,
+        ["items", id, "comments"] => comments::add(&mut tx, identity, item_id(id)?, fields).await?,
+        ["items", id, "comments", comment] if *method == Method::DELETE => {
+            comments::delete(&mut tx, identity, item_id(id)?, item_id(comment)?, fields).await?
+        }
+        ["items", id, "comments", comment] => {
+            comments::update(&mut tx, identity, item_id(id)?, item_id(comment)?, fields).await?
+        }
         // The old image route stores a file too.
         ["items", id, "images"] | ["items", id, "files"] => {
             let upload = file.ok_or_else(ApiError::missing)?;

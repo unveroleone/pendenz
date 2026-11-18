@@ -7,7 +7,7 @@
         "capabilities": {
           "tools": {}
         },
-        "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nFiles: an item can carry files of any kind, pictures too, listed under files in get_item with an id, name, type and size; a picture also has a width and a height. Read or look at one with get_item_file when it matters for the task. Remove one only when the owner asks for it; a removed file does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
+        "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nComments: get_item lists them oldest first. A comment marked outdated: true no longer holds; do not rely on it. When a comment of yours stops being true, such as a plan that changed, mark it outdated with update_comment, and add a new comment for what holds now. You can change or delete only your own comments; delete one only when it was a mistake or the owner asks.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nFiles: an item can carry files of any kind, pictures too, listed under files in get_item with an id, name, type and size; a picture also has a width and a height. Read or look at one with get_item_file when it matters for the task. Remove one only when the owner asks for it; a removed file does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
         "protocolVersion": "2025-06-18",
         "serverInfo": {
           "name": "pendenz",
@@ -25,7 +25,7 @@
         "capabilities": {
           "tools": {}
         },
-        "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nFiles: an item can carry files of any kind, pictures too, listed under files in get_item with an id, name, type and size; a picture also has a width and a height. Read or look at one with get_item_file when it matters for the task. Remove one only when the owner asks for it; a removed file does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
+        "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nComments: get_item lists them oldest first. A comment marked outdated: true no longer holds; do not rely on it. When a comment of yours stops being true, such as a plan that changed, mark it outdated with update_comment, and add a new comment for what holds now. You can change or delete only your own comments; delete one only when it was a mistake or the owner asks.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nFiles: an item can carry files of any kind, pictures too, listed under files in get_item with an id, name, type and size; a picture also has a width and a height. Read or look at one with get_item_file when it matters for the task. Remove one only when the owner asks for it; a removed file does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
         "protocolVersion": "2025-11-25",
         "serverInfo": {
           "name": "pendenz",
@@ -191,7 +191,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "One item in full: every field, its current version, all comments, and the latest changes (who changed which field from what to what).",
+        "description": "One item in full: every field, its current version, its comments oldest first, and the latest changes (who changed which field from what to what). A comment with outdated: true no longer holds: do not rely on it.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -567,7 +567,7 @@
           "openWorldHint": false,
           "readOnlyHint": false
         },
-        "description": "Add a note to an item: progress, a result, a decision. Comments cannot be edited or removed.",
+        "description": "Add a note to an item: progress, a result, a decision. When it no longer holds later, mark it outdated with update_comment.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -605,6 +605,132 @@
           "type": "object"
         },
         "name": "add_comment"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Change a comment: a new text, or outdated: true when it no longer holds, such as a plan that changed. An outdated comment stays visible to the owner, dimmed. You can change only your own comments. Returns the comment with its new version.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "maxLength": 10000,
+              "minLength": 1,
+              "type": "string"
+            },
+            "comment": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Comment ID from the item's comments in get_item."
+            },
+            "id": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^([Pp]-)?[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Item ID, as P-12 or 12."
+            },
+            "key": {
+              "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "outdated": {
+              "description": "true when the comment no longer holds, false to take that back.",
+              "type": "boolean"
+            },
+            "version": {
+              "description": "The comment's version from your last read of the item.",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "comment",
+            "version"
+          ],
+          "type": "object"
+        },
+        "name": "update_comment"
+      },
+      {
+        "annotations": {
+          "destructiveHint": true,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Delete a comment, for one written by mistake or when the owner asks. This cannot be undone. When a comment is only out of date, mark it outdated with update_comment instead. You can delete only your own comments.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "comment": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Comment ID from the item's comments in get_item."
+            },
+            "id": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "pattern": "^([Pp]-)?[1-9]\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Item ID, as P-12 or 12."
+            },
+            "key": {
+              "description": "A name you choose for this write, such as \"tg-4812-create\". Repeating the call with the same key and arguments returns the first result and writes nothing.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "comment"
+          ],
+          "type": "object"
+        },
+        "name": "delete_comment"
       },
       {
         "annotations": {
@@ -1142,7 +1268,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Everything that changed since a cursor: items, comments and projects in their current state, oldest change first. Notes are left out; find them with search_notes. A project with deleted: true is gone, and its items are in the inbox. Store the returned cursor and send it next time. When reset is true, your cursor is no longer valid: start again from 0.",
+        "description": "Everything that changed since a cursor: items, comments and projects in their current state, oldest change first. A comment with deleted: true is gone, and one with outdated: true no longer holds. Notes are left out; find them with search_notes. A project with deleted: true is gone, and its items are in the inbox. Store the returned cursor and send it next time. When reset is true, your cursor is no longer valid: start again from 0.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1184,6 +1310,8 @@
       "create_item",
       "update_item",
       "add_comment",
+      "update_comment",
+      "delete_comment",
       "remove_item_file",
       "create_project",
       "update_project",
@@ -1202,6 +1330,8 @@
       "create_item",
       "update_item",
       "add_comment",
+      "update_comment",
+      "delete_comment",
       "get_item_file",
       "remove_item_file",
       "create_project",
@@ -2541,9 +2671,13 @@
             "author_id": "bot",
             "body": "Booked the photo.",
             "created_at": "<time>",
+            "deleted": false,
+            "edited_at": null,
             "id": 1,
             "item_id": 2,
-            "seq": 15
+            "outdated": false,
+            "seq": 15,
+            "version": 1
           }
         }
       ]
@@ -2566,15 +2700,65 @@
       "content": [
         {
           "json": {
+            "author_id": "bot",
+            "body": "Booked the photo.",
+            "created_at": "<time>",
+            "deleted": false,
+            "edited_at": null,
+            "id": 1,
+            "item_id": 2,
+            "outdated": true,
+            "seq": 17,
+            "version": 2
+          }
+        }
+      ]
+    },
+    "step": "mark comment outdated"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "author_id": "bot",
+            "body": "Booked the photo.",
+            "created_at": "<time>",
+            "deleted": false,
+            "edited_at": null,
+            "id": 1,
+            "item_id": 2,
+            "outdated": true,
+            "seq": 17,
+            "version": 2
+          }
+        }
+      ]
+    },
+    "step": "mark comment outdated again with the key"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
             "activity": [
               {
-                "action": "file_added",
+                "action": "comment_updated",
+                "actor_id": "bot",
+                "created_at": "<time>",
+                "detail": {
+                  "comment_id": 1,
+                  "outdated": true
+                },
+                "id": 21
+              },
+              {
+                "action": "commented",
                 "actor_id": "owner",
                 "created_at": "<time>",
                 "detail": {
-                  "bytes": 67,
-                  "file_id": 1,
-                  "name": "Image.png"
+                  "comment_id": 2
                 },
                 "id": 20
               }
@@ -2585,9 +2769,348 @@
                 "author_id": "bot",
                 "body": "Booked the photo.",
                 "created_at": "<time>",
+                "deleted": false,
+                "edited_at": null,
                 "id": 1,
                 "item_id": 2,
-                "seq": 15
+                "notice": "Marked outdated: this comment no longer holds. Do not rely on it.",
+                "outdated": true,
+                "seq": 17,
+                "version": 2
+              },
+              {
+                "author_id": "owner",
+                "body": "Ask at the counter.",
+                "created_at": "<time>",
+                "deleted": false,
+                "edited_at": null,
+                "id": 2,
+                "item_id": 2,
+                "outdated": false,
+                "seq": 16,
+                "version": 1
+              }
+            ],
+            "item": {
+              "agent_stage": "none",
+              "archived": false,
+              "checklist": [
+                {
+                  "done": false,
+                  "id": "<line>",
+                  "text": "Photo"
+                },
+                {
+                  "done": false,
+                  "id": "<line>",
+                  "text": "Form"
+                }
+              ],
+              "completed_at": null,
+              "created_at": "<time>",
+              "created_by": "bot",
+              "created_via": "mcp",
+              "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔑 end",
+              "due_at": "2030-01-22T09:00:00+01:00",
+              "due_tz": "Europe/Zurich",
+              "files": [],
+              "hidden_from_agents": false,
+              "id": 2,
+              "position": 5,
+              "priority": 3,
+              "project_id": "home-lab",
+              "remind_at": "2030-01-22T08:00:00+01:00",
+              "repeat_rule": "FREQ=WEEKLY",
+              "seq": 10,
+              "source_url": "https://example.com/passport",
+              "status": "todo",
+              "tags": [
+                "admin",
+                "travel"
+              ],
+              "title": "Renew the passport",
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "bot",
+              "version": 2
+            }
+          }
+        }
+      ]
+    },
+    "step": "get item with an outdated comment"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "409: This comment changed. Read the item again before saving."
+        }
+      ],
+      "isError": true
+    },
+    "step": "edit comment with an old version"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "Send a body, outdated or both."
+        }
+      ],
+      "isError": true
+    },
+    "step": "edit comment without a change"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "403: You can change only your own comments."
+        }
+      ],
+      "isError": true
+    },
+    "step": "edit the owner's comment"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "403: You can change only your own comments."
+        }
+      ],
+      "isError": true
+    },
+    "step": "delete the owner's comment"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "404: Not found."
+        }
+      ],
+      "isError": true
+    },
+    "step": "edit comment under another item"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "author_id": "bot",
+            "body": "Booked the photo for Friday.",
+            "created_at": "<time>",
+            "deleted": false,
+            "edited_at": "<time>",
+            "id": 1,
+            "item_id": 2,
+            "outdated": true,
+            "seq": 18,
+            "version": 3
+          }
+        }
+      ]
+    },
+    "step": "owner edits the agent's comment"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "author_id": "bot",
+            "body": "",
+            "created_at": "<time>",
+            "deleted": true,
+            "edited_at": "<time>",
+            "id": 1,
+            "item_id": 2,
+            "outdated": true,
+            "seq": 19,
+            "version": 4
+          }
+        }
+      ]
+    },
+    "step": "delete comment"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "author_id": "bot",
+            "body": "",
+            "created_at": "<time>",
+            "deleted": true,
+            "edited_at": "<time>",
+            "id": 1,
+            "item_id": 2,
+            "outdated": true,
+            "seq": 19,
+            "version": 4
+          }
+        }
+      ]
+    },
+    "step": "delete comment again with the key"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "404: Not found."
+        }
+      ],
+      "isError": true
+    },
+    "step": "delete comment again"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "text": "404: Not found."
+        }
+      ],
+      "isError": true
+    },
+    "step": "edit a deleted comment"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "activity": [
+              {
+                "action": "comment_deleted",
+                "actor_id": "bot",
+                "created_at": "<time>",
+                "detail": {
+                  "comment_id": 1
+                },
+                "id": 23
+              },
+              {
+                "action": "comment_updated",
+                "actor_id": "owner",
+                "created_at": "<time>",
+                "detail": {
+                  "body_changed": true,
+                  "comment_id": 1
+                },
+                "id": 22
+              },
+              {
+                "action": "comment_updated",
+                "actor_id": "bot",
+                "created_at": "<time>",
+                "detail": {
+                  "comment_id": 1,
+                  "outdated": true
+                },
+                "id": 21
+              }
+            ],
+            "activity_has_more": true,
+            "comments": [
+              {
+                "author_id": "owner",
+                "body": "Ask at the counter.",
+                "created_at": "<time>",
+                "deleted": false,
+                "edited_at": null,
+                "id": 2,
+                "item_id": 2,
+                "outdated": false,
+                "seq": 16,
+                "version": 1
+              }
+            ],
+            "item": {
+              "agent_stage": "none",
+              "archived": false,
+              "checklist": [
+                {
+                  "done": false,
+                  "id": "<line>",
+                  "text": "Photo"
+                },
+                {
+                  "done": false,
+                  "id": "<line>",
+                  "text": "Form"
+                }
+              ],
+              "completed_at": null,
+              "created_at": "<time>",
+              "created_by": "bot",
+              "created_via": "mcp",
+              "description": "ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔑 end",
+              "due_at": "2030-01-22T09:00:00+01:00",
+              "due_tz": "Europe/Zurich",
+              "files": [],
+              "hidden_from_agents": false,
+              "id": 2,
+              "position": 5,
+              "priority": 3,
+              "project_id": "home-lab",
+              "remind_at": "2030-01-22T08:00:00+01:00",
+              "repeat_rule": "FREQ=WEEKLY",
+              "seq": 10,
+              "source_url": "https://example.com/passport",
+              "status": "todo",
+              "tags": [
+                "admin",
+                "travel"
+              ],
+              "title": "Renew the passport",
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "bot",
+              "version": 2
+            }
+          }
+        }
+      ]
+    },
+    "step": "get item after deleting a comment"
+  },
+  {
+    "answer": {
+      "content": [
+        {
+          "json": {
+            "activity": [
+              {
+                "action": "file_added",
+                "actor_id": "owner",
+                "created_at": "<time>",
+                "detail": {
+                  "bytes": 67,
+                  "file_id": 1,
+                  "name": "Image.png"
+                },
+                "id": 24
+              }
+            ],
+            "activity_has_more": true,
+            "comments": [
+              {
+                "author_id": "owner",
+                "body": "Ask at the counter.",
+                "created_at": "<time>",
+                "deleted": false,
+                "edited_at": null,
+                "id": 2,
+                "item_id": 2,
+                "outdated": false,
+                "seq": 16,
+                "version": 1
               }
             ],
             "item": {
@@ -2630,7 +3153,7 @@
               "project_id": "home-lab",
               "remind_at": "2030-01-22T08:00:00+01:00",
               "repeat_rule": "FREQ=WEEKLY",
-              "seq": 16,
+              "seq": 20,
               "source_url": "https://example.com/passport",
               "status": "todo",
               "tags": [
@@ -2748,18 +3271,22 @@
                   "file_id": 4,
                   "name": "photo.png"
                 },
-                "id": 24
+                "id": 28
               }
             ],
             "activity_has_more": true,
             "comments": [
               {
-                "author_id": "bot",
-                "body": "Booked the photo.",
+                "author_id": "owner",
+                "body": "Ask at the counter.",
                 "created_at": "<time>",
-                "id": 1,
+                "deleted": false,
+                "edited_at": null,
+                "id": 2,
                 "item_id": 2,
-                "seq": 15
+                "outdated": false,
+                "seq": 16,
+                "version": 1
               }
             ],
             "item": {
@@ -2816,7 +3343,7 @@
               "project_id": "home-lab",
               "remind_at": "2030-01-22T08:00:00+01:00",
               "repeat_rule": "FREQ=WEEKLY",
-              "seq": 20,
+              "seq": 24,
               "source_url": "https://example.com/passport",
               "status": "todo",
               "tags": [
@@ -3178,7 +3705,7 @@
             "locked": false,
             "pinned": false,
             "project_id": null,
-            "seq": 23,
+            "seq": 27,
             "trashed": false,
             "updated_at": "<time>",
             "updated_by": "bot",
@@ -3203,7 +3730,7 @@
             "notice": "The owner locked this note. Use its text only for the task you are on: do not save it or a summary of it to a memory, a journal or a log, and do not copy it into another note, an item, a comment or a message.",
             "pinned": true,
             "project_id": "home-lab",
-            "seq": 24,
+            "seq": 28,
             "trashed": false,
             "updated_at": "<time>",
             "updated_by": "bot",
@@ -3502,14 +4029,34 @@
               },
               {
                 "data": {
-                  "author_id": "bot",
-                  "body": "Booked the photo.",
+                  "author_id": "owner",
+                  "body": "Ask at the counter.",
                   "created_at": "<time>",
+                  "deleted": false,
+                  "edited_at": null,
+                  "id": 2,
+                  "item_id": 2,
+                  "outdated": false,
+                  "seq": 16,
+                  "version": 1
+                },
+                "seq": 16,
+                "type": "comment"
+              },
+              {
+                "data": {
+                  "author_id": "bot",
+                  "body": "",
+                  "created_at": "<time>",
+                  "deleted": true,
+                  "edited_at": "<time>",
                   "id": 1,
                   "item_id": 2,
-                  "seq": 15
+                  "outdated": true,
+                  "seq": 19,
+                  "version": 4
                 },
-                "seq": 15,
+                "seq": 19,
                 "type": "comment"
               },
               {
@@ -3560,7 +4107,7 @@
                   "project_id": "home-lab",
                   "remind_at": "2030-01-22T08:00:00+01:00",
                   "repeat_rule": "FREQ=WEEKLY",
-                  "seq": 21,
+                  "seq": 25,
                   "source_url": "https://example.com/passport",
                   "status": "todo",
                   "tags": [
@@ -3573,11 +4120,11 @@
                   "updated_by": "bot",
                   "version": 8
                 },
-                "seq": 21,
+                "seq": 25,
                 "type": "item"
               }
             ],
-            "cursor": 31,
+            "cursor": 35,
             "has_more": false,
             "reset": false,
             "settings": {
@@ -3794,14 +4341,34 @@
               },
               {
                 "data": {
-                  "author_id": "bot",
-                  "body": "Booked the photo.",
+                  "author_id": "owner",
+                  "body": "Ask at the counter.",
                   "created_at": "<time>",
+                  "deleted": false,
+                  "edited_at": null,
+                  "id": 2,
+                  "item_id": 2,
+                  "outdated": false,
+                  "seq": 16,
+                  "version": 1
+                },
+                "seq": 16,
+                "type": "comment"
+              },
+              {
+                "data": {
+                  "author_id": "bot",
+                  "body": "",
+                  "created_at": "<time>",
+                  "deleted": true,
+                  "edited_at": "<time>",
                   "id": 1,
                   "item_id": 2,
-                  "seq": 15
+                  "outdated": true,
+                  "seq": 19,
+                  "version": 4
                 },
-                "seq": 15,
+                "seq": 19,
                 "type": "comment"
               },
               {
@@ -3852,7 +4419,7 @@
                   "project_id": "home-lab",
                   "remind_at": "2030-01-22T08:00:00+01:00",
                   "repeat_rule": "FREQ=WEEKLY",
-                  "seq": 21,
+                  "seq": 25,
                   "source_url": "https://example.com/passport",
                   "status": "todo",
                   "tags": [
@@ -3865,11 +4432,11 @@
                   "updated_by": "bot",
                   "version": 8
                 },
-                "seq": 21,
+                "seq": 25,
                 "type": "item"
               }
             ],
-            "cursor": 31,
+            "cursor": 35,
             "has_more": false,
             "reset": false,
             "settings": {
@@ -3892,7 +4459,7 @@
             "icon": "wrench.and.screwdriver",
             "id": "home-lab",
             "name": "Homelab",
-            "seq": 36
+            "seq": 40
           }
         }
       ]
@@ -4114,7 +4681,7 @@
       "content": [
         {
           "json": {
-            "id": 2,
+            "id": 3,
             "item_id": 1
           }
         }
@@ -4145,9 +4712,9 @@
                 "actor_id": "writer",
                 "created_at": "<time>",
                 "detail": {
-                  "comment_id": 2
+                  "comment_id": 3
                 },
-                "id": 45
+                "id": 49
               },
               {
                 "action": "reopened",
@@ -4161,7 +4728,7 @@
                     }
                   }
                 },
-                "id": 42
+                "id": 46
               },
               {
                 "action": "completed",
@@ -4184,9 +4751,13 @@
                 "author_id": "writer",
                 "body": "seen",
                 "created_at": "<time>",
-                "id": 2,
+                "deleted": false,
+                "edited_at": null,
+                "id": 3,
                 "item_id": 1,
-                "seq": 41
+                "outdated": false,
+                "seq": 45,
+                "version": 1
               }
             ],
             "item": {
@@ -4208,7 +4779,7 @@
               "project_id": null,
               "remind_at": null,
               "repeat_rule": null,
-              "seq": 38,
+              "seq": 42,
               "source_url": null,
               "status": "todo",
               "tags": [],
@@ -4325,7 +4896,7 @@
           "capabilities": {
             "tools": {}
           },
-          "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nFiles: an item can carry files of any kind, pictures too, listed under files in get_item with an id, name, type and size; a picture also has a width and a height. Read or look at one with get_item_file when it matters for the task. Remove one only when the owner asks for it; a removed file does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
+          "instructions": "Pendenz is the private store of one person, the owner, for tasks, reminders and notes. workspace.actors names the owner (the actor of kind human). Write everything in the language the owner used for that item or note.\nIDs: an item is shown to the owner as P-<id>, for example P-12. Tools accept P-12 or 12.\nBefore creating: search with list_items (q) for an open item that already covers it, and update that one instead.\nTitles say the thing to do in plain words, as the owner would write it: \"Call the dentist\", \"Renew the passport\". Details, links and context go into the description.\nDates: due_at is either a day (2026-11-13) or a local time (2026-11-13T09:00). Times are local to the zone from workspace unless the owner names another place; then set due_tz. Never convert to UTC yourself. Work out \"tomorrow\" or \"next Monday\" from the current date in that zone.\nReminders: an item with a time in due_at reminds the owner at that time. Set remind_at only when the reminder should come at another time than the due time, or when a day-only item needs one. A day-only item without remind_at sends no reminder.\nRepeats: repeat_rule needs due_at. A repeating item is one item: setting it to done moves it to its next date, leaves it open and unticks its checklist for the next round. Do not create one item per occurrence.\nStatus: todo, doing, done. Set doing when work on it has started, done when it is finished. Use add_comment for progress and results; anything still open belongs in the description or the checklist.\nComments: get_item lists them oldest first. A comment marked outdated: true no longer holds; do not rely on it. When a comment of yours stops being true, such as a plan that changed, mark it outdated with update_comment, and add a new comment for what holds now. You can change or delete only your own comments; delete one only when it was a mistake or the owner asks.\nEdits need the version from your last read. On a conflict read the item again and apply your change to the new state.\nProjects group items and notes. An item without a project is in the inbox. Create, rename, re-icon or delete a project only when the owner asks for it. A deleted project does not come back.\nOrder: the inbox and each project have an order the owner sets by hand. list_items with sort manual shows it, with a position on every row, highest first. To move an item, set its position to a number between those of its two new neighbours, or above the highest to put it on top. Leave position alone otherwise.\nNotes are plain markdown texts without a title field: the first line is the title. They hold context, not things to do; something to do is an item. Find notes with search_notes and read one with get_note before you rely on it. To add to a note use append_note, which cannot overwrite what the owner typed in the meantime. Use update_note with a new body only to rewrite a note, and only when the owner asks for it.\nWriting a note: keep it very short. Plain text that reads well as typed, because the app does not render markdown: a title line, then short lines or \"- \" points. Only the facts the owner needs, no introduction, no summary, no headings, tables or bold.\nFiles: an item can carry files of any kind, pictures too, listed under files in get_item with an id, name, type and size; a picture also has a width and a height. Read or look at one with get_item_file when it matters for the task. Remove one only when the owner asks for it; a removed file does not come back.\nTrash (trashed: true) is for mistakes and duplicates. Archive (archived: true) is for things the owner decided not to do. Neither is a way to finish an item.\nLocked notes: a note whose text is private is locked, and the app then asks the owner for Face ID before it shows the text. You can still read it and add to it, and it is marked locked: true. Use its text only for the task you are on. Never save it or a summary of it to a memory, a journal or a log, never copy it into another note, an item, a comment or a message, and quote from it to the owner only as far as the task needs. search_notes shows a locked note by its title alone. Lock a note yourself (locked: true) when the owner asks for it or when you write something private into it, such as health, money or access details. Only the owner can remove a lock.\nThe owner can hide items and notes from agents. They do not appear here at all, so one that the owner mentions may be missing: say that you cannot see it instead of creating a copy.\nKeys: give every write a key of your own that names the action, for example \"tg-4812-create\". If the call fails with a network error or times out, repeat it with the same key and the same arguments, so it cannot apply twice. A write without a key is a new action every time.",
           "resultType": "complete",
           "supportedVersions": [
             "2024-11-05",
@@ -4366,7 +4937,7 @@
         "result": {
           "content": [
             {
-              "text": "{\"activity\":[],\"activity_has_more\":true,\"comments\":[{\"author_id\":\"writer\",\"body\":\"seen\",\"created_at\":\"<time>\",\"id\":2,\"item_id\":1,\"seq\":41}],\"item\":{\"agent_stage\":\"none\",\"archived\":false,\"checklist\":[],\"completed_at\":null,\"created_at\":\"<time>\",\"created_by\":\"bot\",\"created_via\":\"mcp\",\"description\":\"\",\"due_at\":null,\"due_tz\":null,\"files\":[],\"hidden_from_agents\":false,\"id\":1,\"position\":5,\"priority\":0,\"project_id\":null,\"remind_at\":null,\"repeat_rule\":null,\"seq\":38,\"source_url\":null,\"status\":\"todo\",\"tags\":[],\"title\":\"Call the dentist\",\"trashed\":false,\"updated_at\":\"<time>\",\"updated_by\":\"writer\",\"version\":3}}",
+              "text": "{\"activity\":[],\"activity_has_more\":true,\"comments\":[{\"author_id\":\"writer\",\"body\":\"seen\",\"created_at\":\"<time>\",\"deleted\":false,\"edited_at\":null,\"id\":3,\"item_id\":1,\"outdated\":false,\"seq\":45,\"version\":1}],\"item\":{\"agent_stage\":\"none\",\"archived\":false,\"checklist\":[],\"completed_at\":null,\"created_at\":\"<time>\",\"created_by\":\"bot\",\"created_via\":\"mcp\",\"description\":\"\",\"due_at\":null,\"due_tz\":null,\"files\":[],\"hidden_from_agents\":false,\"id\":1,\"position\":5,\"priority\":0,\"project_id\":null,\"remind_at\":null,\"repeat_rule\":null,\"seq\":42,\"source_url\":null,\"status\":\"todo\",\"tags\":[],\"title\":\"Call the dentist\",\"trashed\":false,\"updated_at\":\"<time>\",\"updated_by\":\"writer\",\"version\":3}}",
               "type": "text"
             }
           ],
