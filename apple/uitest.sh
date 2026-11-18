@@ -49,6 +49,7 @@ seed projects vacant '{"name": "Vacant project"}'
 seed items unused-item '{"title": "Project item", "project_id": "unused-project"}'
 seed items trashed '{"title": "Trashed item", "trashed": true}'
 seed notes trashed-note '{"body": "Trashed note", "trashed": true}'
+seed items paragraphs '{"title": "Paragraphs"}'
 n=0
 for title in "Drag A" "Drag B" "Drag C" "Swipe left" "Swipe right"; do
     n=$((n + 1))
