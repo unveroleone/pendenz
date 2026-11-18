@@ -45,10 +45,28 @@ struct ItemDetailView: View {
                         .focused($focus, equals: .title)
                         .labelsHidden()
                 }
-                TextField("Notes", text: $notes, prompt: Text("Notes"), axis: .vertical)
-                    .lineLimit(2 ... 12)
+                // A text editor, not a text field: Return starts a new line on every platform,
+                // where a field on the Mac ends the editing.
+                TextEditor(text: $notes)
+                    .font(.body)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 60)
+                    // The editor insets its text by five points, and on iOS by eight from the
+                    // top. This lines it up with the other rows.
+                    .padding(.horizontal, -5)
+                    #if os(iOS)
+                    .padding(.vertical, -8)
+                    #endif
                     .focused($focus, equals: .notes)
-                    .labelsHidden()
+                    .overlay(alignment: .topLeading) {
+                        if notes.isEmpty {
+                            Text("Notes")
+                                .foregroundStyle(.tertiary)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .accessibilityLabel("Notes")
             }
             Section("Steps") {
                 ForEach($lines) { $line in
