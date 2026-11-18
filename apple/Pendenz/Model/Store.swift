@@ -219,6 +219,10 @@ final class Store {
                 projectsByID.removeAll()
                 notesByID.removeAll()
                 commentsByID.removeAll()
+                // An agent may have another name on the restored server.
+                authors = [:]
+                askedAuthors.removeAll()
+                Self.keptAuthors[api.baseURL.absoluteString] = nil
                 unsavedItems.removeAll()
                 unsavedProjects.removeAll()
                 unsavedNotes.removeAll()
@@ -508,7 +512,7 @@ final class Store {
                     rebases += 1
                     // Missing from the answer: deleted meanwhile. The next try finds it gone.
                     let current = try await fetchComments(of: id)
-                    if !current.contains(where: { $0.id == commentID }) { commentsByID[commentID]?.deleted = true }
+                    if !current.contains(where: { $0.id == commentID }) { forgetComment(commentID) }
                     rekey(entry)
                 case .create, .createNote, .createProject, .updateProject, .deleteProject, .addFile, .removeFile,
                      .deleteComment:
@@ -516,6 +520,7 @@ final class Store {
                 }
             } catch APIError.status(404, _?) {
                 // The row is gone, or hidden from this token. There is nothing to change.
+                if case .deleteComment(_, let commentID) = entry.write { forgetComment(commentID) }
                 finish(entry)
             } catch APIError.status(let code, let message?) where (400 ..< 500).contains(code) && code != 401 {
                 // Refused for good. An answer without the API's own message did not come from
@@ -608,6 +613,15 @@ final class Store {
         return item
     }
 
+    // A comment the server no longer has. Gone from the disk with the next save, and kept in
+    // memory as deleted, so an older answer cannot bring it back.
+    private func forgetComment(_ id: Int) {
+        guard var comment = commentsByID[id], !comment.deleted else { return }
+        comment.deleted = true
+        commentsByID[id] = comment
+        unsavedComments[id] = comment
+    }
+
     // The server's comments of an item replace the ones here, whatever their sequence numbers.
     private func fetchComments(of id: Int) async throws -> [Comment] {
         let current = try await api.comments(of: id)
@@ -648,12 +662,15 @@ final class Store {
         publish()
     }
 
+    // The row read again goes to the disk with the new key: a retry after a restart sends that
+    // key with the version it was made for. With the old row the request would differ, and the
+    // server would refuse the key.
     private func rekey(_ entry: PendingEntry) {
         guard let index = outbox.firstIndex(where: { $0.key == entry.key }) else { return }
         disk.remove(key: entry.key)
         outbox[index].key = UUID().uuidString
         disk.put(outbox[index])
-        disk.commit()
+        save()
     }
 
     // The server gave a new item its ID. Later changes to it were queued under the local one.

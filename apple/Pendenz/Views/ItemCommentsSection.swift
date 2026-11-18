@@ -34,7 +34,9 @@ struct ItemCommentsSection: View {
                         ForEach(earlier) { CommentRow(comment: $0) }
                     }
                 }
+                // By its ID: when a newer comment arrives, this row's state stays with its own.
                 CommentRow(comment: latest)
+                    .id(latest.id)
             }
         }
     }
@@ -214,7 +216,11 @@ private struct CommentEditor: View {
                             store.update(comment, CommentPatch(body: trimmed))
                             dismiss()
                         }
-                        .disabled(trimmed.isEmpty || trimmed == comment.body || trimmed.count > Comment.bodyLimit)
+                        // Counted as the server counts, in Unicode scalars.
+                        .disabled(
+                            trimmed.isEmpty || trimmed == comment.body
+                                || trimmed.unicodeScalars.count > Comment.bodyLimit,
+                        )
                     }
                 }
         }
