@@ -17,6 +17,7 @@
 #   ASC_ISSUER_ID       the API key's issuer
 #   ASC_KEY_PATH        the .p8 file (default ~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8)
 #   SPARKLE_ACCOUNT     the Keychain account of the Sparkle key (default pendenz)
+#   SPARKLE_KEY_FILE    the Sparkle key as a file (generate_keys -x), instead of the Keychain
 #   PENDENZ_BUNDLE_ID   the app's bundle ID (default ch.roadtofinal.pendenz)
 #   APP_PROFILE         the app's Developer ID provisioning profile (default "Pendenz Developer ID")
 #   WIDGETS_PROFILE     the widget extension's (default "Pendenz Widgets Developer ID")
@@ -50,6 +51,8 @@ notes=$1
 : "${ASC_ISSUER_ID:?set ASC_ISSUER_ID to the API key issuer}"
 key_path=${ASC_KEY_PATH:-$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8}
 account=${SPARKLE_ACCOUNT:-pendenz}
+key_file=${SPARKLE_KEY_FILE:-}
+[[ -z $key_file || -f $key_file ]] || fail "no Sparkle key at $key_file"
 bundle_id=${PENDENZ_BUNDLE_ID:-ch.roadtofinal.pendenz}
 app_profile=${APP_PROFILE:-Pendenz Developer ID}
 widgets_profile=${WIDGETS_PROFILE:-Pendenz Widgets Developer ID}
@@ -57,6 +60,7 @@ widgets_profile=${WIDGETS_PROFILE:-Pendenz Widgets Developer ID}
 
 # Both paths are used after the script moves to the top of the repository.
 key_path=$(cd "$(dirname "$key_path")" && pwd)/$(basename "$key_path")
+[[ -z $key_file ]] || key_file=$(cd "$(dirname "$key_file")" && pwd)/$(basename "$key_file")
 notes=$(cd "$(dirname "$notes")" && pwd)/$(basename "$notes")
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$(git rev-parse --show-toplevel)"
@@ -124,9 +128,27 @@ bin="$work/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin"
 [[ -x $bin/generate_appcast ]] || fail "the Sparkle tools are missing from $bin"
 archived_app="$work/Pendenz.xcarchive/Products/Applications/Pendenz.app"
 app_key=$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$archived_app/Contents/Info.plist")
-keychain_key=$("$bin/generate_keys" --account "$account" -p 2>/dev/null || true)
-[[ -n $app_key && $app_key == "$keychain_key" ]] \
-    || fail "the Sparkle key of account $account does not match SUPublicEDKey in the app"
+if [[ -n $key_file ]]; then
+    # generate_keys reads only the Keychain, so the public half of the file comes from CryptoKit.
+    # A build machine keeps the key in a file because the Keychain asks before an unsigned tool
+    # such as generate_keys may read it, and nobody is there to answer.
+    sparkle_key=$(xcrun swift - "$key_file" 2>/dev/null <<'SWIFT' || true
+import CryptoKit
+import Foundation
+let text = try String(contentsOfFile: CommandLine.arguments[1], encoding: .utf8)
+let seed = Data(base64Encoded: text.trimmingCharacters(in: .whitespacesAndNewlines))!
+print(try Curve25519.Signing.PrivateKey(rawRepresentation: seed).publicKey.rawRepresentation.base64EncodedString())
+SWIFT
+    )
+    key_source="the file $key_file"
+    sparkle_auth=(--ed-key-file "$key_file")
+else
+    sparkle_key=$("$bin/generate_keys" --account "$account" -p 2>/dev/null || true)
+    key_source="account $account"
+    sparkle_auth=(--account "$account")
+fi
+[[ -n $app_key && $app_key == "$sparkle_key" ]] \
+    || fail "the Sparkle key of $key_source does not match SUPublicEDKey in the app"
 
 echo "==> Exporting with Developer ID"
 cat >"$work/ExportOptions.plist" <<EOF
@@ -204,7 +226,7 @@ if [[ -f $feed ]]; then
 fi
 cp "$notes" "$work/updates/Pendenz-$version.md"
 "$bin/generate_appcast" \
-    --account "$account" \
+    "${sparkle_auth[@]}" \
     --download-url-prefix "https://github.com/$repo/releases/download/$tag/" \
     --embed-release-notes \
     --maximum-deltas 0 \
