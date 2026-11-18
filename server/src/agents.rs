@@ -10,7 +10,7 @@ use axum::{
     Extension, Json,
     extract::{State, rejection::JsonRejection},
 };
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde_json::{Value, json};
 use sqlx::Row;
 use std::collections::HashMap;
@@ -42,15 +42,17 @@ pub async fn put_report(
             "This server takes reports with schema {SCHEMA}."
         )));
     }
-    let mut report = report.bounded();
-    let now = Utc::now();
-    if report.sent_at > now + Duration::minutes(CLOCK_SLACK_MINUTES) {
-        report.sent_at = now;
+    let report = report.bounded();
+    // A clock far ahead would make every later report look older than this one.
+    if report.sent_at > Utc::now() + Duration::minutes(CLOCK_SLACK_MINUTES) {
+        return Err(ApiError::bad(
+            "The report's time is ahead of the server's clock. Check the agent machine's clock.",
+        ));
     }
     let body = serde_json::to_string(&report).map_err(|_| ApiError::bad("Unreadable report."))?;
     let sent_at = report
         .sent_at
-        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        .to_rfc3339_opts(chrono::SecondsFormat::Nanos, true);
 
     let _guard = state.writer.lock().await;
     let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
@@ -60,8 +62,11 @@ pub async fn put_report(
             .bind(&identity.actor.id)
             .fetch_optional(&mut *tx)
             .await?;
+    let older = |stored: &str| {
+        DateTime::parse_from_rfc3339(stored).is_ok_and(|stored| stored >= report.sent_at)
+    };
     if let Some((stored_sent, received_at)) = &stored
-        && stored_sent.as_str() >= sent_at.as_str()
+        && older(stored_sent)
     {
         return Ok(Json(json!({"received_at": received_at, "kept": "newer"})));
     }
@@ -112,17 +117,20 @@ pub async fn list(
 
     // What each agent did today, in the server's time zone: items it created and changed, and
     // its comments. The activity log has every write with its actor.
-    let midnight = Utc::now()
-        .with_timezone(&state.tz)
-        .date_naive()
-        .and_hms_opt(0, 0, 0)
-        .and_then(|t| t.and_local_timezone(state.tz).earliest())
+    // The first hour of the day that exists: a change of clock can skip midnight.
+    let date = Utc::now().with_timezone(&state.tz).date_naive();
+    let midnight = (0..3)
+        .find_map(|hour| {
+            date.and_hms_opt(hour, 0, 0)?
+                .and_local_timezone(state.tz)
+                .earliest()
+        })
         .map(|t| t.with_timezone(&Utc))
         .unwrap_or_else(Utc::now);
     let counts = sqlx::query(
         "SELECT actor_id, action, COUNT(*) AS n FROM activity \
          WHERE created_at >= ? AND item_id IS NOT NULL \
-           AND action IN ('created', 'updated', 'commented') \
+           AND action IN ('created', 'updated', 'completed', 'completed_occurrence', 'commented') \
            AND actor_id IN (SELECT id FROM actors WHERE kind = 'agent') \
          GROUP BY actor_id, action",
     )
@@ -160,7 +168,7 @@ pub async fn list(
             "scopes": scopes,
             "last_used_at": row.try_get::<Option<String>, _>("last_used_at")?,
             "received_at": row.try_get::<Option<String>, _>("received_at")?,
-            "today": today.remove(&id).unwrap_or_else(|| json!({"created": 0, "updated": 0, "commented": 0})),
+            "today": today.remove(&id).unwrap_or_else(no_activity),
             "report": report,
         }));
     }
@@ -168,4 +176,8 @@ pub async fn list(
         "agents": agents,
         "now": Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
     })))
+}
+
+fn no_activity() -> Value {
+    json!({"created": 0, "updated": 0, "completed": 0, "commented": 0})
 }

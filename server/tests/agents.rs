@@ -86,6 +86,14 @@ async fn reports_are_checked_and_bounded() {
     unknown["extra"] = json!(1);
     assert_eq!(put(&server, &reporter, unknown).await.0, 400);
 
+    // A clock far ahead would hold back every later report.
+    assert_eq!(
+        put(&server, &reporter, report("2999-01-01T00:00:00Z"))
+            .await
+            .0,
+        400
+    );
+
     let mut long = report("2026-11-18T10:00:00Z");
     long["jobs"][0]["name"] = json!("x".repeat(500));
     assert_eq!(put(&server, &reporter, long).await.0, 200);
@@ -128,13 +136,21 @@ async fn only_the_owner_reads_the_agents() {
     let write_only = server.token("owner", "write");
     assert_eq!(agents(&server, &write_only).await.0, 403);
 
-    // The worker creates an item, which counts for today.
-    server
+    // The worker creates an item and completes it, which counts for today.
+    let item = server
         .api(
             &worker,
             "POST",
             "/items",
             Some(json!({"title": "From the worker"})),
+        )
+        .await;
+    server
+        .api(
+            &worker,
+            "PATCH",
+            &format!("/items/{}", item["id"]),
+            Some(json!({"version": item["version"], "status": "done"})),
         )
         .await;
     let (status, list) = agents(&server, &server.owner).await;
@@ -147,6 +163,7 @@ async fn only_the_owner_reads_the_agents() {
     let worker_row = list.iter().find(|a| a["id"] == "worker").unwrap();
     assert_eq!(worker_row["report"], Value::Null);
     assert_eq!(worker_row["today"]["created"], 1);
+    assert_eq!(worker_row["today"]["completed"], 1);
 }
 
 #[tokio::test]

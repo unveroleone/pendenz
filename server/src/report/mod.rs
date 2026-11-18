@@ -155,7 +155,7 @@ pub struct Spend {
     pub month: f64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Default, PartialEq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Tokens {
     #[serde(default)]
@@ -491,7 +491,9 @@ pub async fn collect(args: &Args) -> Report {
             .as_ref()
             .filter(|p| p.join("config.yaml").is_file() || p.join("state.db").is_file())
         {
-            Some(path) => bounded_source("hermes", hermes::collect(path.clone())).await,
+            Some(path) => {
+                bounded_source("hermes", hermes::collect(path.clone(), state_dir.clone())).await
+            }
             None => None,
         }
     };

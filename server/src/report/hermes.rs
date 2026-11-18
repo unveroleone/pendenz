@@ -5,7 +5,7 @@ use super::{
     Account, AccountKind, Agent, Channel, Day, Health, Job, ModelUse, Spend, Tokens, Window, text,
 };
 use chrono::{DateTime, Duration as Span, FixedOffset, Local, NaiveDate, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{
     ConnectOptions, Connection, Row,
@@ -23,7 +23,7 @@ pub struct Found {
     pub jobs: Vec<Job>,
 }
 
-pub async fn collect(home: PathBuf) -> anyhow::Result<Found> {
+pub async fn collect(home: PathBuf, state_dir: Option<PathBuf>) -> anyhow::Result<Found> {
     let config = {
         let path = home.join("config.yaml");
         tokio::task::spawn_blocking(move || Config::read(&path)).await?
@@ -34,7 +34,7 @@ pub async fn collect(home: PathBuf) -> anyhow::Result<Found> {
     let (version, windows, usage) =
         tokio::join!(version(&hermes), plan_windows(&hermes, &providers), async {
             if store.is_file() {
-                usage(&store).await
+                usage(&store, state_dir.as_deref()).await
             } else {
                 Ok(Vec::new())
             }
@@ -167,50 +167,97 @@ pub fn account_name(provider: &str, kind: AccountKind) -> String {
     }
 }
 
-// Usage per account, model and day over the last 30 days, from the session store. Hermes
-// estimates the cost of a session from a price list; a session that a plan includes has none.
-async fn usage(path: &Path) -> anyhow::Result<Vec<Account>> {
+// What Hermes keeps per session and model is a running total. To know on which day the tokens
+// were used, the report command keeps the totals it saw last and adds what grew since to the
+// day the row was last used. A row it sees for the first time is spread over the days from its
+// first to its last use.
+#[derive(Serialize, Deserialize, Default)]
+struct Ledger {
+    seen: HashMap<String, Seen>,
+    // Per day, per account and model ("anthropic-api|claude-sonnet-5-5").
+    days: BTreeMap<NaiveDate, BTreeMap<String, Used>>,
+}
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct Seen {
+    tokens: Tokens,
+    cost: f64,
+    last_seen: f64,
+}
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct Used {
+    tokens: Tokens,
+    cost: f64,
+    estimated: bool,
+    sessions: BTreeSet<String>,
+}
+
+const LEDGER: &str = "hermes-usage.json";
+// A row unused for this long is forgotten; a session picked up after that counts in full again.
+const LEDGER_DAYS: i64 = 90;
+
+fn day_of(timestamp: f64) -> Option<NaiveDate> {
+    DateTime::from_timestamp(timestamp as i64, 0).map(|t| t.with_timezone(&Local).date_naive())
+}
+
+fn less(after: &Tokens, before: &Tokens) -> Option<Tokens> {
+    Some(Tokens {
+        input: after.input.checked_sub(before.input)?,
+        output: after.output.checked_sub(before.output)?,
+        cache_read: after.cache_read.checked_sub(before.cache_read)?,
+        cache_write: after.cache_write.checked_sub(before.cache_write)?,
+    })
+}
+
+fn share(tokens: &Tokens, parts: u64) -> Tokens {
+    Tokens {
+        input: tokens.input / parts,
+        output: tokens.output / parts,
+        cache_read: tokens.cache_read / parts,
+        cache_write: tokens.cache_write / parts,
+    }
+}
+
+// Usage per account, model and day over the last 30 days. Hermes estimates the cost of a call
+// from a price list; usage that a plan includes has none.
+async fn usage(path: &Path, state_dir: Option<&Path>) -> anyhow::Result<Vec<Account>> {
     let mut db: SqliteConnection = SqliteConnectOptions::new()
         .filename(path)
         .read_only(true)
         .busy_timeout(Duration::from_secs(3))
         .connect()
         .await?;
-    let today = Local::now().date_naive();
-    let first = today - Span::days(29);
-    let since = first
-        .and_hms_opt(0, 0, 0)
-        .and_then(|t| t.and_local_timezone(Local).earliest())
-        .map(|t| t.timestamp() as f64)
-        .unwrap_or(0.0);
+    let now = Utc::now().timestamp() as f64;
     let rows = sqlx::query(
-        "SELECT u.model, u.billing_provider AS provider, \
+        "SELECT u.session_id, u.model, u.billing_provider AS provider, \
            COALESCE(NULLIF(u.billing_mode, ''), s.billing_mode, '') AS mode, \
-           date(COALESCE(u.last_seen, s.started_at), 'unixepoch', 'localtime') AS day, \
-           COUNT(DISTINCT u.session_id) AS sessions, \
-           SUM(u.input_tokens) AS input, SUM(u.output_tokens) AS output, \
-           SUM(u.cache_read_tokens) AS cache_read, SUM(u.cache_write_tokens) AS cache_write, \
-           SUM(CASE WHEN u.actual_cost_usd > 0 THEN u.actual_cost_usd \
-             ELSE u.estimated_cost_usd END) AS cost, \
-           SUM(u.actual_cost_usd <= 0) AS estimated \
+           COALESCE(u.first_seen, s.started_at) AS first_seen, \
+           COALESCE(u.last_seen, u.first_seen, s.started_at) AS last_seen, \
+           u.input_tokens AS input, u.output_tokens AS output, \
+           u.cache_read_tokens AS cache_read, u.cache_write_tokens AS cache_write, \
+           CASE WHEN u.actual_cost_usd > 0 THEN u.actual_cost_usd \
+             ELSE u.estimated_cost_usd END AS cost, \
+           u.actual_cost_usd <= 0 AS estimated \
          FROM session_model_usage u JOIN sessions s ON s.id = u.session_id \
-         WHERE COALESCE(u.last_seen, s.started_at) >= ? AND u.billing_provider <> '' \
-         GROUP BY 1, 2, 3, 4",
+         WHERE COALESCE(u.last_seen, u.first_seen, s.started_at) >= ? AND u.billing_provider <> ''",
     )
-    .bind(since)
+    .bind(now - (LEDGER_DAYS * 86_400) as f64)
     .fetch_all(&mut db)
     .await?;
     db.close().await.ok();
 
-    struct Building {
-        kind: AccountKind,
-        provider: String,
-        days: BTreeMap<NaiveDate, (f64, Tokens)>,
-        models: HashMap<String, ModelUse>,
-        estimated: bool,
-    }
-    let mut accounts: BTreeMap<String, Building> = BTreeMap::new();
+    let ledger_path = state_dir.map(|d| d.join(LEDGER));
+    let mut ledger: Ledger = ledger_path
+        .as_ref()
+        .and_then(|p| std::fs::read(p).ok())
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default();
+    let today = Local::now().date_naive();
+    let first = today - Span::days(29);
+    let mut kinds: HashMap<String, (AccountKind, String)> = HashMap::new();
+
     for row in rows {
+        let session: String = row.try_get("session_id")?;
+        let model: String = row.try_get("model")?;
         let provider: String = row.try_get("provider")?;
         let mode: String = row.try_get("mode")?;
         let kind = if mode.contains("subscription") {
@@ -218,7 +265,7 @@ async fn usage(path: &Path) -> anyhow::Result<Vec<Account>> {
         } else {
             AccountKind::Api
         };
-        let id = format!(
+        let account = format!(
             "{provider}-{}",
             if kind == AccountKind::Api {
                 "api"
@@ -226,46 +273,121 @@ async fn usage(path: &Path) -> anyhow::Result<Vec<Account>> {
                 "plan"
             }
         );
-        let day: String = row.try_get("day")?;
-        let Ok(day) = NaiveDate::parse_from_str(&day, "%Y-%m-%d") else {
-            continue;
-        };
+        kinds.insert(account.clone(), (kind, provider.clone()));
+        let first_seen: f64 = row.try_get::<Option<f64>, _>("first_seen")?.unwrap_or(now);
+        let last_seen: f64 = row.try_get::<Option<f64>, _>("last_seen")?.unwrap_or(now);
         let tokens = Tokens {
             input: row.try_get::<i64, _>("input")?.max(0) as u64,
             output: row.try_get::<i64, _>("output")?.max(0) as u64,
             cache_read: row.try_get::<i64, _>("cache_read")?.max(0) as u64,
             cache_write: row.try_get::<i64, _>("cache_write")?.max(0) as u64,
         };
-        // Each usage row counts with its actual cost when Hermes knows it, else its estimate.
-        let cost: f64 = row.try_get::<Option<f64>, _>("cost")?.unwrap_or(0.0);
-        let estimated = row.try_get::<i64, _>("estimated")? > 0;
-        let model: String = row.try_get("model")?;
-        let sessions = row.try_get::<i64, _>("sessions")?.max(0) as u64;
+        let cost: f64 = row
+            .try_get::<Option<f64>, _>("cost")?
+            .unwrap_or(0.0)
+            .max(0.0);
+        let estimated = row.try_get::<Option<i64>, _>("estimated")?.unwrap_or(1) > 0;
 
-        let account = accounts.entry(id).or_insert_with(|| Building {
-            kind,
-            provider: provider.clone(),
-            days: BTreeMap::new(),
-            models: HashMap::new(),
-            estimated: false,
-        });
-        account.estimated |= estimated;
-        let entry = account.days.entry(day).or_default();
-        entry.0 += cost;
-        entry.1.add(&tokens);
-        let use_ = account.models.entry(model.clone()).or_insert(ModelUse {
-            model,
-            cost: (kind == AccountKind::Api).then_some(0.0),
-            sessions: 0,
-            tokens: Tokens::default(),
-        });
-        use_.sessions += sessions;
-        use_.tokens.add(&tokens);
-        if let Some(total) = &mut use_.cost {
-            *total += cost;
+        let key = format!("{session}|{model}|{provider}|{mode}");
+        let before = ledger.seen.get(&key).cloned();
+        ledger.seen.insert(
+            key,
+            Seen {
+                tokens: tokens.clone(),
+                cost,
+                last_seen,
+            },
+        );
+        // What grew since the last run, on the day of the last use. A row that shrank was
+        // started again and counts in full.
+        let (grown, grown_cost, spread_from) = match before
+            .as_ref()
+            .and_then(|b| less(&tokens, &b.tokens).map(|t| (t, (cost - b.cost).max(0.0))))
+        {
+            Some((grown, grown_cost)) => (grown, grown_cost, last_seen),
+            None => (tokens.clone(), cost, first_seen),
+        };
+        if grown == Tokens::default() && grown_cost == 0.0 {
+            continue;
+        }
+        let (Some(from), Some(to)) = (day_of(spread_from), day_of(last_seen)) else {
+            continue;
+        };
+        let from = from.max(first).min(to);
+        let parts = ((to - from).num_days() + 1).max(1) as u64;
+        let mut day = from;
+        while day <= to {
+            let used = ledger
+                .days
+                .entry(day)
+                .or_default()
+                .entry(format!("{account}|{model}"))
+                .or_default();
+            used.tokens.add(&share(&grown, parts));
+            used.cost += grown_cost / parts as f64;
+            used.estimated |= estimated;
+            used.sessions.insert(session.clone());
+            day += Span::days(1);
         }
     }
+    ledger
+        .seen
+        .retain(|_, seen| seen.last_seen >= now - (LEDGER_DAYS * 86_400) as f64);
+    ledger.days.retain(|day, _| *day >= first);
+    if let (Some(path), Some(dir)) = (&ledger_path, state_dir) {
+        std::fs::create_dir_all(dir)?;
+        let temporary = dir.join(format!("{LEDGER}.tmp"));
+        std::fs::write(&temporary, serde_json::to_vec(&ledger)?)?;
+        std::fs::rename(&temporary, path)?;
+    }
 
+    struct Building {
+        kind: AccountKind,
+        provider: String,
+        days: BTreeMap<NaiveDate, (f64, Tokens)>,
+        models: HashMap<String, (ModelUse, BTreeSet<String>)>,
+        estimated: bool,
+    }
+    let mut accounts: BTreeMap<String, Building> = BTreeMap::new();
+    for (day, used) in &ledger.days {
+        for (key, used) in used {
+            let Some((account, model)) = key.split_once('|') else {
+                continue;
+            };
+            let Some((kind, provider)) = kinds.get(account).cloned() else {
+                continue;
+            };
+            let building = accounts
+                .entry(account.to_owned())
+                .or_insert_with(|| Building {
+                    kind,
+                    provider,
+                    days: BTreeMap::new(),
+                    models: HashMap::new(),
+                    estimated: false,
+                });
+            building.estimated |= used.estimated;
+            let entry = building.days.entry(*day).or_default();
+            entry.0 += used.cost;
+            entry.1.add(&used.tokens);
+            let use_ = building.models.entry(model.to_owned()).or_insert_with(|| {
+                (
+                    ModelUse {
+                        model: model.to_owned(),
+                        cost: (kind == AccountKind::Api).then_some(0.0),
+                        sessions: 0,
+                        tokens: Tokens::default(),
+                    },
+                    BTreeSet::new(),
+                )
+            });
+            use_.0.tokens.add(&used.tokens);
+            if let Some(total) = &mut use_.0.cost {
+                *total += used.cost;
+            }
+            use_.1.extend(used.sessions.iter().cloned());
+        }
+    }
     Ok(accounts
         .into_iter()
         .map(|(id, building)| {
@@ -294,7 +416,14 @@ async fn usage(path: &Path) -> anyhow::Result<Vec<Account>> {
                 week: round_money(sum(7)),
                 month: round_money(sum(30)),
             });
-            let mut models: Vec<ModelUse> = building.models.into_values().collect();
+            let mut models: Vec<ModelUse> = building
+                .models
+                .into_values()
+                .map(|(mut model, sessions)| {
+                    model.sessions = sessions.len() as u64;
+                    model
+                })
+                .collect();
             for model in &mut models {
                 model.cost = model.cost.map(round_money);
             }
