@@ -148,6 +148,7 @@ Tasks, reminders and notes for one person, with a server that agents can work fr
 - While a context menu is open the simulator never reports the app as idle, so every step of a test waits a minute there. Keep such a test to one tap in the open menu, and do not tap "Complete": that is also the label of every row's circle.
 - Not covered: text dropped from another app between two rows, and everything on the Mac, where the test target does not build.
 - The UI tests are slow. Run them once at the end of a change, not after every edit.
+- To see what a test did, run it with `PENDENZ_UITEST_FRAMES=<dir>`, which saves a screenshot about once a second and stops with the script. Never start a screenshot loop of your own in the background: one that outlived its run filled the disk with 54 GB of frames. Delete the frames when you are done.
 
 ## Rules
 
