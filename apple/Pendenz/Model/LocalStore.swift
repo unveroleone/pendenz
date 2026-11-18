@@ -174,7 +174,8 @@ final class LocalStore {
             if state.format < 8 {
                 // Rows stored by an older build lack a field: when a project was made, when an
                 // item was completed, whether a note is locked, which files an item has, its
-                // pictures among them, where an agent is with it. Such a build stored a row without a list it did not know,
+                // pictures among them, where an agent is with it. Such a build stored a row without a list it did not
+                // know,
                 // or skipped the comments, and its cursor has passed that row. The server sends
                 // every row again from the start, and each replaces the one kept here. The
                 // waiting changes stay.

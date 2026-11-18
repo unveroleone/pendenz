@@ -44,7 +44,9 @@ struct SettingsView: View {
                         ForEach(AgentsVisibility.allCases) { Text($0.title).tag($0) }
                     }
                 } footer: {
-                    Text("Agents shows what your agents do and cost. Automatic shows it once an agent has sent a report.")
+                    Text(
+                        "Agents shows what your agents do and cost. Automatic shows it once an agent has sent a report.",
+                    )
                 }
                 if session.isDevelopment {
                     Section {

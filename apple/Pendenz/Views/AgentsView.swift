@@ -51,7 +51,9 @@ struct AgentsView: View {
             if let entry, entry.isReportUnreadable {
                 ContentUnavailableView(
                     "Report Not Readable", systemImage: "exclamationmark.triangle",
-                    description: Text("\(entry.name) sent a report this version of the app cannot read. Update the app."),
+                    description: Text(
+                        "\(entry.name) sent a report this version of the app cannot read. Update the app.",
+                    ),
                 )
             } else if let entry, let report = entry.report {
                 ScrollView {
@@ -83,9 +85,12 @@ struct AgentsView: View {
     private var problemNote: some View {
         switch board.problem {
         case .outdated:
-            Label("The server is older than agent reports. Update it to see your agents.", systemImage: "exclamationmark.triangle")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            Label(
+                "The server is older than agent reports. Update it to see your agents.",
+                systemImage: "exclamationmark.triangle",
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
         case .unreachable:
             if let fetchedAt = board.fetchedAt {
                 Label {
@@ -198,7 +203,11 @@ private func money(_ amount: Double) -> String {
 }
 
 private func duration(_ seconds: Int) -> String {
-    Duration.seconds(seconds).formatted(.units(allowed: [.days, .hours, .minutes], width: .abbreviated, maximumUnitCount: 2))
+    Duration.seconds(seconds).formatted(.units(
+        allowed: [.days, .hours, .minutes],
+        width: .abbreviated,
+        maximumUnitCount: 2,
+    ))
 }
 
 // MARK: Status
@@ -242,7 +251,10 @@ private struct AgentStatusCard: View {
             }
             if let agent = report.agent {
                 VStack(alignment: .leading, spacing: 6) {
-                    LabeledContent("Software", value: [agent.software, agent.version].compactMap(\.self).joined(separator: " "))
+                    LabeledContent(
+                        "Software",
+                        value: [agent.software, agent.version].compactMap(\.self).joined(separator: " "),
+                    )
                     if let model = agent.model {
                         LabeledContent("Model", value: model)
                     }
@@ -266,9 +278,11 @@ private struct AgentStatusCard: View {
                 .font(.subheadline)
             }
             let today = entry.today
-            Text("Today: \(today.created) added, \(today.updated) changed, \(today.completed) completed, \(today.commented) comments")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            Text(
+                "Today: \(today.created) added, \(today.updated) changed, \(today.completed) completed, \(today.commented) comments",
+            )
+            .font(.footnote)
+            .foregroundStyle(.secondary)
         }
     }
 }
@@ -676,7 +690,13 @@ private struct JobRow: View {
                         LabeledContent("Tokens this week", value: tokens(job.tokensWeek))
                     }
                     if let seconds = job.lastDurationS {
-                        LabeledContent("Last model run took", value: Duration.seconds(seconds).formatted(.units(width: .abbreviated, maximumUnitCount: 2)))
+                        LabeledContent(
+                            "Last model run took",
+                            value: Duration.seconds(seconds).formatted(.units(
+                                width: .abbreviated,
+                                maximumUnitCount: 2,
+                            )),
+                        )
                     }
                 }
                 .font(.footnote)
@@ -701,16 +721,26 @@ private struct MachineCard: View {
 
     var body: some View {
         Card(title: host.name, systemImage: "desktopcomputer") {
-            Text([host.chip, host.cores > 0 ? "\(host.cores) cores" : nil, host.os].compactMap(\.self).joined(separator: " · "))
+            Text([host.chip, host.cores > 0 ? "\(host.cores) cores" : nil, host.os].compactMap(\.self)
+                .joined(separator: " · "))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             HStack(alignment: .top, spacing: 16) {
-                Meter(label: "CPU", percent: host.cpuPercent, detail: host.load.first.map { "Load \($0.formatted(.number.precision(.fractionLength(1))))" })
-                Meter(label: "Memory", percent: memoryShare, detail: "\(bytes(host.memoryUsed)) of \(bytes(host.memoryTotal))")
+                Meter(
+                    label: "CPU",
+                    percent: host.cpuPercent,
+                    detail: host.load.first.map { "Load \($0.formatted(.number.precision(.fractionLength(1))))" },
+                )
+                Meter(
+                    label: "Memory",
+                    percent: memoryShare,
+                    detail: "\(bytes(host.memoryUsed)) of \(bytes(host.memoryTotal))",
+                )
                 Meter(label: "Disk", percent: diskShare, detail: "\(bytes(host.diskTotal - host.diskUsed)) free")
             }
             if let free = host.memoryFreePercent {
-                Text(free < 20 ? "Memory is tight: \(Int(free)) % free." : "Memory pressure is low: \(Int(free)) % free.")
+                Text(free < 20 ? "Memory is tight: \(Int(free)) % free." :
+                    "Memory pressure is low: \(Int(free)) % free.")
                     .font(.caption)
                     .foregroundStyle(free < 20 ? .red : .secondary)
             }
