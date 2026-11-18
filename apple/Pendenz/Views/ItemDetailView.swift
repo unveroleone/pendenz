@@ -50,7 +50,13 @@ struct ItemDetailView: View {
                 TextEditor(text: $notes)
                     .font(.body)
                     .scrollContentBackground(.hidden)
+                    // About two lines, as the field before it: the body text is 17 points on
+                    // iOS and 13 on the Mac.
+                    #if os(iOS)
                     .frame(minHeight: 60)
+                    #else
+                    .frame(minHeight: 34)
+                    #endif
                     // The editor insets its text by five points, and on iOS by eight from the
                     // top. This lines it up with the other rows.
                     .padding(.horizontal, -5)
@@ -61,7 +67,7 @@ struct ItemDetailView: View {
                     .overlay(alignment: .topLeading) {
                         if notes.isEmpty {
                             Text("Notes")
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(Self.placeholder)
                                 .allowsHitTesting(false)
                                 .accessibilityHidden(true)
                         }
@@ -200,6 +206,13 @@ struct ItemDetailView: View {
     }
 
     // MARK: Text
+
+    // The color the system gives the placeholder of a text field, which a text editor lacks.
+    #if os(macOS)
+    private static let placeholder = Color(nsColor: .placeholderTextColor)
+    #else
+    private static let placeholder = Color(uiColor: .placeholderText)
+    #endif
 
     private var isEditingLines: Bool {
         switch focus {
