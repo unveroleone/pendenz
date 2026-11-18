@@ -180,3 +180,181 @@ async fn the_command_sends_a_report_file() {
     let (_, list) = agents(&server, &server.owner).await;
     assert_eq!(list["agents"][0]["report"]["host"]["name"], "box");
 }
+
+async fn post(server: &Server, token: Option<&str>, path: &str, body: Value) -> (u16, Value) {
+    let mut request = reqwest::Client::new()
+        .post(format!("{}/api{path}", server.url()))
+        .json(&body);
+    if let Some(token) = token {
+        request = request.bearer_auth(token);
+    }
+    let response = request.send().await.unwrap();
+    let status = response.status().as_u16();
+    (status, response.json().await.unwrap_or(Value::Null))
+}
+
+#[tokio::test]
+async fn an_agent_connects_once_with_a_code_from_the_owner() {
+    let server = Server::start().await;
+    // Only the owner's devices make codes.
+    let worker = server.token("worker", "read,write");
+    let request = json!({"name": "Mac mini", "access": "status"});
+    assert_eq!(
+        post(&server, Some(&worker), "/agent-codes", request.clone())
+            .await
+            .0,
+        403
+    );
+    let read_only = server.token("owner", "read");
+    assert_eq!(
+        post(&server, Some(&read_only), "/agent-codes", request.clone())
+            .await
+            .0,
+        403
+    );
+    assert_eq!(
+        post(
+            &server,
+            Some(&server.owner),
+            "/agent-codes",
+            json!({"name": "x", "access": "admin"})
+        )
+        .await
+        .0,
+        400
+    );
+
+    let (status, made) = post(&server, Some(&server.owner), "/agent-codes", request).await;
+    assert_eq!(status, 200, "{made}");
+    assert_eq!(made["scopes"], json!(["report"]));
+    let code = made["code"].as_str().unwrap().to_lowercase();
+
+    let (status, connected) = post(&server, None, "/agents/connect", json!({"code": code})).await;
+    assert_eq!(status, 200, "{connected}");
+    assert_eq!(connected["agent"]["id"], "mac-mini");
+    let token = connected["token"].as_str().unwrap().to_owned();
+    // The code works once.
+    assert_eq!(
+        post(&server, None, "/agents/connect", json!({"code": code}))
+            .await
+            .0,
+        400
+    );
+
+    // The new token sends reports and does nothing else.
+    assert_eq!(
+        put(&server, &token, report("2026-11-18T10:00:00Z")).await.0,
+        200
+    );
+    let response = reqwest::Client::new()
+        .get(format!("{}/api/items", server.url()))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 403);
+
+    // A second agent of the same name gets its own ID, here with access to the items.
+    let (_, made) = post(
+        &server,
+        Some(&server.owner),
+        "/agent-codes",
+        json!({"name": "Mac mini", "access": "work"}),
+    )
+    .await;
+    let (_, second) = post(
+        &server,
+        None,
+        "/agents/connect",
+        json!({"code": made["code"]}),
+    )
+    .await;
+    assert_eq!(second["agent"]["id"], "mac-mini-2");
+    assert_eq!(second["scopes"], json!(["read", "write", "report"]));
+}
+
+#[tokio::test]
+async fn revoking_an_agent_ends_its_tokens_and_report() {
+    let server = Server::start().await;
+    let reporter = server.token("box", "report");
+    put(&server, &reporter, report("2026-11-18T10:00:00Z")).await;
+    let worker = server.token("worker", "read,write");
+    let delete = |token: String, id: &str| {
+        let url = format!("{}/api/agents/{id}", server.url());
+        async move {
+            reqwest::Client::new()
+                .delete(url)
+                .bearer_auth(token)
+                .send()
+                .await
+                .unwrap()
+                .status()
+                .as_u16()
+        }
+    };
+    assert_eq!(delete(worker.clone(), "box").await, 403);
+    assert_eq!(delete(server.owner.clone(), "owner").await, 404);
+    assert_eq!(delete(server.owner.clone(), "box").await, 200);
+    assert_eq!(
+        put(&server, &reporter, report("2026-11-18T11:00:00Z"))
+            .await
+            .0,
+        401
+    );
+    let (_, list) = agents(&server, &server.owner).await;
+    let row = list["agents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["id"] == "box")
+        .unwrap()
+        .clone();
+    assert_eq!(row["report"], Value::Null);
+    assert_eq!(row["scopes"], json!([]));
+}
+
+#[tokio::test]
+async fn the_command_line_connects_and_reports_with_the_saved_token() {
+    let server = Server::start().await;
+    let (_, made) = post(
+        &server,
+        Some(&server.owner),
+        "/agent-codes",
+        json!({"name": "Box", "access": "status"}),
+    )
+    .await;
+    let config = server.dir.join("config");
+    let command = |args: &[&str]| {
+        std::process::Command::new(BIN)
+            .args(args)
+            .env_remove("PENDENZ_API_URL")
+            .env_remove("PENDENZ_API_TOKEN")
+            .env("XDG_CONFIG_HOME", &config)
+            .output()
+            .unwrap()
+    };
+    let out = command(&["connect", &server.url(), made["code"].as_str().unwrap()]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let saved = config.join("pendenz/agent.json");
+    use std::os::unix::fs::PermissionsExt;
+    assert_eq!(
+        std::fs::metadata(&saved).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+
+    let file = server.dir.join("report.json");
+    std::fs::write(&file, report("2026-11-18T10:00:00Z").to_string()).unwrap();
+    let out = command(&["report", "--file", file.to_str().unwrap()]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let (_, list) = agents(&server, &server.owner).await;
+    assert_eq!(list["agents"][0]["id"], "box");
+    assert_eq!(list["agents"][0]["report"]["host"]["name"], "box");
+}

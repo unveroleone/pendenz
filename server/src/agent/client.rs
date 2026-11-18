@@ -116,10 +116,23 @@ impl Client {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("the HTTP client starts");
+        // The environment wins. Without it, the server and token that `pendenz connect` saved.
+        let saved = if env("PENDENZ_API_URL").is_none() && env("PENDENZ_API_TOKEN").is_none() {
+            crate::report::setup::saved()
+        } else {
+            None
+        };
+        let (base, token) = match saved {
+            Some(saved) => (saved.server, Some(saved.token)),
+            None => (
+                env("PENDENZ_API_URL").unwrap_or_else(|| "http://127.0.0.1:8080".into()),
+                env("PENDENZ_API_TOKEN"),
+            ),
+        };
         Client(Transport::Http {
             http,
-            base: env("PENDENZ_API_URL").unwrap_or_else(|| "http://127.0.0.1:8080".into()),
-            token: env("PENDENZ_API_TOKEN"),
+            base,
+            token,
             source: env("PENDENZ_SOURCE"),
         })
     }

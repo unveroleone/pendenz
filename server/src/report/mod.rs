@@ -3,6 +3,7 @@
 mod claude;
 mod hermes;
 mod host;
+pub mod setup;
 mod text;
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -447,8 +448,19 @@ impl Report {
     }
 }
 
+#[derive(clap::Subcommand)]
+enum Action {
+    /// Send a report every two minutes from now on: a LaunchAgent on macOS, a systemd user
+    /// timer on Linux.
+    Install,
+    /// Stop sending reports.
+    Uninstall,
+}
+
 #[derive(clap::Args)]
 pub struct Args {
+    #[command(subcommand)]
+    action: Option<Action>,
     /// Print the report instead of sending it.
     #[arg(long)]
     dry_run: bool,
@@ -573,7 +585,32 @@ pub async fn collect(args: &Args) -> Report {
     report.bounded()
 }
 
+fn print(result: anyhow::Result<serde_json::Value>) -> i32 {
+    match result {
+        Ok(value) => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&value).unwrap_or_default()
+            );
+            0
+        }
+        Err(error) => {
+            eprintln!("{error:#}");
+            1
+        }
+    }
+}
+
+pub async fn connect(server: &str, code: &str) -> i32 {
+    print(setup::connect(server, code).await)
+}
+
 pub async fn run(args: Args) -> i32 {
+    match args.action {
+        Some(Action::Install) => return print(setup::install()),
+        Some(Action::Uninstall) => return print(setup::uninstall()),
+        None => {}
+    }
     let report = match &args.file {
         Some(path) => match read_file(path) {
             Ok(report) => report,

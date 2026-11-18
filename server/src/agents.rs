@@ -183,3 +183,233 @@ pub async fn list(
 fn no_activity() -> Value {
     json!({"created": 0, "updated": 0, "completed": 0, "commented": 0})
 }
+
+// MARK: Connecting an agent
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CodeRequest {
+    name: String,
+    // "status": it sends reports and nothing else. "work": it also reads and writes items.
+    access: String,
+}
+
+fn scopes_for(access: &str) -> Option<Vec<&'static str>> {
+    match access {
+        "status" => Some(vec!["report"]),
+        "work" => Some(vec!["read", "write", "report"]),
+        _ => None,
+    }
+}
+
+fn clean_name(name: &str) -> Option<String> {
+    let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!name.is_empty() && name.chars().count() <= 60 && !name.chars().any(char::is_control))
+        .then_some(name)
+}
+
+// The owner makes a one-time code for a new agent, in the app. The code carries the name and
+// the scopes; the agent cannot choose them. Like a pairing code it needs a token that approves.
+pub async fn create_code(
+    State(state): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    payload: std::result::Result<Json<CodeRequest>, JsonRejection>,
+) -> Result<Json<Value>> {
+    crate::devices::require_owner(&identity)?;
+    let shape = || {
+        ApiError::bad(
+            "Send {\"name\": \"...\", \"access\": \"status\" or \"work\"} with a name of 1 to 60 characters.",
+        )
+    };
+    let Json(request) = payload.map_err(|_| shape())?;
+    let name = clean_name(&request.name).ok_or_else(shape)?;
+    let scopes = scopes_for(&request.access).ok_or_else(shape)?;
+    let _guard = state.writer.lock().await;
+    let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
+    sqlx::query(concat!(
+        "DELETE FROM agent_codes WHERE expires_at <= ",
+        now!()
+    ))
+    .execute(&mut *tx)
+    .await?;
+    let code = crate::devices::new_code();
+    let expires_at: String = sqlx::query_scalar(
+        "INSERT INTO agent_codes(code_hash, name, scopes, created_by, expires_at) \
+         VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)) RETURNING expires_at",
+    )
+    .bind(crate::auth::hash(&code))
+    .bind(&name)
+    .bind(scopes.join(","))
+    .bind(identity.device.as_deref())
+    .bind(format!("+{} minutes", crate::devices::CODE_MINUTES))
+    .fetch_one(&mut *tx)
+    .await?;
+    sqlx::query(
+        "INSERT INTO activity(actor_id, action, detail) VALUES (?, 'agent_code_created', ?)",
+    )
+    .bind(&identity.actor.id)
+    .bind(json!({"name": name, "scopes": scopes}).to_string())
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    let (head, tail) = code.split_at(crate::devices::CODE_LENGTH / 2);
+    Ok(Json(json!({
+        "code": format!("{head}-{tail}"),
+        "expires_at": expires_at,
+        "name": name,
+        "scopes": scopes,
+    })))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConnectRequest {
+    code: String,
+}
+
+fn invalid_agent_code() -> ApiError {
+    ApiError::bad("This agent code is not valid or has expired. Make a new one in the app.")
+}
+
+// An ID from the name, lowercase letters, digits and hyphens, that no actor has yet.
+async fn free_agent_id(conn: &mut sqlx::SqliteConnection, name: &str) -> Result<String> {
+    let mut base: String = name
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    while base.contains("--") {
+        base = base.replace("--", "-");
+    }
+    let mut base = base.trim_matches('-').chars().take(32).collect::<String>();
+    // Reserved for the bridge, which gets the telegram scope alone; and never the owner.
+    if base.is_empty() || base == crate::auth::OWNER || base == "telegram-bridge" {
+        base = format!("agent-{}", if base.is_empty() { "new" } else { &base });
+    }
+    for n in 1..1000 {
+        let id = if n == 1 {
+            base.clone()
+        } else {
+            format!("{base}-{n}")
+        };
+        let taken: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM actors WHERE id = ?)")
+            .bind(&id)
+            .fetch_one(&mut *conn)
+            .await?;
+        if !taken {
+            return Ok(id);
+        }
+    }
+    Err(ApiError::bad("Choose another name for the agent."))
+}
+
+// Without a token, like pairing: the agent's machine trades the code for a new agent and its
+// token. The code is used up in the same transaction, so it works once. A lost answer leaves a
+// connected agent without its token; the owner revokes it and makes a new code.
+pub async fn connect(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    payload: std::result::Result<Json<ConnectRequest>, JsonRejection>,
+) -> Result<Json<Value>> {
+    if state.local && !crate::auth::loopback_host(&headers) {
+        return Err(ApiError::forbidden());
+    }
+    let Json(request) = payload.map_err(|_| ApiError::bad("Send {\"code\": \"...\"}."))?;
+    let code = crate::devices::normalize(&request.code).ok_or_else(invalid_agent_code)?;
+    let code_hash = crate::auth::hash(&code);
+    // Looked up without the write lock first, so guesses cannot hold up the writers.
+    let known: bool = sqlx::query_scalar(concat!(
+        "SELECT EXISTS(SELECT 1 FROM agent_codes WHERE code_hash = ? AND expires_at > ",
+        now!(),
+        ")"
+    ))
+    .bind(&code_hash)
+    .fetch_one(&state.db)
+    .await?;
+    if !known {
+        return Err(invalid_agent_code());
+    }
+    let _guard = state.writer.lock().await;
+    let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
+    let used: Option<(String, String)> = sqlx::query_as(concat!(
+        "DELETE FROM agent_codes WHERE code_hash = ? AND expires_at > ",
+        now!(),
+        " RETURNING name, scopes"
+    ))
+    .bind(&code_hash)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let (name, scopes) = used.ok_or_else(invalid_agent_code)?;
+    // Only scopes an agent may hold, whatever the row says.
+    let scopes: Vec<&str> = scopes
+        .split(',')
+        .filter(|s| ["read", "write", "report"].contains(s))
+        .collect();
+    let id = free_agent_id(&mut tx, &name).await?;
+    sqlx::query("INSERT INTO actors(id, name, kind) VALUES (?, ?, 'agent')")
+        .bind(&id)
+        .bind(&name)
+        .execute(&mut *tx)
+        .await?;
+    let token = crate::auth::new_token();
+    sqlx::query(
+        "INSERT INTO tokens(id, actor_id, label, token_hash, scopes) VALUES (?, ?, 'connected', ?, ?)",
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(&id)
+    .bind(crate::auth::hash(&token))
+    .bind(scopes.join(","))
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query("INSERT INTO activity(actor_id, action, detail) VALUES (?, 'agent_connected', ?)")
+        .bind(&id)
+        .bind(json!({"name": name, "scopes": scopes}).to_string())
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(Json(json!({
+        "token": token,
+        "agent": {"id": id, "name": name},
+        "scopes": scopes,
+    })))
+}
+
+// The owner takes an agent off: its tokens stop working and its report goes. The agent stays
+// as an actor, so the activity log and the items it wrote still name it.
+pub async fn revoke(
+    State(state): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<Value>> {
+    crate::devices::require_owner(&identity)?;
+    let _guard = state.writer.lock().await;
+    let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
+    let is_agent: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM actors WHERE id = ? AND kind = 'agent')")
+            .bind(&id)
+            .fetch_one(&mut *tx)
+            .await?;
+    if !is_agent {
+        return Err(ApiError::missing());
+    }
+    let revoked = sqlx::query("UPDATE tokens SET revoked = 1 WHERE actor_id = ? AND revoked = 0")
+        .bind(&id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+    sqlx::query("DELETE FROM agent_reports WHERE actor_id = ?")
+        .bind(&id)
+        .execute(&mut *tx)
+        .await?;
+    if revoked > 0 {
+        sqlx::query(
+            "INSERT INTO activity(actor_id, action, detail) VALUES (?, 'agent_revoked', ?)",
+        )
+        .bind(&identity.actor.id)
+        .bind(json!({"agent": id}).to_string())
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(Json(json!({"id": id, "revoked": true})))
+}

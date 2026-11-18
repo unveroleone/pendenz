@@ -17,10 +17,10 @@ use sqlx::{FromRow, SqliteConnection};
 const CODE_ALPHABET: &[u8; 30] = b"ABCDEFGHJKMNPQRSTVWXYZ23456789";
 // 30^10 codes, about 49 bits. A code lives for ten minutes, so guessing one is out of reach
 // without a limit on attempts.
-const CODE_LENGTH: usize = 10;
-const CODE_MINUTES: i64 = 10;
+pub(crate) const CODE_LENGTH: usize = 10;
+pub(crate) const CODE_MINUTES: i64 = 10;
 
-fn new_code() -> String {
+pub(crate) fn new_code() -> String {
     loop {
         // The hash of a fresh token is 32 evenly spread bytes. A byte of 240 or more is skipped,
         // so every character is equally likely.
@@ -38,7 +38,7 @@ fn new_code() -> String {
 }
 
 // The code as it was typed, without the hyphen and spaces and in upper case.
-fn normalize(code: &str) -> Option<String> {
+pub(crate) fn normalize(code: &str) -> Option<String> {
     let code: String = code
         .chars()
         .filter(|c| !c.is_whitespace() && *c != '-')
