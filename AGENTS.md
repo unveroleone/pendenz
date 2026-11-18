@@ -44,6 +44,40 @@ Tasks, reminders and notes for one person, with a server that agents can work fr
 - The Sparkle key is the Keychain account `pendenz` (`generate_keys --account pendenz`), and its public half is `SUPublicEDKey` in `Config/Info.plist`. Without the private key no update can reach the copies already installed, so keep a copy outside the Keychain.
 - Neither workflow runs for a push that changes `apple/appcast.xml` alone.
 
+### Making a release
+
+Ask the owner before the tag: a pushed tag publishes the release and the image, and servers on the nightly timer take `latest` that night.
+
+1. Merge every pull request that goes in. Then run `apple/uitest.sh` once on the merged `main`: each pull request ran the tests alone, and the seeds and tests of two can get in each other's way. Wait until CI on `main` has passed.
+2. Raise `version` in `server/Cargo.toml` and record the agent fixtures again (`PENDENZ_RECORD_FIXTURES=1 cargo test --test agent`), since they hold the version. When the apps start to send something new, `ServerVersion.minimum` goes up in the same change.
+3. Tag the commit (`git tag -a v<version> -m "Pendenz <version>"`), push the tag and wait for CI. It writes a release with the image line and a list of the merged pull requests.
+4. Add the sections `## Server` and `## iPhone and iPad` to that release between the image line and "What's Changed" (`gh release edit v<version> --notes-file <file>`).
+5. Update the owner's server with `update.sh <version>`, which takes a backup first. Then check that it answers with the new `Pendenz-Version`, that `/readyz` answers 200 and that a request without a token gets 401.
+6. Run `apple/release-mac.sh <notes.md>` on `main` at the tagged commit, with the team and the API key in the environment. It adds `## Mac app` with the notes to the same release and puts the same text in the update window of Sparkle. It does not ask before it publishes. Do not switch branches in that checkout while it runs, because it builds from the working tree.
+7. Install the new build on the owner's iPhone when it is paired with this Mac and reachable. Until the App Store, this is how the phone gets an update:
+
+   ```sh
+   xcodebuild -project apple/Pendenz.xcodeproj -scheme Pendenz -configuration Release \
+       -destination 'id=<device>' -derivedDataPath <dir> \
+       -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
+       -authenticationKeyPath <key.p8> -authenticationKeyID <key id> -authenticationKeyIssuerID <issuer> \
+       DEVELOPMENT_TEAM=<team> MARKETING_VERSION=<version> CURRENT_PROJECT_VERSION=$(git rev-list --count HEAD) build
+   xcrun devicectl device install app --device <device> <dir>/Build/Products/Release-iphoneos/Pendenz.app
+   ```
+
+   `xcrun devicectl list devices` names the device. Without `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` the build calls itself 0.1.0 (1). A locked phone takes the install, but the app cannot be launched until it is unlocked.
+
+### Release notes
+
+The notes are for the person who updates: what they will notice and what they have to do. Write them after the tag, from the merged pull requests, and read each line as someone who never saw the code.
+
+- One line per change, said from the user's side: "Search finds an item by its number", not the title of the pull request. Route, tool and file names belong in `## Server`, which self-hosters and authors of agents read.
+- Always say what an update costs: a migration, and that the older version does not start on the migrated database, so the backup from `update.sh` is the way back; which server version the apps need and what waits until the server has it; something that happens once, such as a full sync on the first launch; a deploy file that `update.sh` does not copy and has to be copied by hand.
+- Say what a security fix closes, plainly: what could happen before, and who could do it.
+- Leave out tests, CI, refactors and review notes. The list of pull requests is below them for anyone who wants more.
+- The Mac notes start with the download line (see an earlier release). The same text shows in the update window of the installed app, so it has no headings and no links to pull requests.
+- No introduction and no closing line. A release with three changes gets three lines.
+
 ## Migrations
 
 - A committed migration is never edited: every schema change is a new file in `server/migrations/`. sqlx compares each file's SHA-384 with the one in `_sqlx_migrations`, and a server with an edited migration does not start on any database made before the edit.
