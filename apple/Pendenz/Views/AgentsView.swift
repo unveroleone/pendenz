@@ -48,7 +48,12 @@ struct AgentsView: View {
 
     var body: some View {
         Group {
-            if let entry, let report = entry.report {
+            if let entry, entry.isReportUnreadable {
+                ContentUnavailableView(
+                    "Report Not Readable", systemImage: "exclamationmark.triangle",
+                    description: Text("\(entry.name) sent a report this version of the app cannot read. Update the app."),
+                )
+            } else if let entry, let report = entry.report {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         if board.reporting.count > 1 {
@@ -620,9 +625,17 @@ private struct JobRow: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(job.name)
                             .font(.subheadline.weight(.medium))
-                        Text(job.enabled ? job.schedule : "Paused")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            if job.isFailing {
+                                Text("Failed")
+                                    .foregroundStyle(.red)
+                                Text("·")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(job.enabled ? job.schedule : "Paused")
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.caption)
                     }
                     Spacer(minLength: 8)
                     if let next = job.nextRunAt, next <= .now {

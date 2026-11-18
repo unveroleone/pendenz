@@ -20,6 +20,10 @@ final class AgentBoard {
     private(set) var fetchedAt: Date?
     private(set) var problem: Problem?
     private(set) var isLoading = false
+    // The last time any window asked, answered or not, so open windows share one request.
+    private var askedAt: Date?
+    // Called when the server refuses this device's token: the pairing is over.
+    var onUnauthorized: (() -> Void)?
 
     private let api: APIClient
     private let file: URL
@@ -62,6 +66,7 @@ final class AgentBoard {
     func refresh() async {
         guard !isClosed, !isLoading else { return }
         isLoading = true
+        askedAt = .now
         defer { isLoading = false }
         do {
             let data = try await api.agents()
@@ -74,6 +79,9 @@ final class AgentBoard {
                 at: file.deletingLastPathComponent(), withIntermediateDirectories: true,
             )
             try? data.write(to: file, options: .atomic)
+        } catch APIError.status(401, _) {
+            guard !isClosed else { return }
+            onUnauthorized?()
         } catch APIError.status(404, _) {
             guard !isClosed else { return }
             problem = .outdated
@@ -87,7 +95,7 @@ final class AgentBoard {
     // Several windows share the answers, since a fetch younger than the interval is not repeated.
     func watch() async {
         while !Task.isCancelled, !isClosed {
-            if fetchedAt.map({ Date.now.timeIntervalSince($0) >= 25 }) ?? true || problem != nil {
+            if askedAt.map({ Date.now.timeIntervalSince($0) >= 25 }) ?? true {
                 await refresh()
             }
             try? await Task.sleep(for: Self.interval)

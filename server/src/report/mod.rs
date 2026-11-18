@@ -306,6 +306,23 @@ const MAX_PROCESSES: usize = 10;
 const MAX_SAMPLES: usize = 300;
 const MAX_CHANNELS: usize = 8;
 
+// The largest count a report keeps: far above any real use, and small enough that the apps can
+// add up a month of them without running over.
+const MAX_COUNT: u64 = 1_000_000_000_000_000;
+
+fn count(value: &mut u64) {
+    *value = (*value).min(MAX_COUNT);
+}
+
+impl Tokens {
+    fn capped(&mut self) {
+        count(&mut self.input);
+        count(&mut self.output);
+        count(&mut self.cache_read);
+        count(&mut self.cache_write);
+    }
+}
+
 fn finite(value: f64) -> f64 {
     if value.is_finite() { value } else { 0.0 }
 }
@@ -361,11 +378,14 @@ impl Report {
                 account.daily.drain(..skip);
                 for day in &mut account.daily {
                     day.cost = day.cost.map(money);
+                    day.tokens.capped();
                 }
                 account.models.truncate(MAX_MODELS);
                 for model in &mut account.models {
                     model.model = text::cut(&model.model, NAME);
                     model.cost = model.cost.map(money);
+                    model.tokens.capped();
+                    count(&mut model.sessions);
                 }
             }
         }
@@ -380,6 +400,7 @@ impl Report {
                     .as_deref()
                     .map(|v| text::cut(&text::clean(v), DETAIL));
                 job.last_duration_s = job.last_duration_s.map(|v| finite(v).max(0.0));
+                count(&mut job.tokens_week);
             }
         }
         if let Some(runs) = &mut self.runs {
@@ -398,15 +419,28 @@ impl Report {
             host.load.truncate(3);
             host.load.iter_mut().for_each(|v| *v = finite(*v).max(0.0));
             host.memory_free_percent = host.memory_free_percent.map(percent);
+            for value in [
+                &mut host.memory_used,
+                &mut host.memory_total,
+                &mut host.swap_used,
+                &mut host.disk_used,
+                &mut host.disk_total,
+                &mut host.uptime_s,
+            ] {
+                count(value);
+            }
+            host.disk_used = host.disk_used.min(host.disk_total);
             host.top.truncate(MAX_PROCESSES);
             for process in &mut host.top {
                 process.name = text::cut(&process.name, NAME);
                 process.cpu_percent = finite(process.cpu_percent).max(0.0);
+                count(&mut process.memory);
             }
             let skip = host.series.len().saturating_sub(MAX_SAMPLES);
             host.series.drain(..skip);
             for sample in &mut host.series {
                 sample.cpu_percent = percent(sample.cpu_percent);
+                count(&mut sample.memory_used);
             }
         }
         self

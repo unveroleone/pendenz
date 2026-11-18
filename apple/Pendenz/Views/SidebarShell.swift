@@ -120,6 +120,10 @@ struct SidebarShell: View {
         }
         .searchable(text: $query, prompt: place == .notes ? "Search notes" : "Search items")
         .searchFocused($isSearchFocused)
+        .onChange(of: agentsVisibility.isShown(agents), initial: true) { _, isShown in
+            // The entry was taken away while it was open.
+            if !isShown, navigation.place == .agents { navigation.place = .inbox }
+        }
         .onChange(of: navigation.place) { _, place in
             // A list chosen while a search is on screen ends the search.
             query = ""

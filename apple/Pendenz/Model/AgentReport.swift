@@ -17,6 +17,30 @@ nonisolated struct AgentEntry: Decodable, Sendable, Identifiable {
     var receivedAt: Date?
     var today: AgentToday
     var report: AgentReport?
+    // True when the agent sent a report this app cannot read, such as one from a newer agent.
+    // The other agents still show.
+    var isReportUnreadable = false
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, scopes, lastUsedAt, receivedAt, today, report
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        scopes = try container.decode([String].self, forKey: .scopes)
+        lastUsedAt = try container.decodeIfPresent(Date.self, forKey: .lastUsedAt)
+        receivedAt = try container.decodeIfPresent(Date.self, forKey: .receivedAt)
+        today = (try? container.decode(AgentToday.self, forKey: .today))
+            ?? AgentToday(created: 0, updated: 0, completed: 0, commented: 0)
+        do {
+            report = try container.decodeIfPresent(AgentReport.self, forKey: .report)
+        } catch {
+            report = nil
+            isReportUnreadable = true
+        }
+    }
 }
 
 // What an agent did today in the server's time zone, from the activity log.
@@ -101,8 +125,11 @@ nonisolated struct AgentDay: Decodable, Sendable, Identifiable {
     var id: String { date }
     var tokens: Int { input + output + cacheRead + cacheWrite }
 
+    // Midnight of that day on this device's calendar, which is how the charts group days.
     var day: Date? {
-        try? Date(date, strategy: Date.ISO8601FormatStyle().year().month().day())
+        let parts = date.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 }
 
@@ -205,6 +232,6 @@ nonisolated extension AgentList {
 
     // The agents that sent a report, newest first: the server sorts them so.
     var reporting: [AgentEntry] {
-        agents.filter { $0.report != nil }
+        agents.filter { $0.report != nil || $0.isReportUnreadable }
     }
 }

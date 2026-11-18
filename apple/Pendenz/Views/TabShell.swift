@@ -38,7 +38,11 @@ struct TabShell: View {
     }
 
     private var tab: AppTab {
-        get { launchTab ?? savedTab }
+        get {
+            let tab = launchTab ?? savedTab
+            // A tab that is no longer offered falls back to Tasks.
+            return tab == .agents && !agentsVisibility.isShown(agents) ? .tasks : tab
+        }
         nonmutating set {
             if launchTab == nil { savedTab = newValue } else { launchTab = newValue }
         }

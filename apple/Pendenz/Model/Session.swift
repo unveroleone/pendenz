@@ -224,7 +224,11 @@ final class Session {
         self.store?.close()
         self.store = store
         agents?.close()
-        agents = AgentBoard(api: api)
+        let agents = AgentBoard(api: api)
+        if connection.token != nil {
+            agents.onUnauthorized = { [weak self] in self?.lostPairing() }
+        }
+        self.agents = agents
     }
 
     // MARK: Pairing
@@ -311,7 +315,9 @@ final class Session {
         connection = nil
         store?.close()
         store = nil
-        agents?.close()
+        // Unlike the items, the reports of a pairing that ended are not kept: they say what an
+        // agent's machine runs and spends, and a new pairing fetches them again.
+        agents?.erase()
         agents = nil
         // The widgets and Spotlight show nothing of a pairing that has ended.
         WidgetFeed.shared.clear()
