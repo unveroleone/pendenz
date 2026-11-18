@@ -178,7 +178,11 @@ The author owns a comment. An agent may change and delete only the comments its 
 
 The routes work like the file routes: they check the item with the hidden filter and look the comment up by its ID and the item's ID together, and a trashed item takes no change to its comments. The activity log records `comment_updated` with the comment's ID, whether the text changed and the new `outdated` value, and `comment_deleted` with the ID. It never holds the text, so a deleted comment leaves no text on the server, apart from the backups made before. Copies that a device or an agent already read stay where they are.
 
-`outdated` marks a comment that no longer holds. Nothing is hidden: `get_item` puts a `notice` next to it that tells the agent not to rely on it. The app does not show comments yet; it is to show an outdated one dimmed.
+`outdated` marks a comment that no longer holds. Nothing is hidden: `get_item` puts a `notice` next to it that tells the agent not to rely on it, and the app shows it dimmed with an "Outdated" label.
+
+In the app, the comments are a section of the item detail ([`ItemCommentsSection.swift`](../apple/Pendenz/Views/ItemCommentsSection.swift)), there only when the item has any. It shows the latest comment, and a row above it opens the earlier ones, so the order stays oldest first without a long list on every item. A comment shows its author ("You" for the owner, an agent by its name) and its time, and a long text shows six lines until it is tapped. A long press or a right click copies, edits, marks as outdated or deletes it; on the iPhone and iPad a swipe does the same. The app does not add comments yet.
+
+The app keeps the comments it gets from the changes feed on disk and removes a deleted one there. Their authors' names come from `GET /api/bootstrap`, asked once per launch for an author ID the device does not know yet, and are kept per server. Edits and deletions go through the outbox like every other change; a 409 reads the item's comments again (`GET /api/items/<id>`) and sends the change on top of them.
 
 ### Files
 
@@ -419,7 +423,7 @@ The control "New Item" for Control Center, the lock screen and the Action button
 
 - The app is black and white. The tint is the label color, and color is kept for state, such as red for overdue. Liquid Glass takes its color from what is behind it, so color in the chrome would carry nothing.
 - Quick add is one line. It understands dates, times, repeats and `#project` in English and German ([`QuickAddParser.swift`](../apple/Pendenz/Model/QuickAddParser.swift)), and shows what it understood as chips.
-- The app asks only before what cannot be taken back: unpairing, revoking a device, deleting a project and removing an attachment. Always as an alert with the red action and Cancel. Moving something to the trash never asks, because "Put Back" undoes it, and a question before every trash teaches the hand to confirm without reading.
+- The app asks only before what cannot be taken back: unpairing, revoking a device, deleting a project, removing an attachment and deleting a comment. Always as an alert with the red action and Cancel. Moving something to the trash never asks, because "Put Back" undoes it, and a question before every trash teaches the hand to confirm without reading.
 - Each list keeps its own sort order on each device. Manual order is the only one in which rows can be dragged.
 
 ## Kept simple on purpose

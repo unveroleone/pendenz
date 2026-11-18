@@ -25,12 +25,12 @@ private nonisolated struct SettingsPatch: Encodable {
     let fileLimitMb: Int
 }
 
-// One row of the changes feed in its current state. Comments are skipped until the item detail
-// shows them.
+// One row of the changes feed in its current state.
 nonisolated enum Change: Sendable, Decodable {
     case item(Item)
     case project(Project)
     case note(Note)
+    case comment(Comment)
     case other
 
     private enum CodingKeys: String, CodingKey {
@@ -43,6 +43,7 @@ nonisolated enum Change: Sendable, Decodable {
         case "item": self = try .item(container.decode(Item.self, forKey: .data))
         case "project": self = try .project(container.decode(Project.self, forKey: .data))
         case "note": self = try .note(container.decode(Note.self, forKey: .data))
+        case "comment": self = try .comment(container.decode(Comment.self, forKey: .data))
         default: self = .other
         }
     }
@@ -70,6 +71,14 @@ private nonisolated struct Failure: Decodable {
 
 private nonisolated struct Detail: Decodable {
     let item: Item
+}
+
+private nonisolated struct CommentDetail: Decodable {
+    let comments: [Comment]
+}
+
+private nonisolated struct Workspace: Decodable {
+    let actors: [Author]
 }
 
 private nonisolated struct NoteDetail: Decodable {
@@ -314,6 +323,41 @@ nonisolated struct APIClient: Sendable {
         ])
         let detail: Detail = try await send(URLRequest(url: url))
         return detail.item
+    }
+
+    // The comments of an item as the server holds them now, without the deleted ones.
+    @concurrent
+    func comments(of id: Int) async throws -> [Comment] {
+        let url = baseURL.appending(path: "api/items/\(id)").appending(queryItems: [
+            URLQueryItem(name: "activity", value: "0"),
+        ])
+        let detail: CommentDetail = try await send(URLRequest(url: url))
+        return detail.comments
+    }
+
+    @concurrent
+    func update(comment id: Int, of itemID: Int, patch: CommentPatch, version: Int, key: String) async throws
+        -> Comment
+    {
+        try await send(write(
+            "PATCH", "api/items/\(itemID)/comments/\(id)", key: key, body: Versioned(version: version, patch: patch),
+        ))
+    }
+
+    // Answers with the comment's row, now marked as deleted.
+    @concurrent
+    func delete(comment id: Int, of itemID: Int, key: String) async throws -> Comment {
+        var request = URLRequest(url: baseURL.appending(path: "api/items/\(itemID)/comments/\(id)"))
+        request.httpMethod = "DELETE"
+        request.setValue(key, forHTTPHeaderField: "Idempotency-Key")
+        return try await send(request)
+    }
+
+    // Who writes on this server: the owner and the agents, with their names.
+    @concurrent
+    func authors() async throws -> [Author] {
+        let workspace: Workspace = try await send(URLRequest(url: baseURL.appending(path: "api/bootstrap")))
+        return workspace.actors
     }
 
     // MARK: Devices

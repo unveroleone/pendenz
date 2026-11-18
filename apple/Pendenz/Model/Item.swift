@@ -341,6 +341,8 @@ nonisolated enum PendingWrite: Sendable, Codable {
     case deleteProject(projectID: String)
     case addFile(itemID: Int, file: PendingFile)
     case removeFile(itemID: Int, fileID: Int)
+    case updateComment(itemID: Int, commentID: Int, patch: CommentPatch)
+    case deleteComment(itemID: Int, commentID: Int)
 }
 
 extension PendingWrite {
@@ -363,6 +365,7 @@ extension PendingWrite {
         case .createProject(let project): Rows(project: project.id)
         case .updateProject(let id, _), .deleteProject(let id): Rows(project: id)
         case .addFile(let id, _), .removeFile(let id, _): Rows(items: [id])
+        case .updateComment(let id, _, _), .deleteComment(let id, _): Rows(items: [id])
         }
     }
 }
