@@ -99,6 +99,44 @@ pub struct Account {
     pub models: Vec<ModelUse>,
 }
 
+impl Account {
+    // Adds another program's use of the same account: tokens per day and per model add up.
+    fn merge(&mut self, other: Account) {
+        for name in other.used_by {
+            if !self.used_by.contains(&name) {
+                self.used_by.push(name);
+            }
+        }
+        for day in other.daily {
+            match self.daily.iter_mut().find(|d| d.date == day.date) {
+                Some(mine) => {
+                    mine.tokens.add(&day.tokens);
+                    if let Some(cost) = day.cost {
+                        mine.cost = Some(mine.cost.unwrap_or(0.0) + cost);
+                    }
+                }
+                None => self.daily.push(day),
+            }
+        }
+        self.daily.sort_by_key(|d| d.date);
+        for model in other.models {
+            match self.models.iter_mut().find(|m| m.model == model.model) {
+                Some(mine) => {
+                    mine.tokens.add(&model.tokens);
+                    mine.sessions += model.sessions;
+                    if let Some(cost) = model.cost {
+                        mine.cost = Some(mine.cost.unwrap_or(0.0) + cost);
+                    }
+                }
+                None => self.models.push(model),
+            }
+        }
+        self.models.sort_by_key(|m| {
+            std::cmp::Reverse(m.tokens.input + m.tokens.output + m.tokens.cache_read)
+        });
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct Window {
@@ -451,14 +489,17 @@ pub async fn collect(args: &Args) -> Report {
     let hermes = async {
         match hermes_home
             .as_ref()
-            .filter(|p| p.join("state.db").is_file())
+            .filter(|p| p.join("config.yaml").is_file() || p.join("state.db").is_file())
         {
             Some(path) => bounded_source("hermes", hermes::collect(path.clone())).await,
             None => None,
         }
     };
     let claude = async {
-        match claude_home.as_ref().filter(|p| p.join("projects").is_dir()) {
+        match claude_home
+            .as_ref()
+            .filter(|p| p.join("projects").is_dir() || p.join("sessions").is_dir())
+        {
             Some(path) => bounded_source("claude-code", claude::collect(path.clone())).await,
             None => None,
         }
@@ -483,11 +524,7 @@ pub async fn collect(args: &Args) -> Report {
         // Claude Code runs on the Claude plan. When Hermes already found that plan's limits,
         // the tokens join that account.
         match accounts.iter_mut().find(|a| a.id == claude.account.id) {
-            Some(account) => {
-                account.used_by.extend(claude.account.used_by);
-                account.daily = claude.account.daily;
-                account.models = claude.account.models;
-            }
+            Some(account) => account.merge(claude.account),
             None => accounts.push(claude.account),
         }
     }

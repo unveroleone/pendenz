@@ -24,15 +24,21 @@ pub struct Found {
 }
 
 pub async fn collect(home: PathBuf) -> anyhow::Result<Found> {
-    let config = Config::read(&home.join("config.yaml"));
+    let config = {
+        let path = home.join("config.yaml");
+        tokio::task::spawn_blocking(move || Config::read(&path)).await?
+    };
     let hermes = binary();
     let providers = config.providers();
     let store = home.join("state.db");
-    let (version, windows, usage) = tokio::join!(
-        version(&hermes),
-        plan_windows(&hermes, &providers),
-        usage(&store)
-    );
+    let (version, windows, usage) =
+        tokio::join!(version(&hermes), plan_windows(&hermes, &providers), async {
+            if store.is_file() {
+                usage(&store).await
+            } else {
+                Ok(Vec::new())
+            }
+        });
     let mut accounts = usage.unwrap_or_else(|error| {
         eprintln!("hermes usage: {error:#}");
         Vec::new()
@@ -57,14 +63,15 @@ pub async fn collect(home: PathBuf) -> anyhow::Result<Found> {
             }),
         }
     }
-    let mut agent = gateway(&home);
+    let (mut agent, jobs) =
+        tokio::task::spawn_blocking(move || (gateway(&home), jobs(&home.join("cron")))).await?;
     agent.version = version;
     agent.model = config.model.clone();
     agent.fallbacks = config.fallbacks.iter().map(|(_, m)| m.clone()).collect();
     Ok(Found {
         agent,
         accounts,
-        jobs: jobs(&home.join("cron")),
+        jobs,
     })
 }
 
@@ -179,13 +186,15 @@ async fn usage(path: &Path) -> anyhow::Result<Vec<Account>> {
     let rows = sqlx::query(
         "SELECT u.model, u.billing_provider AS provider, \
            COALESCE(NULLIF(u.billing_mode, ''), s.billing_mode, '') AS mode, \
-           date(s.started_at, 'unixepoch', 'localtime') AS day, \
+           date(COALESCE(u.last_seen, s.started_at), 'unixepoch', 'localtime') AS day, \
            COUNT(DISTINCT u.session_id) AS sessions, \
            SUM(u.input_tokens) AS input, SUM(u.output_tokens) AS output, \
            SUM(u.cache_read_tokens) AS cache_read, SUM(u.cache_write_tokens) AS cache_write, \
-           SUM(u.estimated_cost_usd) AS estimated, SUM(u.actual_cost_usd) AS actual \
+           SUM(CASE WHEN u.actual_cost_usd > 0 THEN u.actual_cost_usd \
+             ELSE u.estimated_cost_usd END) AS cost, \
+           SUM(u.actual_cost_usd <= 0) AS estimated \
          FROM session_model_usage u JOIN sessions s ON s.id = u.session_id \
-         WHERE s.started_at >= ? AND u.billing_provider <> '' \
+         WHERE COALESCE(u.last_seen, s.started_at) >= ? AND u.billing_provider <> '' \
          GROUP BY 1, 2, 3, 4",
     )
     .bind(since)
@@ -198,7 +207,7 @@ async fn usage(path: &Path) -> anyhow::Result<Vec<Account>> {
         provider: String,
         days: BTreeMap<NaiveDate, (f64, Tokens)>,
         models: HashMap<String, ModelUse>,
-        actual: bool,
+        estimated: bool,
     }
     let mut accounts: BTreeMap<String, Building> = BTreeMap::new();
     for row in rows {
@@ -227,9 +236,9 @@ async fn usage(path: &Path) -> anyhow::Result<Vec<Account>> {
             cache_read: row.try_get::<i64, _>("cache_read")?.max(0) as u64,
             cache_write: row.try_get::<i64, _>("cache_write")?.max(0) as u64,
         };
-        let actual: f64 = row.try_get::<Option<f64>, _>("actual")?.unwrap_or(0.0);
-        let estimated: f64 = row.try_get::<Option<f64>, _>("estimated")?.unwrap_or(0.0);
-        let cost = if actual > 0.0 { actual } else { estimated };
+        // Each usage row counts with its actual cost when Hermes knows it, else its estimate.
+        let cost: f64 = row.try_get::<Option<f64>, _>("cost")?.unwrap_or(0.0);
+        let estimated = row.try_get::<i64, _>("estimated")? > 0;
         let model: String = row.try_get("model")?;
         let sessions = row.try_get::<i64, _>("sessions")?.max(0) as u64;
 
@@ -238,9 +247,9 @@ async fn usage(path: &Path) -> anyhow::Result<Vec<Account>> {
             provider: provider.clone(),
             days: BTreeMap::new(),
             models: HashMap::new(),
-            actual: false,
+            estimated: false,
         });
-        account.actual |= actual > 0.0;
+        account.estimated |= estimated;
         let entry = account.days.entry(day).or_default();
         entry.0 += cost;
         entry.1.add(&tokens);
@@ -280,7 +289,7 @@ async fn usage(path: &Path) -> anyhow::Result<Vec<Account>> {
                     .sum()
             };
             let spend = api.then(|| Spend {
-                estimated: !building.actual,
+                estimated: building.estimated,
                 today: round_money(sum(1)),
                 week: round_money(sum(7)),
                 month: round_money(sum(30)),

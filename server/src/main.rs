@@ -7,6 +7,7 @@ macro_rules! now {
 }
 
 mod agent;
+mod agents;
 mod auth;
 mod changes;
 mod comments;
@@ -184,7 +185,7 @@ async fn issue_token(
     let requested: Vec<&str> = scopes.split(',').map(str::trim).collect();
     anyhow::ensure!(
         requested.iter().all(|s| auth::SCOPES.contains(s)),
-        "Scopes are read, write, propose, approve and telegram"
+        "Scopes are read, write, propose, approve, telegram and report"
     );
     // Stored in one fixed order without duplicates.
     let granted: Vec<&str> = auth::SCOPES
@@ -496,6 +497,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/devices/{id}", delete(devices::revoke))
         .route("/pairing-codes", post(devices::create_code))
         .route("/push-token", put(push::register).delete(push::unregister))
+        .route("/agents", get(agents::list))
+        .route(
+            "/agents/me/report",
+            put(agents::put_report).layer(DefaultBodyLimit::max(agents::BODY_LIMIT)),
+        )
         .route("/changes", get(changes::changes))
         .route("/reminders", get(changes::reminders))
         .route_layer(middleware::from_fn_with_state(

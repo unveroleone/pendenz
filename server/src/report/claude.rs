@@ -120,9 +120,10 @@ fn usage(projects: &Path) -> Account {
     let mut files = Vec::new();
     logs(projects, since, &mut files);
 
-    let mut seen: HashSet<String> = HashSet::new();
-    let mut days: BTreeMap<NaiveDate, Tokens> = BTreeMap::new();
-    let mut models: HashMap<String, (Tokens, HashSet<String>)> = HashMap::new();
+    // One answer is written as several lines while it streams. They share the message and request
+    // IDs, and the last one has the final output count, so the largest of each is kept.
+    let mut answers: HashMap<String, (NaiveDate, String, Option<String>, Tokens)> = HashMap::new();
+    let mut unnamed = 0u64;
     for file in files {
         let Ok(text) = std::fs::read_to_string(&file) else {
             continue;
@@ -147,15 +148,6 @@ fn usage(projects: &Path) -> Account {
             if model.starts_with('<') {
                 continue;
             }
-            // One answer is written as several lines while it streams, each with the same usage.
-            let key = format!(
-                "{}:{}",
-                message.id.unwrap_or_default(),
-                line.request_id.unwrap_or_default()
-            );
-            if key != ":" && !seen.insert(key) {
-                continue;
-            }
             let date = at.with_timezone(&Local).date_naive();
             if date < first || date > today {
                 continue;
@@ -166,12 +158,32 @@ fn usage(projects: &Path) -> Account {
                 cache_read: usage.cache_read_input_tokens,
                 cache_write: usage.cache_creation_input_tokens,
             };
-            days.entry(date).or_default().add(&tokens);
-            let entry = models.entry(model).or_default();
-            entry.0.add(&tokens);
-            if let Some(session) = line.session_id {
-                entry.1.insert(session);
+            let key = match (message.id, line.request_id) {
+                (None, None) => {
+                    unnamed += 1;
+                    format!("#{unnamed}")
+                }
+                (id, request) => {
+                    format!("{}:{}", id.unwrap_or_default(), request.unwrap_or_default())
+                }
+            };
+            let size = |t: &Tokens| t.output + t.input + t.cache_read + t.cache_write;
+            match answers.get(&key) {
+                Some(kept) if size(&kept.3) >= size(&tokens) => {}
+                _ => {
+                    answers.insert(key, (date, model, line.session_id, tokens));
+                }
             }
+        }
+    }
+    let mut days: BTreeMap<NaiveDate, Tokens> = BTreeMap::new();
+    let mut models: HashMap<String, (Tokens, HashSet<String>)> = HashMap::new();
+    for (date, model, session, tokens) in answers.into_values() {
+        days.entry(date).or_default().add(&tokens);
+        let entry = models.entry(model).or_default();
+        entry.0.add(&tokens);
+        if let Some(session) = session {
+            entry.1.insert(session);
         }
     }
     let daily = (0..30)
