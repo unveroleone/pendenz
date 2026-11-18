@@ -36,6 +36,9 @@ struct SidebarShell: View {
                     PlaceLink(place: .inbox)
                     PlaceLink(place: .reminders)
                     PlaceLink(place: .notes)
+                    if agentsVisibility.isShown(agents) {
+                        PlaceLink(place: .agents)
+                    }
                 }
                 Section("Projects", isExpanded: $isProjectsExpanded) {
                     ForEach(store.orderedProjects) { project in
@@ -46,11 +49,6 @@ struct SidebarShell: View {
                 Section {
                     PlaceLink(place: .completed)
                     PlaceLink(place: .trash)
-                }
-                if agentsVisibility.isShown(agents) {
-                    Section {
-                        PlaceLink(place: .agents)
-                    }
                 }
             }
             .safeAreaBar(edge: .bottom) {
