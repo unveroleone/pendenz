@@ -5,7 +5,8 @@ use chrono::{Duration as Span, Utc};
 use std::{collections::HashMap, path::PathBuf};
 use sysinfo::{Disks, MINIMUM_CPU_UPDATE_INTERVAL, ProcessesToUpdate, System};
 
-const TOP: usize = 5;
+// The largest programs in memory and the busiest on the CPU, this many of each.
+const TOP: usize = 8;
 // One sample is kept per this many minutes.
 const SAMPLE_MINUTES: i64 = 10;
 
@@ -52,14 +53,12 @@ fn measure() -> anyhow::Result<Host> {
         entry.memory += process.memory();
     }
     let mut programs: Vec<Process> = programs.into_values().collect();
-    // Busiest first by CPU, then the largest in memory fill the rest.
-    programs.sort_by(|a, b| b.cpu_percent.total_cmp(&a.cpu_percent));
-    let mut top: Vec<Process> = programs.iter().take(TOP).cloned().collect();
+    // The largest in memory, then the busiest on the CPU that are not among them. Sent largest
+    // first; the apps sort again by what they show.
     programs.sort_by_key(|p| std::cmp::Reverse(p.memory));
-    for program in programs {
-        if top.len() >= TOP * 2 {
-            break;
-        }
+    let mut top: Vec<Process> = programs.iter().take(TOP).cloned().collect();
+    programs.sort_by(|a, b| b.cpu_percent.total_cmp(&a.cpu_percent));
+    for program in programs.into_iter().take(TOP) {
         if !top.iter().any(|p| p.name == program.name) {
             top.push(program);
         }

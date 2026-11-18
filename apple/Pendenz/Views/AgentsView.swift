@@ -709,7 +709,31 @@ private struct JobRow: View {
 // MARK: Machine
 
 private struct MachineCard: View {
+    enum Sorting: String, CaseIterable, Identifiable {
+        case memory = "Memory"
+        case cpu = "CPU"
+        var id: Self { self }
+    }
+
     let host: AgentHost
+    @AppStorage("agentsProcessSorting") private var sorting = Sorting.memory
+
+    // Highest first by what is chosen.
+    private var programs: [AgentProcess] {
+        let sorted = switch sorting {
+        case .memory: host.top.sorted { $0.memory > $1.memory }
+        case .cpu: host.top.sorted { $0.cpuPercent > $1.cpuPercent }
+        }
+        return Array(sorted.prefix(6))
+    }
+
+    // The share of the machine a program takes, 0 to 1: of all memory, or of all cores.
+    private func share(_ process: AgentProcess) -> Double {
+        switch sorting {
+        case .memory: host.memoryTotal > 0 ? Double(process.memory) / Double(host.memoryTotal) : 0
+        case .cpu: process.cpuPercent / 100
+        }
+    }
 
     private var memoryShare: Double {
         host.memoryTotal > 0 ? Double(host.memoryUsed) / Double(host.memoryTotal) * 100 : 0
@@ -760,22 +784,37 @@ private struct MachineCard: View {
                 .frame(height: 80)
                 .accessibilityLabel("CPU over the last 24 hours")
             }
-            VStack(spacing: 6) {
-                ForEach(host.top.prefix(6)) { process in
-                    HStack {
-                        Text(process.count > 1 ? "\(process.name) (\(process.count))" : process.name)
-                            .lineLimit(1)
-                        Spacer()
-                        Text("\(process.cpuPercent.formatted(.number.precision(.fractionLength(1)))) %")
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                            .frame(minWidth: 52, alignment: .trailing)
-                        Text(bytes(process.memory))
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                            .frame(minWidth: 72, alignment: .trailing)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Programs")
+                        .font(.subheadline.weight(.medium))
+                    Spacer()
+                    Picker("Sort by", selection: $sorting) {
+                        ForEach(Sorting.allCases) { Text($0.rawValue).tag($0) }
                     }
-                    .font(.footnote)
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                }
+                ForEach(programs) { process in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(process.count > 1 ? "\(process.name) (\(process.count))" : process.name)
+                                .lineLimit(1)
+                            Spacer()
+                            Text(sorting == .memory ? bytes(process.memory) :
+                                "\(process.cpuPercent.formatted(.number.precision(.fractionLength(1)))) %")
+                                .monospacedDigit()
+                            Text("\(Int((share(process) * 100).rounded())) %")
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                                .frame(minWidth: 40, alignment: .trailing)
+                        }
+                        .font(.footnote)
+                        ProgressView(value: min(max(share(process), 0), 1))
+                            .tint(.agent)
+                            .scaleEffect(y: 0.6, anchor: .center)
+                    }
+                    .accessibilityElement(children: .combine)
                 }
             }
             Text("Up \(duration(host.uptimeS))")

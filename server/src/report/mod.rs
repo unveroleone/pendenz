@@ -302,7 +302,7 @@ const MAX_DAYS: usize = 31;
 const MAX_MODELS: usize = 12;
 const MAX_JOBS: usize = 50;
 const MAX_RUNS: usize = 20;
-const MAX_PROCESSES: usize = 10;
+const MAX_PROCESSES: usize = 16;
 const MAX_SAMPLES: usize = 300;
 const MAX_CHANNELS: usize = 8;
 
