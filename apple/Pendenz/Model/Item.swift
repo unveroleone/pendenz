@@ -41,6 +41,10 @@ nonisolated struct Item: Identifiable, Hashable, Sendable, Codable {
     // The files the server holds for it, pictures among them. Missing in rows stored by a build
     // without files.
     var files: [ItemFile] = []
+    // Where an agent is with it: "new", "none", "gathering", "needs_answer", "ready", "running",
+    // "review" or "declined". Kept as text, so a stage a newer server adds reads as unknown.
+    // Missing in rows stored by a build before the Agents screen.
+    var agentStage: String?
 
     // The day it was completed, on this device's calendar.
     var completedDay: Day? {
@@ -95,6 +99,7 @@ nonisolated extension Item {
             seq: container.decode(Int.self, forKey: .seq),
             completedAt: container.decodeIfPresent(String.self, forKey: .completedAt),
             files: container.decodeIfPresent([ItemFile].self, forKey: .files) ?? [],
+            agentStage: container.decodeIfPresent(String.self, forKey: .agentStage),
         )
     }
 }

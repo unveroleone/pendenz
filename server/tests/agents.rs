@@ -163,7 +163,10 @@ async fn only_the_owner_reads_the_agents() {
     let worker_row = list.iter().find(|a| a["id"] == "worker").unwrap();
     assert_eq!(worker_row["report"], Value::Null);
     assert_eq!(worker_row["today"]["created"], 1);
-    assert_eq!(worker_row["today"]["completed"], 1);
+    assert_eq!(
+        worker_row["today"],
+        json!({"created": 1, "updated": 0, "completed": 1, "commented": 0})
+    );
 }
 
 #[tokio::test]

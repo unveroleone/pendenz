@@ -142,10 +142,12 @@ pub async fn list(
         let actor: String = row.try_get("actor_id")?;
         let action: String = row.try_get("action")?;
         let n: i64 = row.try_get("n")?;
-        today
-            .entry(actor)
-            .or_insert_with(|| json!({"created": 0, "updated": 0, "commented": 0}))[action] =
-            json!(n);
+        let field = match action.as_str() {
+            "completed_occurrence" => "completed",
+            other => other,
+        };
+        let counts = today.entry(actor).or_insert_with(no_activity);
+        counts[field] = json!(counts[field].as_i64().unwrap_or(0) + n);
     }
 
     let mut agents = Vec::new();

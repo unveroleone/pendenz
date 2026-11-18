@@ -4,6 +4,7 @@ import SwiftUI
 // out. A window of its own on the Mac, a sheet on iPhone and iPad.
 struct SettingsView: View {
     @Environment(Session.self) private var session
+    @AppStorage(AgentsVisibility.key) private var agentsVisibility = AgentsVisibility.automatic
     @Environment(\.dismiss) private var dismiss
 
     @State private var devices: [Device] = []
@@ -37,6 +38,13 @@ struct SettingsView: View {
                             Text("Files")
                         }
                     }
+                }
+                Section {
+                    Picker("Show Agents", selection: $agentsVisibility) {
+                        ForEach(AgentsVisibility.allCases) { Text($0.title).tag($0) }
+                    }
+                } footer: {
+                    Text("Agents shows what your agents do and cost. Automatic shows it once an agent has sent a report.")
                 }
                 if session.isDevelopment {
                     Section {

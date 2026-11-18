@@ -372,6 +372,13 @@ nonisolated struct APIClient: Sendable {
         return try await send(request)
     }
 
+    // The agents and their latest reports, as the server sent them: `AgentList.decode` reads
+    // them, and the Agents screen keeps the bytes for its next launch.
+    @concurrent
+    func agents() async throws -> Data {
+        try await load(URLRequest(url: baseURL.appending(path: "api/agents")))
+    }
+
     @concurrent
     func devices() async throws -> DeviceList {
         try await send(URLRequest(url: baseURL.appending(path: "api/devices")))

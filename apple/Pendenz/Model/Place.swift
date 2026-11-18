@@ -11,6 +11,8 @@ enum Place: Hashable {
     case completed
     // What was moved to the trash, items and notes, to look at and to put back.
     case trash
+    // What the agents do and cost. Offered once an agent has sent a report.
+    case agents
 
     var systemImage: String {
         switch self {
@@ -20,6 +22,7 @@ enum Place: Hashable {
         case .project: "number"
         case .completed: "checkmark.circle"
         case .trash: "trash"
+        case .agents: "sparkles"
         }
     }
 }

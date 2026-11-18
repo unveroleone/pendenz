@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SidebarShell: View {
     @Environment(Store.self) private var store
+    @Environment(AgentBoard.self) private var agents
+    @AppStorage(AgentsVisibility.key) private var agentsVisibility = AgentsVisibility.automatic
     @State private var query = ""
     @FocusState private var isSearchFocused: Bool
     @State private var isAdding = false
@@ -45,6 +47,11 @@ struct SidebarShell: View {
                     PlaceLink(place: .completed)
                     PlaceLink(place: .trash)
                 }
+                if agentsVisibility.isShown(agents) {
+                    Section {
+                        PlaceLink(place: .agents)
+                    }
+                }
             }
             .safeAreaBar(edge: .bottom) {
                 SidebarFooter()
@@ -79,6 +86,7 @@ struct SidebarShell: View {
                         case .notes: NotesView()
                         case .completed: CompletedView()
                         case .trash: TrashView()
+                        case .agents: AgentsView()
                         case let place?: ItemListView(place: place)
                         case nil: ContentUnavailableView("Choose a list", systemImage: "sidebar.left")
                         }
