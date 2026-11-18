@@ -472,7 +472,18 @@ async fn update_item(
         .remove("version")
         .and_then(|v| v.as_i64())
         .ok_or_else(|| ApiError::bad("Include the version you read."))?;
-    if fields.is_empty() {
+    // The agent stage is not part of ItemInput: a new item gets it from who created it.
+    let sent_stage = match fields.remove("agent_stage") {
+        None => None,
+        Some(Value::String(stage)) if STAGES.contains(&stage.as_str()) => Some(stage),
+        Some(_) => {
+            return Err(ApiError::bad(format!(
+                "agent_stage is one of {}.",
+                STAGES.join(", ")
+            )));
+        }
+    };
+    if fields.is_empty() && sent_stage.is_none() {
         return Err(ApiError::bad("Include at least one field to change."));
     }
     if version != before.version {
@@ -495,7 +506,19 @@ async fn update_item(
         body: json!(item),
     };
     settle_project(conn, &mut input.project_id).await?;
-    if input == current {
+    // When the owner changes the title or the description, the item waits for triage again,
+    // unless an agent is working on it or its result waits for review.
+    let retriage = identity.is_human()
+        && (input.title != current.title || input.description != current.description)
+        && !matches!(before.agent_stage.as_str(), "running" | "review");
+    let stage = sent_stage.unwrap_or_else(|| {
+        if retriage {
+            "new".to_string()
+        } else {
+            before.agent_stage.clone()
+        }
+    });
+    if input == current && stage == before.agent_stage {
         return Ok(written(&before));
     }
     // A repeating item is never done: marking it done moves it to its next occurrence.
@@ -529,7 +552,7 @@ async fn update_item(
     let seq = next_seq(conn).await?;
     let item = sqlx::query_as::<_, Item>(concat!("UPDATE items SET title = ?, description = ?, status = ?, project_id = ?, priority = ?, \
          position = ?, tags = ?, checklist = ?, due_at = ?, due_tz = ?, due_utc = ?, remind_at = ?, \
-         remind_utc = ?, repeat_rule = ?, hidden_from_agents = ?, source_url = ?, archived = ?, \
+         remind_utc = ?, repeat_rule = ?, agent_stage = ?, hidden_from_agents = ?, source_url = ?, archived = ?, \
          trashed = ?, \
          completed_at = CASE WHEN ? <> 'done' THEN NULL WHEN status = 'done' THEN completed_at ELSE ", now!(), " END, \
          version = version + 1, seq = ?, updated_by = ?, updated_at = ", now!(), " \
@@ -548,6 +571,7 @@ async fn update_item(
     .bind(&input.remind_at)
     .bind(&derived.remind_utc)
     .bind(&input.repeat_rule)
+    .bind(&stage)
     .bind(input.hidden_from_agents)
     .bind(&input.source_url)
     .bind(input.archived)
@@ -569,6 +593,12 @@ async fn update_item(
                 changes.insert(key, json!({"from": from, "to": to}));
             }
         }
+    }
+    if stage != before.agent_stage {
+        changes.insert(
+            "agent_stage".into(),
+            json!({"from": before.agent_stage, "to": stage}),
+        );
     }
     record(
         conn,
