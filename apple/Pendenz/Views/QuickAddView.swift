@@ -19,7 +19,7 @@ struct QuickAddView: View {
         switch place {
         case .reminders: "New reminder for today"
         case .project: "New item in \(store.title(for: place))"
-        case .inbox, .notes, .completed, .trash: "New item in Inbox"
+        case .inbox, .notes, .completed, .trash, .agents: "New item in Inbox"
         }
     }
 

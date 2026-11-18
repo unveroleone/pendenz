@@ -14,7 +14,8 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sqlx::FromRow;
 
-pub const SCOPES: [&str; 5] = ["read", "write", "propose", "approve", "telegram"];
+// `report` lets an agent send its status report (`pendenz report`) and nothing else.
+pub const SCOPES: [&str; 6] = ["read", "write", "propose", "approve", "telegram", "report"];
 // What a paired device may do: everything a person can, approving included.
 pub const DEVICE_SCOPES: [&str; 4] = ["read", "write", "propose", "approve"];
 pub const TOKEN_PREFIX: &str = "pdz_";

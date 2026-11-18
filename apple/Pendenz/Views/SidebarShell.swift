@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SidebarShell: View {
     @Environment(Store.self) private var store
+    @Environment(AgentBoard.self) private var agents
+    @AppStorage(AgentsVisibility.key) private var agentsVisibility = AgentsVisibility.automatic
     @State private var query = ""
     @FocusState private var isSearchFocused: Bool
     @State private var isAdding = false
@@ -34,6 +36,9 @@ struct SidebarShell: View {
                     PlaceLink(place: .inbox)
                     PlaceLink(place: .reminders)
                     PlaceLink(place: .notes)
+                    if agentsVisibility.isShown(agents) {
+                        PlaceLink(place: .agents)
+                    }
                 }
                 Section("Projects", isExpanded: $isProjectsExpanded) {
                     ForEach(store.orderedProjects) { project in
@@ -79,6 +84,7 @@ struct SidebarShell: View {
                         case .notes: NotesView()
                         case .completed: CompletedView()
                         case .trash: TrashView()
+                        case .agents: AgentsView()
                         case let place?: ItemListView(place: place)
                         case nil: ContentUnavailableView("Choose a list", systemImage: "sidebar.left")
                         }
@@ -112,6 +118,10 @@ struct SidebarShell: View {
         }
         .searchable(text: $query, prompt: place == .notes ? "Search notes" : "Search items")
         .searchFocused($isSearchFocused)
+        .onChange(of: agentsVisibility.isShown(agents), initial: true) { _, isShown in
+            // The entry was taken away while it was open.
+            if !isShown, navigation.place == .agents { navigation.place = .inbox }
+        }
         .onChange(of: navigation.place) { _, place in
             // A list chosen while a search is on screen ends the search.
             query = ""

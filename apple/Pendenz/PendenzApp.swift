@@ -13,9 +13,10 @@ struct PendenzApp: App {
     var body: some Scene {
         WindowGroup(id: "main") {
             Group {
-                if let store = session.store {
+                if let store = session.store, let agents = session.agents {
                     RootView()
                         .environment(store)
+                        .environment(agents)
                 } else {
                     PairingView()
                         // An action of the home screen menu or the control has nothing to act
@@ -206,6 +207,7 @@ enum Settings {
         case "notes": .notes
         case "completed": .completed
         case "trash": .trash
+        case "agents": .agents
         default: nil
         }
     }

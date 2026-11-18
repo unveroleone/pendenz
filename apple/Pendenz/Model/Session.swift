@@ -33,6 +33,8 @@ nonisolated enum PairingError: LocalizedError {
 final class Session {
     private(set) var connection: Connection?
     private(set) var store: Store?
+    // The agents of the paired server, for the Agents screen. Made and ended with the store.
+    private(set) var agents: AgentBoard?
     // Said on the pairing screen: why the device is no longer paired.
     var notice: String?
     // The push token the server has taken in this launch, with the pairing it was sent for.
@@ -205,6 +207,7 @@ final class Session {
     private func openStore() {
         guard let connection, let api else {
             store = nil
+            agents = nil
             Reminders.shared.server = nil
             Push.shared.isWanted = false
             WidgetFeed.shared.clear()
@@ -220,6 +223,12 @@ final class Session {
         }
         self.store?.close()
         self.store = store
+        agents?.close()
+        let agents = AgentBoard(api: api)
+        if connection.token != nil {
+            agents.onUnauthorized = { [weak self] in self?.lostPairing() }
+        }
+        self.agents = agents
     }
 
     // MARK: Pairing
@@ -274,6 +283,7 @@ final class Session {
     func unpair() async {
         guard let connection, let api, connection.token != nil else { return }
         store?.erase()
+        agents?.erase()
         close()
         var isRevoked = false
         if let id = connection.deviceID {
@@ -305,6 +315,10 @@ final class Session {
         connection = nil
         store?.close()
         store = nil
+        // Unlike the items, the reports of a pairing that ended are not kept: they say what an
+        // agent's machine runs and spends, and a new pairing fetches them again.
+        agents?.erase()
+        agents = nil
         // The widgets and Spotlight show nothing of a pairing that has ended.
         WidgetFeed.shared.clear()
         SpotlightFeed.shared.clear()
@@ -329,6 +343,18 @@ final class Session {
 
     func revoke(_ device: Device) async throws {
         try await call { try await $0.revoke(device: device.id) }
+    }
+
+    // MARK: Agents
+
+    // Asked directly, like the device routes: a code means nothing without the server.
+    func agentCode(name: String, access: String) async throws -> AgentCode {
+        try await call { try await $0.agentCode(name: name, access: access) }
+    }
+
+    func revoke(agent id: String) async throws {
+        try await call { try await $0.revoke(agent: id) }
+        await agents?.refresh()
     }
 
     // MARK: Settings of the server

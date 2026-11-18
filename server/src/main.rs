@@ -7,6 +7,7 @@ macro_rules! now {
 }
 
 mod agent;
+mod agents;
 mod auth;
 mod changes;
 mod comments;
@@ -19,6 +20,7 @@ mod model;
 mod notes;
 mod push;
 mod repeat;
+mod report;
 mod settings;
 
 use axum::{
@@ -55,7 +57,7 @@ pub struct AppState {
 }
 
 #[derive(Parser)]
-#[command(about = "Pendenz server, its admin commands, and the MCP server and command line for agents", after_help = agent::cli::NOTES)]
+#[command(version, about = "Pendenz server, its admin commands, and the MCP server and command line for agents", after_help = agent::cli::NOTES)]
 struct Args {
     #[arg(long, env = "DATABASE_URL", default_value = "sqlite://data/pendenz.db")]
     database_url: String,
@@ -105,6 +107,15 @@ enum Command {
     /// Run the MCP server over stdio for an agent on this machine, with PENDENZ_API_URL and
     /// PENDENZ_API_TOKEN.
     Mcp,
+    /// Collect a status report on this machine (the agent software found here, its usage and
+    /// jobs, and the machine's load) and send it with PENDENZ_API_URL and PENDENZ_API_TOKEN.
+    Report(report::Args),
+    /// Connect this machine as an agent with a code from the app's settings (Agents, Connect an
+    /// Agent). Saves the server and the new token for the agent commands of this user.
+    Connect {
+        server: String,
+        code: String,
+    },
     #[command(flatten)]
     Agent(agent::cli::Command),
     // Anything else, answered as the agent command line always did.
@@ -180,7 +191,7 @@ async fn issue_token(
     let requested: Vec<&str> = scopes.split(',').map(str::trim).collect();
     anyhow::ensure!(
         requested.iter().all(|s| auth::SCOPES.contains(s)),
-        "Scopes are read, write, propose, approve and telegram"
+        "Scopes are read, write, propose, approve, telegram and report"
     );
     // Stored in one fixed order without duplicates.
     let granted: Vec<&str> = auth::SCOPES
@@ -360,6 +371,10 @@ async fn main() -> anyhow::Result<()> {
     // and no log on stdout, which is theirs.
     match args.command {
         Some(Command::Mcp) => return agent::stdio::run().await,
+        Some(Command::Report(args)) => std::process::exit(report::run(args).await),
+        Some(Command::Connect { server, code }) => {
+            std::process::exit(report::connect(&server, &code).await)
+        }
         Some(Command::Agent(command)) => std::process::exit(agent::cli::run(command).await),
         Some(Command::Unknown(_)) => {
             eprintln!("Unknown command. Run with --help.");
@@ -403,7 +418,13 @@ async fn main() -> anyhow::Result<()> {
         Command::ListDevices => return list_devices(&db).await,
         Command::RevokeDevice { id } => return revoke_device(&db, &id).await,
         Command::Serve => {}
-        Command::Mcp | Command::Agent(_) | Command::Unknown(_) => unreachable!(),
+        Command::Mcp
+        | Command::Report(_)
+        | Command::Connect { .. }
+        | Command::Agent(_)
+        | Command::Unknown(_) => {
+            unreachable!()
+        }
     }
     let mode = std::env::var("PENDENZ_AUTH_MODE").unwrap_or_else(|_| "token".into());
     anyhow::ensure!(
@@ -489,6 +510,13 @@ async fn main() -> anyhow::Result<()> {
         .route("/devices/{id}", delete(devices::revoke))
         .route("/pairing-codes", post(devices::create_code))
         .route("/push-token", put(push::register).delete(push::unregister))
+        .route("/agents", get(agents::list))
+        .route("/agents/{id}", delete(agents::revoke))
+        .route("/agent-codes", post(agents::create_code))
+        .route(
+            "/agents/me/report",
+            put(agents::put_report).layer(DefaultBodyLimit::max(agents::BODY_LIMIT)),
+        )
         .route("/changes", get(changes::changes))
         .route("/reminders", get(changes::reminders))
         .route_layer(middleware::from_fn_with_state(
@@ -496,7 +524,9 @@ async fn main() -> anyhow::Result<()> {
             auth::authenticate,
         ))
         // Added after the layer above: a device that pairs has no token yet.
-        .route("/pair", post(devices::pair));
+        .route("/pair", post(devices::pair))
+        // The same for an agent that connects with a code from the app.
+        .route("/agent-codes/redeem", post(agents::connect));
     // What clients call this server, for the hosted MCP endpoint's host check.
     let origin = std::env::var("PENDENZ_ORIGIN")
         .ok()

@@ -120,7 +120,7 @@ struct ItemListView: View {
         // shorter date leaves room to say how an item repeats.
         case .reminders:
             ItemRow.Style(showsDay: section.id == Store.overdueSection, showsProject: true, namesRepeat: true)
-        case .inbox, .project, .notes, .completed, .trash:
+        case .inbox, .project, .notes, .completed, .trash, .agents:
             ItemRow.Style(showsDay: true, showsProject: false)
         }
     }
@@ -289,7 +289,7 @@ struct EmptyState: View {
                 )
             case .inbox:
                 ContentUnavailableView("Inbox is empty", systemImage: Place.inbox.systemImage)
-            case .project, .notes:
+            case .project, .notes, .agents:
                 ContentUnavailableView("No open items", systemImage: store.symbol(for: place))
             case .completed:
                 ContentUnavailableView(

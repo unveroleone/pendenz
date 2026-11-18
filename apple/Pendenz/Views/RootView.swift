@@ -8,6 +8,7 @@ private struct ReminderInput: Equatable {
 // Tabs where the window is narrow (iPhone, a slim iPad window), a sidebar everywhere else.
 struct RootView: View {
     @Environment(Store.self) private var store
+    @Environment(AgentBoard.self) private var agents
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.scenePhase) private var scenePhase
     #if os(macOS)
@@ -103,6 +104,9 @@ struct RootView: View {
         .environment(navigation)
         .focusedSceneValue(\.navigation, navigation)
         .task { await store.sync() }
+        // Once per launch and on each return to the front, so the Agents screen is offered as
+        // soon as an agent has sent a report.
+        .task { await agents.refresh() }
         .task { await reminders.refreshAccess() }
         // The waiting notifications follow the items, and start when access is given.
         .task(id: ReminderInput(items: store.openItems, access: reminders.access)) {
@@ -156,6 +160,7 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                Task { await agents.refresh() }
                 Task {
                     await store.sync()
                     // The sync may have found the device revoked. Its reminders were removed

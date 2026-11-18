@@ -2,7 +2,7 @@ import SwiftUI
 
 struct TabShell: View {
     private enum AppTab: String, Hashable {
-        case reminders, tasks, notes, search
+        case reminders, tasks, notes, agents, search
     }
 
     // Remembered per window, so two windows on an iPad do not switch each other's tab.
@@ -26,6 +26,8 @@ struct TabShell: View {
     @State private var quickAddHeight: CGFloat = 124
     @Environment(Navigation.self) private var navigation
     @Environment(Store.self) private var store
+    @Environment(AgentBoard.self) private var agents
+    @AppStorage(AgentsVisibility.key) private var agentsVisibility = AgentsVisibility.automatic
 
     private var isShowingItem: Binding<Bool> {
         Binding {
@@ -36,7 +38,11 @@ struct TabShell: View {
     }
 
     private var tab: AppTab {
-        get { launchTab ?? savedTab }
+        get {
+            let tab = launchTab ?? savedTab
+            // A tab that is no longer offered falls back to Tasks.
+            return tab == .agents && !agentsVisibility.isShown(agents) ? .tasks : tab
+        }
         nonmutating set {
             if launchTab == nil { savedTab = newValue } else { launchTab = newValue }
         }
@@ -47,7 +53,7 @@ struct TabShell: View {
         switch tab {
         case .reminders: .reminders
         case .tasks: tasksPath.last ?? .inbox
-        case .notes, .search: .inbox
+        case .notes, .agents, .search: .inbox
         }
     }
 
@@ -71,6 +77,15 @@ struct TabShell: View {
             }
             Tab("Notes", systemImage: Place.notes.systemImage, value: AppTab.notes) {
                 NotesTab()
+            }
+            if agentsVisibility.isShown(agents) {
+                Tab("Agents", systemImage: Place.agents.systemImage, value: AppTab.agents) {
+                    NavigationStack {
+                        AgentsView()
+                            .toolbar { SettingsItem() }
+                    }
+                }
+                .badge(store.count(for: .agents))
             }
             Tab(value: AppTab.search, role: .search) {
                 NavigationStack {
@@ -123,6 +138,7 @@ struct TabShell: View {
             case .trash:
                 tab = .tasks
                 tasksPath = [.trash]
+            case .agents: tab = .agents
             case nil: break
             }
         }
@@ -138,6 +154,8 @@ struct TabShell: View {
                 tab = .reminders
             case .notes:
                 tab = .notes
+            case .agents:
+                tab = .agents
             case .inbox, .project, .completed, .trash:
                 tab = .tasks
                 if tasksPath != [place] { tasksPath = [place] }
@@ -154,6 +172,7 @@ struct TabShell: View {
             switch tab {
             case .reminders: navigation.place = .reminders
             case .notes: navigation.place = .notes
+            case .agents: navigation.place = .agents
             case .tasks: navigation.place = tasksPath.last ?? .inbox
             case .search: navigation.place = nil
             }
@@ -204,7 +223,7 @@ struct TabShell: View {
         case .completed: "completed"
         case .trash: "trash"
         case .project(let id): "project:\(id)"
-        case .reminders, .notes, nil: ""
+        case .reminders, .notes, .agents, nil: ""
         }
     }
 
@@ -322,7 +341,7 @@ struct PlaceLink: View {
     private var takesItems: Bool {
         switch place {
         case .reminders, .inbox, .project: true
-        case .notes, .completed, .trash: false
+        case .notes, .completed, .trash, .agents: false
         }
     }
 

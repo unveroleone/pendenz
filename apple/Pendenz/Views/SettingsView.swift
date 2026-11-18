@@ -38,6 +38,11 @@ struct SettingsView: View {
                         }
                     }
                 }
+                Section {
+                    NavigationLink(value: SettingsPage.agents) {
+                        LabeledContent("Agents", value: "\(session.agents?.connected.count ?? 0) connected")
+                    }
+                }
                 if session.isDevelopment {
                     Section {
                         Text(
@@ -71,6 +76,7 @@ struct SettingsView: View {
             switch page {
             case .notifications: NotificationSettingsView()
             case .files: FileSettingsView()
+            case .agents: AgentSettingsView()
             }
         }
         // Neither can be taken back, so both ask, in an alert: see "Questions before an
@@ -329,6 +335,7 @@ private struct CopyButton: View {
 enum SettingsPage: Hashable {
     case notifications
     case files
+    case agents
 }
 
 // The gear that opens the settings on iPhone and iPad. The Mac has them in its app menu.

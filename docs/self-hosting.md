@@ -149,7 +149,33 @@ The hosted endpoint is `https://<hostname>/mcp`, a stateless POST endpoint that 
 claude mcp add --transport http pendenz https://<hostname>/mcp --header "Authorization: Bearer pdz_..."
 ```
 
-The stdio server is `pendenz mcp` with `PENDENZ_API_URL` and `PENDENZ_API_TOKEN` in its environment. It also offers `add_item_image`, which reads a file next to the agent. Both servers offer only the tools the token's scopes allow. Install the binary on the agent's machine from a checkout with `cargo install --path server`; it needs no database there. `pendenz --help` lists the CLI commands, which take the same environment.
+The stdio server is `pendenz mcp` with `PENDENZ_API_URL` and `PENDENZ_API_TOKEN` in its environment. It also offers `add_item_image`, which reads a file next to the agent. Both servers offer only the tools the token's scopes allow. Install the binary on the agent's machine with `install.sh` (see below) or from a checkout with `cargo install --path server`; it needs no database there. `pendenz --help` lists the CLI commands, which take the same environment.
+
+### Connect an agent from the app
+
+In the app, Settings, Agents, Connect an Agent makes a one-time code and shows three lines to run on the agent's machine:
+
+```sh
+curl -fsSL https://github.com/unveroleone/pendenz/releases/latest/download/install.sh | sh
+~/.local/bin/pendenz connect https://<hostname> 48TQY-AA7ZA
+~/.local/bin/pendenz report install
+```
+
+- `install.sh` puts the `pendenz` command in `~/.local/bin` (macOS on Apple silicon, Linux on x86_64 or arm64) after checking it against the release's `SHA256SUMS`. `PENDENZ_INSTALL_DIR` and `PENDENZ_VERSION` change where and which release.
+- `pendenz connect` trades the code for a new agent with its own token and saves both in `~/.config/pendenz/agent.json`, readable by that user alone. The agent commands of that user take the server and token from there when `PENDENZ_API_URL` and `PENDENZ_API_TOKEN` are not set. The code works once, for ten minutes, and the app chooses what the agent may do: send its status only (`report`), or also read and change items (`report`, `read`, `write`).
+- `pendenz report install` runs `pendenz report` every two minutes, as a LaunchAgent on macOS (log in `~/Library/Logs/pendenz-report.log`) or a systemd user timer on Linux. `pendenz report uninstall` stops it.
+
+The same works by hand: `pendenz add-agent` and `pendenz issue-token --scopes report` on the server, and `PENDENZ_API_URL` and `PENDENZ_API_TOKEN` for `pendenz report` on the agent's machine, run by a scheduler of your own. `pendenz report install` needs the connection that `pendenz connect` saved, since the scheduled job does not see the shell's environment.
+
+### Status reports
+
+`pendenz report` collects a status report on the machine it runs on and sends it to `PUT /api/agents/me/report`. The Agents screen in the app shows it. It finds on its own:
+
+- **The machine**: CPU, memory, disk, the programs that use the most memory and CPU, and samples of the last 24 hours (kept in `~/.local/state/pendenz`). `--no-host` leaves it out.
+- **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** in `~/.hermes`: whether its gateway runs, its models, the cron jobs, the tokens and estimated cost per day and model from its session store, and the plan limits that `hermes usage` reports.
+- **Claude Code** in `~/.claude`: tokens per day and model from its session logs, and the sessions open right now.
+
+`pendenz report --dry-run` prints the report instead of sending it. `pendenz report --file report.json` sends a report written by anything else, in the same format; the server refuses fields it does not know. A report holds names of jobs, programs and sessions and the first line of a job's error, with the home folder shortened and anything that looks like a key removed. Only the owner's devices can read it.
 
 ## Updates
 

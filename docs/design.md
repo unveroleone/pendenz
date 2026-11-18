@@ -235,6 +235,7 @@ Tokens are `pdz_` plus 64 hex characters, stored as a SHA-256 hash. They are iss
 | `propose` | Reserved; nothing uses it yet |
 | `approve` | Device routes: pairing codes, the device list, revoking; changing the settings |
 | `telegram` | Only for the identity `telegram-bridge`, which gets no other scope. Items it adds are marked as captured through Telegram |
+| `report` | Sending the agent's own status report (`PUT /api/agents/me/report`), and nothing else |
 
 A token without `read` gets only a receipt from a write (the ID and version), never the stored row. This is for capture-only tokens, such as a shortcut that adds items: it can write, also with the hide flag, but cannot read anything back.
 
@@ -248,6 +249,12 @@ A new device is paired with a one-time code:
 - `GET /api/devices` lists the devices with their last use, and `DELETE /api/devices/<id>` revokes one. Revoking removes its push token and the unused codes it created.
 
 The device routes and `PATCH /api/settings` need a human token with `approve` (`require_owner`). Nothing else in the API needs `approve` today.
+
+### Connecting an agent
+
+An agent can be connected from the app, the way a device is paired. `POST /api/agent-codes` (owner with `approve`) makes a one-time code with a name and the scopes: `report` alone, or `report`, `read` and `write`. `POST /api/agent-codes/redeem` takes the code without a token, uses it up and creates the agent and its token in the same transaction, like `/api/pair`. The code is stored as a hash, works once and for ten minutes. The scopes come from the code, never from the agent, and are filtered to those an agent may hold. A lost answer leaves an agent without a working token: the owner revokes it and makes a new code.
+
+`DELETE /api/agents/<id>` (owner with `approve`) revokes every token of an agent and removes its report. The actor stays, so the activity log and the rows it wrote still name it.
 
 ### What agents can never do
 
@@ -380,6 +387,16 @@ Some choices in them:
 - Every write tool takes an optional `key`. An agent that retries after a timeout sends the same key and arguments, and the write cannot apply twice. Without one the adapter makes a fresh key per call.
 
 The server instructions tell the agent how to write titles, dates and notes, how to handle versions and conflicts, and what a locked or hidden row means. They are part of the design: the lock rule for agents is an instruction, not a barrier.
+
+### Status reports
+
+An agent's machine sends a status report every two minutes with `pendenz report` (see [self-hosting.md](self-hosting.md#status-reports)). The server keeps the latest report per agent in `agent_reports` and nothing older: a report carries the history it shows, 30 days of usage and 24 hours of samples. The Agents screen in the app reads them from `GET /api/agents`, which only a human token with `read` may call, together with each agent's scopes, its last use and what it did today from the activity log.
+
+- **Not item data.** A report is no write through `write`: it is not in the activity log, which would grow by a row every two minutes, not in the changes feed and not pushed. The route takes the writer lock itself and needs no idempotency key, since a repeat replaces the same row.
+- **Checked and bounded.** The server parses the report into its own types, refuses unknown fields and other schema versions, cuts texts, lists and counts to fixed bounds, and stores what it parsed. A report older than the stored one does not replace it, and one dated more than five minutes ahead is refused.
+- **Generic.** The report format knows agents, accounts, jobs, running sessions and a machine, not a particular agent. The sources for Hermes Agent and Claude Code live in the report command, and anything else can send a report file.
+- **Money and limits apart.** An account is either paid per token, shown with its estimated cost, or a plan, shown with its limit windows and tokens and never with money. Hermes keeps running totals per session, so the report command remembers the totals it saw last and counts what grew since on the day it grew.
+- **Freshness.** The app shows a report as stale after ten minutes on the server's clock, so a machine that stopped sending is told apart from an agent whose gateway is down, which the report itself says.
 
 ### CLI
 

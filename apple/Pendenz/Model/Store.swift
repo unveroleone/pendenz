@@ -1109,7 +1109,7 @@ final class Store {
         case .reminders: reschedule(item, to: today)
         case .inbox: move(item, toProject: nil)
         case .project(let id): move(item, toProject: id)
-        case .notes, .completed, .trash: break
+        case .notes, .completed, .trash, .agents: break
         }
     }
 
@@ -1573,6 +1573,7 @@ extension Store {
         case .project(let id): projectName(id) ?? "Project"
         case .completed: "Completed"
         case .trash: "Trash"
+        case .agents: "Agents"
         }
     }
 
@@ -1583,6 +1584,8 @@ extension Store {
         case .inbox: openItems.count { $0.isOpen && $0.projectId == nil }
         case .notes, .completed, .trash: 0
         case .project(let id): openItems.count { $0.isOpen && $0.projectId == id }
+        // What an agent waits on the owner for.
+        case .agents: openItems.count { $0.isOpen && ["needs_answer", "review"].contains($0.agentStage) }
         }
     }
 
@@ -1625,7 +1628,7 @@ extension Store {
                 }
             }
             return sections
-        case .notes, .trash:
+        case .notes, .trash, .agents:
             return []
         }
     }
@@ -1645,7 +1648,7 @@ extension Store {
         switch place {
         case .inbox: "inbox"
         case .project(let id): "project:\(id)"
-        case .reminders, .notes, .completed, .trash: nil
+        case .reminders, .notes, .completed, .trash, .agents: nil
         }
     }
 

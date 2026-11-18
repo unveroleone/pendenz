@@ -335,6 +335,7 @@ nonisolated struct ListEntity: AppEntity {
         case .notes: "notes"
         case .completed: "completed"
         case .trash: "trash"
+        case .agents: "agents"
         case .project(let id): "project:\(id)"
         }
     }
@@ -346,6 +347,7 @@ nonisolated struct ListEntity: AppEntity {
         case "notes": .notes
         case "completed": .completed
         case "trash": .trash
+        case "agents": .agents
         default:
             id.hasPrefix("project:") && id.count > "project:".count
                 ? .project(String(id.dropFirst("project:".count))) : nil

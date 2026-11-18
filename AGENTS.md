@@ -34,6 +34,8 @@ Tasks, reminders and notes for one person, with a server that agents can work fr
 - A deleted project keeps its row with `deleted` set. Add `AND deleted = 0` to every SQL query that lists or checks projects. `DELETE /api/projects/<id>` moves its items and notes to the inbox in the same transaction, and `settle_project` sends a later write that still names it to the inbox too. The ID of a deleted project is never given to a new one.
 - Queries that should use the partial indexes for open items have to repeat `status <> 'done' AND trashed = 0 AND archived = 0` as SQL literals.
 - The telegram scope belongs to the agent ID `telegram-bridge` alone, which gets no other scope.
+- Status reports are in `server/src/agents.rs` and `server/src/report/`. `PUT /api/agents/me/report` needs the `report` scope and an agent; it takes the writer lock itself, writes no activity row, no changes and no push, because it runs every two minutes. `GET /api/agents` is for human tokens only: agents never read reports. The report types in `report/mod.rs` are the schema; a new field gets a default and a bound in `Report::bounded`, and the app's `AgentReport` reads it as optional. `POST /api/agent-codes/redeem` is the second route without a token, added after the auth layer next to `/api/pair`.
+- The collector sources in `server/src/report/` read other programs' files (`~/.hermes`, `~/.claude`). Each may be missing or change shape: a source that fails leaves its part out of the report, never the whole report. Nothing from a prompt, a message or a chat goes into a report. A failed job sends the first line of its error, with the home folder shortened and key-like words removed (`report/text.rs`), because the owner needs to see why it failed; only the owner's devices read it.
 
 ## Releases
 
@@ -118,7 +120,7 @@ The notes are for the person who updates: what they will notice and what they ha
 ### Launch arguments
 
 - The app uses the server it is paired with. A Debug build launched with `-apiURL <url>` skips pairing and talks to that server without a token, which only a server in local mode accepts. To pair with the local server, enter `http://127.0.0.1:8080` and a code from `cargo run --bin pendenz -- pairing-code`.
-- `-tab reminders|tasks|notes|search` opens the iPhone layout on that tab, `-place reminders|inbox|notes|completed|trash` opens the sidebar layout on that list (`-place trash` or `-place completed` next to `-tab tasks` opens that list on the iPhone), `-note <id>` opens a note, `-quickAdd YES` opens the iPhone quick add and `-item <id>` opens an item's detail on every layout, which helps for screenshots with `xcrun simctl io booted screenshot`. `-projectOrder name|added|edited` sets the order of the projects and `-projectsExpanded NO` folds them in the sidebar.
+- `-tab reminders|tasks|notes|agents|search` opens the iPhone layout on that tab, `-place reminders|inbox|notes|completed|trash|agents` opens the sidebar layout on that list (`-place trash` or `-place completed` next to `-tab tasks` opens that list on the iPhone), `-note <id>` opens a note, `-quickAdd YES` opens the iPhone quick add and `-item <id>` opens an item's detail on every layout, which helps for screenshots with `xcrun simctl io booted screenshot`. `-projectOrder name|added|edited` sets the order of the projects and `-projectsExpanded NO` folds them in the sidebar.
 - The tab of the iPhone layout is kept per window in `@SceneStorage`. The launch argument `-tab` is read from the argument domain into a state of its own (`launchTab` in `TabShell`): a value written to scene storage at launch is overwritten when the scene is restored. The Tasks tab keeps its open list in `@SceneStorage` (`tasksPlace`) and restores it after the first draw; a window launched with `-tab` neither restores nor saves it.
 
 ### Store, sync and the outbox
@@ -146,6 +148,12 @@ The notes are for the person who updates: what they will notice and what they ha
 
 - Every screen that shows text of a note has to ask `NoteLock.shared.isOpen` first for a locked one: the row shows no preview, the search matches the title only, and the editor shows the placeholder.
 - `NoteLock` closes when the app leaves the front, and ignores that while the system asks for the face or the finger, because its sheet takes the front too. In the Simulator the system may ask for a passcode that a script cannot type; to see the opened state there, add a temporary launch-argument hook that sets `isOpen`, and remove it before committing.
+
+### Agents
+
+- The Agents screen reads `AgentBoard`, which `Session` makes and ends with the store. It asks `GET /api/agents` directly, like the device list, at launch, on each return to the front and every 30 seconds while the screen is open, and keeps the last answer in `Caches/Agents/` per server. A 401 there ends the pairing; the cache is deleted when a pairing ends.
+- The screen is offered once an agent has sent a report (Settings, Agents, Show Agents: Automatic, Always, Never). Waiting for You and Working On come from `agent_stage` on the items in the store, not from the report.
+- Color on that screen carries state only: green fine, orange from 75 %, red for a failure or from 90 %, grey for idle or stale.
 
 ### Widgets
 

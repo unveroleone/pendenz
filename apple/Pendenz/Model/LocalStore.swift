@@ -110,7 +110,8 @@ final class LocalStore {
     // 5: an item's row lists its files.
     // 6: an item's pictures are among its files.
     // 7: comments are kept.
-    private static let format = 7
+    // 8: an item's row says where an agent is with it.
+    private static let format = 8
 
     // Kept alive here: a context whose container is gone traps on its first fetch.
     private let container: ModelContainer
@@ -170,10 +171,11 @@ final class LocalStore {
             for row in closed where (try? decoder.decode(Item.self, from: row.payload))?.trashed == true {
                 row.isTrashed = true
             }
-            if state.format < 7 {
+            if state.format < 8 {
                 // Rows stored by an older build lack a field: when a project was made, when an
                 // item was completed, whether a note is locked, which files an item has, its
-                // pictures among them. Such a build stored a row without a list it did not know,
+                // pictures among them, where an agent is with it. Such a build stored a row without a list it did not
+                // know,
                 // or skipped the comments, and its cursor has passed that row. The server sends
                 // every row again from the start, and each replaces the one kept here. The
                 // waiting changes stay.
