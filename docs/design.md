@@ -176,9 +176,9 @@ A comment is a progress note on an item: a question, a plan, a result. Agents wr
 
 The author owns a comment. An agent may change and delete only the comments its own actor wrote; one of another actor's answers 403. The owner's tokens may change any comment, since the owner decides what holds on their own list. This is the one place where an agent's write depends on who wrote the row: an item can be edited by any agent that sees it (see "Kept simple on purpose").
 
-The routes work like the file routes: they check the item with the hidden filter and look the comment up by its ID and the item's ID together, and a trashed item takes no change to its comments. The activity log records `comment_updated` with the comment's ID, whether the text changed and the new `outdated` value, and `comment_deleted` with the ID. It never holds the text, so a deleted comment leaves nothing of it behind, apart from the backups made before.
+The routes work like the file routes: they check the item with the hidden filter and look the comment up by its ID and the item's ID together, and a trashed item takes no change to its comments. The activity log records `comment_updated` with the comment's ID, whether the text changed and the new `outdated` value, and `comment_deleted` with the ID. It never holds the text, so a deleted comment leaves no text on the server, apart from the backups made before. Copies that a device or an agent already read stay where they are.
 
-`outdated` marks a comment that no longer holds. Nothing is hidden: the app shows it dimmed, and `get_item` puts a `notice` next to it that tells the agent not to rely on it.
+`outdated` marks a comment that no longer holds. Nothing is hidden: `get_item` puts a `notice` next to it that tells the agent not to rely on it. The app does not show comments yet; it is to show an outdated one dimmed.
 
 ### Files
 
