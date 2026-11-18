@@ -82,6 +82,7 @@ struct ItemDetailView: View {
                 }
             }
             ItemAttachmentsSection(item: item)
+            ItemCommentsSection(itemID: item.id)
             Section {
                 Toggle("Date", isOn: hasDate(item))
                     .selectionTint()
