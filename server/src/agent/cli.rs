@@ -314,3 +314,31 @@ async fn execute(command: Command) -> Result<Value, String> {
         }
     })
 }
+
+// Sends a status report for the agent this token belongs to (`pendenz report`).
+pub async fn send_report(report: &crate::report::Report) -> i32 {
+    let body = match serde_json::to_value(report) {
+        Ok(body) => body,
+        Err(error) => {
+            eprintln!("{error}");
+            return 1;
+        }
+    };
+    let client = Client::from_env();
+    match client
+        .request("/agents/me/report", Call::write(Method::PUT, body, None))
+        .await
+    {
+        Ok(reply) => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&reply.json()).unwrap_or_default()
+            );
+            0
+        }
+        Err(message) => {
+            eprintln!("{message}");
+            1
+        }
+    }
+}

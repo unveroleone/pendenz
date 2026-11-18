@@ -19,6 +19,7 @@ mod model;
 mod notes;
 mod push;
 mod repeat;
+mod report;
 mod settings;
 
 use axum::{
@@ -105,6 +106,9 @@ enum Command {
     /// Run the MCP server over stdio for an agent on this machine, with PENDENZ_API_URL and
     /// PENDENZ_API_TOKEN.
     Mcp,
+    /// Collect a status report on this machine (the agent software found here, its usage and
+    /// jobs, and the machine's load) and send it with PENDENZ_API_URL and PENDENZ_API_TOKEN.
+    Report(report::Args),
     #[command(flatten)]
     Agent(agent::cli::Command),
     // Anything else, answered as the agent command line always did.
@@ -360,6 +364,7 @@ async fn main() -> anyhow::Result<()> {
     // and no log on stdout, which is theirs.
     match args.command {
         Some(Command::Mcp) => return agent::stdio::run().await,
+        Some(Command::Report(args)) => std::process::exit(report::run(args).await),
         Some(Command::Agent(command)) => std::process::exit(agent::cli::run(command).await),
         Some(Command::Unknown(_)) => {
             eprintln!("Unknown command. Run with --help.");
@@ -403,7 +408,9 @@ async fn main() -> anyhow::Result<()> {
         Command::ListDevices => return list_devices(&db).await,
         Command::RevokeDevice { id } => return revoke_device(&db, &id).await,
         Command::Serve => {}
-        Command::Mcp | Command::Agent(_) | Command::Unknown(_) => unreachable!(),
+        Command::Mcp | Command::Report(_) | Command::Agent(_) | Command::Unknown(_) => {
+            unreachable!()
+        }
     }
     let mode = std::env::var("PENDENZ_AUTH_MODE").unwrap_or_else(|_| "token".into());
     anyhow::ensure!(
