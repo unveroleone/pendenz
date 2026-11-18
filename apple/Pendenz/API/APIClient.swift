@@ -115,6 +115,16 @@ nonisolated struct DeviceList: Sendable, Decodable {
     let current: String?
 }
 
+// A one-time code that connects a new agent, with what the agent may do.
+nonisolated struct AgentCode: Sendable, Decodable, Identifiable {
+    let code: String
+    let expiresAt: String
+    let name: String
+    let scopes: [String]
+
+    var id: String { code }
+}
+
 nonisolated struct PairingCode: Sendable, Decodable {
     let code: String
     let expiresAt: String
@@ -377,6 +387,23 @@ nonisolated struct APIClient: Sendable {
     @concurrent
     func agents() async throws -> Data {
         try await load(URLRequest(url: baseURL.appending(path: "api/agents")))
+    }
+
+    // `access` is "status" (reports only) or "work" (reports, and reading and writing items).
+    @concurrent
+    func agentCode(name: String, access: String) async throws -> AgentCode {
+        var request = URLRequest(url: baseURL.appending(path: "api/agent-codes"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["name": name, "access": access])
+        return try await send(request)
+    }
+
+    @concurrent
+    func revoke(agent id: String) async throws {
+        var request = URLRequest(url: baseURL.appending(path: "api/agents/\(id)"))
+        request.httpMethod = "DELETE"
+        let _: Revoked = try await send(request)
     }
 
     @concurrent

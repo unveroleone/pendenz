@@ -52,6 +52,11 @@ final class AgentBoard {
         list?.reporting ?? []
     }
 
+    // The agents that still have a working token, in the server's order.
+    var connected: [AgentEntry] {
+        list?.agents.filter { !$0.scopes.isEmpty } ?? []
+    }
+
     // The age of a report on the server's clock, so a device whose clock is off still shows it
     // right. Measured to now: the list may have been fetched a while ago.
     func age(of entry: AgentEntry, at now: Date = .now) -> TimeInterval? {

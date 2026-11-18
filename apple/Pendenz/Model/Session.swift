@@ -345,6 +345,18 @@ final class Session {
         try await call { try await $0.revoke(device: device.id) }
     }
 
+    // MARK: Agents
+
+    // Asked directly, like the device routes: a code means nothing without the server.
+    func agentCode(name: String, access: String) async throws -> AgentCode {
+        try await call { try await $0.agentCode(name: name, access: access) }
+    }
+
+    func revoke(agent id: String) async throws {
+        try await call { try await $0.revoke(agent: id) }
+        await agents?.refresh()
+    }
+
     // MARK: Settings of the server
 
     // Also asked directly, like the devices: the server's settings belong to the server, and a

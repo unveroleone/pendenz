@@ -4,7 +4,6 @@ import SwiftUI
 // out. A window of its own on the Mac, a sheet on iPhone and iPad.
 struct SettingsView: View {
     @Environment(Session.self) private var session
-    @AppStorage(AgentsVisibility.key) private var agentsVisibility = AgentsVisibility.automatic
     @Environment(\.dismiss) private var dismiss
 
     @State private var devices: [Device] = []
@@ -40,13 +39,9 @@ struct SettingsView: View {
                     }
                 }
                 Section {
-                    Picker("Show Agents", selection: $agentsVisibility) {
-                        ForEach(AgentsVisibility.allCases) { Text($0.title).tag($0) }
+                    NavigationLink(value: SettingsPage.agents) {
+                        LabeledContent("Agents", value: "\(session.agents?.connected.count ?? 0) connected")
                     }
-                } footer: {
-                    Text(
-                        "Agents shows what your agents do and cost. Automatic shows it once an agent has sent a report.",
-                    )
                 }
                 if session.isDevelopment {
                     Section {
@@ -81,6 +76,7 @@ struct SettingsView: View {
             switch page {
             case .notifications: NotificationSettingsView()
             case .files: FileSettingsView()
+            case .agents: AgentSettingsView()
             }
         }
         // Neither can be taken back, so both ask, in an alert: see "Questions before an
@@ -339,6 +335,7 @@ private struct CopyButton: View {
 enum SettingsPage: Hashable {
     case notifications
     case files
+    case agents
 }
 
 // The gear that opens the settings on iPhone and iPad. The Mac has them in its app menu.
