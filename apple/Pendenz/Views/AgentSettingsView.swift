@@ -87,9 +87,21 @@ struct AgentSettingsView: View {
     }
 
     private func detail(for agent: AgentEntry) -> String {
-        let access = agent.scopes.contains("write") ? "Status and items" : "Status only"
+        let access = Self.access(agent.scopes)
         guard let used = agent.lastUsedAt else { return access }
         return "\(access) · active \(used.formatted(.relative(presentation: .named)))"
+    }
+
+    // What an agent's tokens allow, in words: whether it reads or changes items, and whether it
+    // sends a status report.
+    static func access(_ scopes: [String]) -> String {
+        let items = scopes.contains("write") ? "Changes items" : scopes.contains("read") ? "Reads items" : nil
+        let reports = scopes.contains("report") ? "sends its status" : nil
+        switch (items, reports) {
+        case let (items?, reports?): return "\(items), \(reports)"
+        case let (items?, nil): return items
+        case (nil, _): return "Sends its status"
+        }
     }
 
     private func revoke(_ agent: AgentEntry) {
