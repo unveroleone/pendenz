@@ -177,12 +177,21 @@ private struct CommentRow: View {
             guard text[lower ..< upper].link == nil else { continue }
             text[lower ..< upper].link = url
         }
-        // The tint is black or white, so a link is told apart by its line.
-        for run in text.runs where run.link != nil {
-            text[run.range].underlineStyle = .single
+        for run in text.runs {
+            guard let link = run.link else { continue }
+            if let scheme = link.scheme?.lowercased(), Self.linkSchemes.contains(scheme) {
+                // The tint is black or white, so a link is told apart by its line.
+                text[run.range].underlineStyle = .single
+            } else {
+                // A markdown link shows its label, not where it goes. One that would open
+                // another app, such as a shortcut, stays plain text.
+                text[run.range].link = nil
+            }
         }
         return text
     }
+
+    private static let linkSchemes: Set<String> = ["http", "https", "mailto"]
 }
 
 // Changes the text of a comment. Saving an empty text is not offered; deleting is.

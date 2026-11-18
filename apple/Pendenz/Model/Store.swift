@@ -251,13 +251,15 @@ final class Store {
     }
 
     // The names of the authors of the comments here, asked for once per launch for an ID this
-    // device does not know yet. A comment without a known name shows its author's ID.
+    // device does not know yet, until the server has answered. A comment without a known name
+    // shows its author's ID.
     private func learnAuthors() async {
         let unknown = Set(commentsByID.values.map(\.authorId))
             .subtracting(authors.keys).subtracting(askedAuthors)
         guard !unknown.isEmpty, !isClosed else { return }
-        askedAuthors.formUnion(unknown)
+        // Without an answer the next sync asks again.
         guard let named = try? await api.authors(), !isClosed else { return }
+        askedAuthors.formUnion(unknown)
         var known = authors
         for author in named {
             known[author.id] = author
