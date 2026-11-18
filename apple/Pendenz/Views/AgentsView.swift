@@ -26,19 +26,31 @@ enum AgentsVisibility: String, CaseIterable, Identifiable {
     }
 }
 
-extension Color {
-    // The one color of the agents, next to red for what needs attention. The rest of the app is
-    // black and white.
-    static let agent = Color.teal
+// The state of something an agent reports, and its one color. The rest of the screen stays
+// black and white, as the app does: color only says whether something is fine.
+enum AgentLevel {
+    case good, warning, problem, idle
+
+    var color: Color {
+        switch self {
+        case .good: .green
+        case .warning: .orange
+        case .problem: .red
+        case .idle: .secondary
+        }
+    }
+
+    // A share of a limit or of the machine: fine below 75 %, a warning to 90 %, a problem above.
+    init(percent: Double) {
+        self = percent >= 90 ? .problem : percent >= 75 ? .warning : .good
+    }
 }
 
-// What the agents do and cost: their state, what waits for the owner, plan limits, spend, the
-// scheduled jobs and the machine they run on. Cards in one column on the iPhone, a grid where
-// the window is wide.
+// What the agents do and cost, as one grouped list like Settings: what needs the owner first,
+// then the limits, the work, the jobs, the money and the machine. Details open on pages of
+// their own, so the list stays short on the iPhone.
 struct AgentsView: View {
     @Environment(AgentBoard.self) private var board
-    @Environment(Store.self) private var store
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var chosenAgent: String?
 
     private var entry: AgentEntry? {
@@ -56,139 +68,101 @@ struct AgentsView: View {
                     ),
                 )
             } else if let entry, let report = entry.report {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if board.reporting.count > 1 {
-                            Picker("Agent", selection: Binding { entry.id } set: { chosenAgent = $0 }) {
-                                ForEach(board.reporting) { Text($0.name).tag($0.id) }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-                        problemNote
-                        cards(entry, report)
-                    }
-                    .padding(16)
-                }
+                AgentForm(entry: entry, report: report, chosenAgent: $chosenAgent)
             } else if board.list == nil, board.problem == nil {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                empty
+                ContentUnavailableView {
+                    Label("No Agent Reports", systemImage: Place.agents.systemImage)
+                } description: {
+                    Text(
+                        board.problem == .outdated
+                            ? "The server is older than agent reports. Update it to see your agents."
+                            : "An agent shows up here once it sends a report. Connect one in Settings.",
+                    )
+                }
             }
         }
         .navigationTitle("Agents")
         .refreshable { await board.refresh() }
         .task { await board.watch() }
     }
+}
 
-    @ViewBuilder
-    private var problemNote: some View {
-        switch board.problem {
-        case .outdated:
-            Label(
-                "The server is older than agent reports. Update it to see your agents.",
-                systemImage: "exclamationmark.triangle",
-            )
-            .font(.callout)
-            .foregroundStyle(.secondary)
-        case .unreachable:
-            if let fetchedAt = board.fetchedAt {
-                Label {
-                    Text("Offline. Showing what the server said \(fetchedAt, format: .relative(presentation: .named)).")
-                } icon: {
-                    Image(systemName: "wifi.slash")
+private struct AgentForm: View {
+    @Environment(AgentBoard.self) private var board
+    @Environment(Store.self) private var store
+    let entry: AgentEntry
+    let report: AgentReport
+    @Binding var chosenAgent: String?
+
+    private var waiting: [Item] {
+        store.openItems.filter { ["needs_answer", "review"].contains($0.agentStage) }
+    }
+
+    private var working: [Item] {
+        store.openItems.filter { ["running", "gathering", "ready"].contains($0.agentStage) }
+    }
+
+    private var windows: [(account: AgentAccount, window: AgentWindow)] {
+        (report.accounts ?? []).flatMap { account in
+            (account.windows ?? []).map { (account, $0) }
+        }
+    }
+
+    var body: some View {
+        Form {
+            if board.reporting.count > 1 {
+                Picker("Agent", selection: Binding { entry.id } set: { chosenAgent = $0 }) {
+                    ForEach(board.reporting) { Text($0.name).tag($0.id) }
                 }
-                .font(.callout)
-                .foregroundStyle(.secondary)
             }
-        case nil:
-            EmptyView()
-        }
-    }
-
-    private var empty: some View {
-        ContentUnavailableView {
-            Label("No Agent Reports", systemImage: "sparkles")
-        } description: {
-            if board.problem == .outdated {
-                Text("The server is older than agent reports. Update it to see your agents.")
-            } else {
-                Text(
-                    "An agent shows up here once it sends a report. Run `pendenz report` on the agent's machine with a token that has the report scope.",
-                )
+            Section {
+                NavigationLink {
+                    AgentDetailView(entry: entry, report: report)
+                } label: {
+                    StatusRow(entry: entry, report: report, age: board.age(of: entry))
+                }
+            } footer: {
+                if board.problem == .unreachable, let fetchedAt = board.fetchedAt {
+                    Text(
+                        "Offline. Shown as the server reported it \(fetchedAt, format: .relative(presentation: .named)).",
+                    )
+                } else if board.problem == .outdated {
+                    Text("The server is older than agent reports. Update it to see new ones.")
+                }
             }
-        }
-    }
-
-    // One column where the window is narrow. Where it is wide, two columns that each stack
-    // their cards, so a short card leaves no gap under it: the agent and its work on the left,
-    // what it uses on the right.
-    @ViewBuilder
-    private func cards(_ entry: AgentEntry, _ report: AgentReport) -> some View {
-        let accounts = report.accounts ?? []
-        let plans = accounts.filter { $0.kind == .subscription && !($0.windows ?? []).isEmpty }
-        let paid = accounts.filter { $0.kind == .api }
-        let planTokens = accounts.filter { $0.kind == .subscription && ($0.daily ?? []).contains { $0.tokens > 0 } }
-        let left = Group {
-            AgentStatusCard(entry: entry, report: report, age: board.age(of: entry))
-            WaitingCard()
-            WorkingCard(runs: report.runs ?? [])
-            if let jobs = report.jobs, !jobs.isEmpty { JobsCard(jobs: jobs) }
-        }
-        let right = Group {
-            if !plans.isEmpty { PlanLimitsCard(accounts: plans) }
-            if !paid.isEmpty { SpendCard(accounts: paid) }
-            if !planTokens.isEmpty { PlanTokensCard(accounts: planTokens) }
-            if let host = report.host { MachineCard(host: host) }
-        }
-        if sizeClass == .compact {
-            VStack(spacing: 16) {
-                left
-                right
+            if !waiting.isEmpty {
+                Section("Waiting for You") {
+                    ForEach(waiting) { item in
+                        ItemLine(item: item, note: item.agentStage == "review" ? "To review" : "Question")
+                    }
+                }
             }
-        } else {
-            HStack(alignment: .top, spacing: 16) {
-                VStack(spacing: 16) { left }
-                VStack(spacing: 16) { right }
+            if !windows.isEmpty {
+                Section("Limits") {
+                    ForEach(windows, id: \.window) { pair in
+                        LimitRow(account: pair.account, window: pair.window)
+                    }
+                }
+            }
+            WorkingSection(items: working, runs: report.runs ?? [])
+            if let jobs = report.jobs, !jobs.isEmpty {
+                JobsSection(jobs: jobs)
+            }
+            if let accounts = report.accounts, !accounts.isEmpty {
+                SpendSection(accounts: accounts)
+            }
+            if let host = report.host {
+                MachineSection(host: host)
             }
         }
+        .formStyle(.grouped)
     }
 }
 
-// MARK: Pieces
-
-private struct Card<Content: View>: View {
-    let title: String
-    var systemImage: String?
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label {
-                Text(title)
-            } icon: {
-                if let systemImage { Image(systemName: systemImage) }
-            }
-            .font(.headline)
-            .labelStyle(.titleAndIcon)
-            content
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary, in: .rect(cornerRadius: 16))
-    }
-}
-
-private struct StateDot: View {
-    let color: Color
-
-    var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 8, height: 8)
-            .accessibilityHidden(true)
-    }
-}
+// MARK: Formats
 
 private func tokens(_ count: Int) -> String {
     count.formatted(.number.notation(.compactName).precision(.fractionLength(0 ... 1)))
@@ -202,55 +176,95 @@ private func money(_ amount: Double) -> String {
     amount.formatted(.currency(code: "USD").presentation(.narrow).precision(.fractionLength(amount < 10 ? 2 : 0)))
 }
 
-private func duration(_ seconds: Int) -> String {
-    Duration.seconds(seconds).formatted(.units(
-        allowed: [.days, .hours, .minutes],
-        width: .abbreviated,
-        maximumUnitCount: 2,
-    ))
+private func percent(_ value: Double) -> String {
+    "\(Int(value.rounded())) %"
+}
+
+private struct StateDot: View {
+    let level: AgentLevel
+
+    var body: some View {
+        Circle()
+            .fill(level.color)
+            .frame(width: 8, height: 8)
+            .accessibilityHidden(true)
+    }
+}
+
+// A thin bar for a share, in the color of its state.
+private struct ShareBar: View {
+    let percent: Double
+
+    var body: some View {
+        ProgressView(value: min(max(percent, 0), 100), total: 100)
+            .tint(AgentLevel(percent: percent).color)
+            .accessibilityHidden(true)
+    }
 }
 
 // MARK: Status
 
-private struct AgentStatusCard: View {
+private struct StatusRow: View {
     let entry: AgentEntry
     let report: AgentReport
     let age: TimeInterval?
 
-    private var isStale: Bool {
-        (age ?? .infinity) > AgentBoard.staleAfter
+    private var failing: Int {
+        (report.jobs ?? []).count(where: \.isFailing)
     }
 
-    private var health: (String, Color) {
-        if isStale { return ("No recent report", .secondary) }
+    private var health: (text: String, level: AgentLevel) {
+        if (age ?? .infinity) > AgentBoard.staleAfter { return ("No recent report", .idle) }
         switch report.agent?.health {
-        case .online: return ("Online", .agent)
-        case .degraded: return ("Partly working", .orange)
-        case .offline: return ("Offline", .red)
-        case nil: return ("Reporting", .agent)
+        case .online, nil: return ("Online", .good)
+        case .degraded: return ("Partly working", .warning)
+        case .offline: return ("Offline", .problem)
         }
     }
 
     var body: some View {
-        Card(title: entry.name, systemImage: "sparkles") {
-            HStack(spacing: 8) {
-                StateDot(color: health.1)
-                Text(health.0)
-                    .font(.subheadline.weight(.medium))
-                Spacer()
-                if let age {
-                    Text("Updated \(Date.now.addingTimeInterval(-age), format: .relative(presentation: .named))")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+        HStack(spacing: 12) {
+            Image(systemName: Place.agents.systemImage)
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .frame(width: 32)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.name)
+                    .font(.headline)
+                HStack(spacing: 6) {
+                    StateDot(level: health.level)
+                    Text(health.text)
+                    if let age {
+                        Text("· \(Date.now.addingTimeInterval(-age), format: .relative(presentation: .named))")
+                    }
                 }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
             }
-            if let detail = report.agent?.healthDetail {
-                Text(detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            if failing > 0 {
+                Label(
+                    failing == 1 ? "1 job failed" : "\(failing) jobs failed",
+                    systemImage: "exclamationmark.circle.fill",
+                )
+                .font(.subheadline)
+                .foregroundStyle(.red)
+                .labelStyle(.titleAndIcon)
             }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct AgentDetailView: View {
+    let entry: AgentEntry
+    let report: AgentReport
+
+    var body: some View {
+        Form {
             if let agent = report.agent {
-                VStack(alignment: .leading, spacing: 6) {
+                Section {
                     LabeledContent(
                         "Software",
                         value: [agent.software, agent.version].compactMap(\.self).joined(separator: " "),
@@ -261,106 +275,40 @@ private struct AgentStatusCard: View {
                     if let fallbacks = agent.fallbacks, !fallbacks.isEmpty {
                         LabeledContent("Fallbacks", value: fallbacks.joined(separator: ", "))
                     }
-                    ForEach(agent.channels ?? [], id: \.self) { channel in
-                        LabeledContent(channel.name) {
-                            HStack(spacing: 6) {
-                                StateDot(color: channel.connected ? .agent : .red)
-                                Text(channel.connected ? "Connected" : "Not connected")
-                            }
-                        }
-                    }
                     if let since = agent.since {
                         LabeledContent("Running since") {
                             Text(since, format: .relative(presentation: .named))
                         }
                     }
+                } footer: {
+                    if let detail = agent.healthDetail { Text(detail) }
                 }
-                .font(.subheadline)
+                if let channels = agent.channels, !channels.isEmpty {
+                    Section("Channels") {
+                        ForEach(channels, id: \.self) { channel in
+                            LabeledContent(channel.name) {
+                                HStack(spacing: 6) {
+                                    StateDot(level: channel.connected ? .good : .problem)
+                                    Text(channel.connected ? "Connected" : "Not connected")
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            let today = entry.today
-            Text(
-                "Today: \(today.created) added, \(today.updated) changed, \(today.completed) completed, \(today.commented) comments",
-            )
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+            Section("Today") {
+                LabeledContent("Items added", value: "\(entry.today.created)")
+                LabeledContent("Items changed", value: "\(entry.today.updated)")
+                LabeledContent("Items completed", value: "\(entry.today.completed)")
+                LabeledContent("Comments", value: "\(entry.today.commented)")
+            }
         }
+        .formStyle(.grouped)
+        .navigationTitle(entry.name)
     }
 }
 
 // MARK: Items
-
-// Items an agent waits on: a question for the owner, or work to look at. Shown for the whole
-// workspace, since a stage belongs to the item and not to one agent.
-private struct WaitingCard: View {
-    @Environment(Store.self) private var store
-    @Environment(Navigation.self) private var navigation
-
-    private var items: [Item] {
-        store.openItems.filter { ["needs_answer", "review"].contains($0.agentStage) }
-    }
-
-    var body: some View {
-        Card(title: "Waiting for You", systemImage: "hand.raised") {
-            if items.isEmpty {
-                Text("Nothing waits for you.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(items) { item in
-                    ItemLine(item: item, note: item.agentStage == "review" ? "To review" : "Question")
-                }
-            }
-        }
-    }
-}
-
-private struct WorkingCard: View {
-    @Environment(Store.self) private var store
-    let runs: [AgentRun]
-
-    private static func note(for stage: String?) -> String {
-        switch stage {
-        case "gathering": "Gathering"
-        case "ready": "Ready to start"
-        default: "Running"
-        }
-    }
-
-    private var items: [Item] {
-        store.openItems.filter { ["running", "gathering", "ready"].contains($0.agentStage) }
-    }
-
-    var body: some View {
-        Card(title: "Working On", systemImage: "gearshape.2") {
-            if items.isEmpty, runs.isEmpty {
-                Text("Nothing runs right now.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(items) { item in
-                ItemLine(item: item, note: Self.note(for: item.agentStage))
-            }
-            ForEach(runs) { run in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    StateDot(color: run.isBusy ? .agent : .secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(run.title)
-                            .font(.subheadline)
-                            .lineLimit(1)
-                        HStack(spacing: 4) {
-                            Text("\(run.kind), \(run.isBusy ? "working" : "idle")")
-                            if let started = run.startedAt {
-                                Text("· started \(started, format: .relative(presentation: .named))")
-                            }
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-    }
-}
 
 private struct ItemLine: View {
     @Environment(Navigation.self) private var navigation
@@ -372,96 +320,274 @@ private struct ItemLine: View {
         Button {
             navigation.itemID = item.id
         } label: {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title)
-                        .font(.subheadline)
-                        .lineLimit(2)
-                    Text([note, store.projectName(item.projectId)].compactMap(\.self).joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.forward")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Text([note, store.projectName(item.projectId)].compactMap(\.self).joined(separator: " · "))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
     }
 }
 
-// MARK: Money and limits
+private struct WorkingSection: View {
+    let items: [Item]
+    let runs: [AgentRun]
 
-private struct PlanLimitsCard: View {
-    let accounts: [AgentAccount]
+    private var busy: [AgentRun] {
+        runs.filter(\.isBusy)
+    }
+
+    private static func note(for stage: String?) -> String {
+        switch stage {
+        case "gathering": "Gathering"
+        case "ready": "Ready to start"
+        default: "Running"
+        }
+    }
 
     var body: some View {
-        Card(title: "Plan Limits", systemImage: "gauge.with.dots.needle.50percent") {
-            ForEach(accounts) { account in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(account.name)
-                            .font(.subheadline.weight(.medium))
-                        if let plan = account.plan {
-                            Text(plan)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if let usedBy = account.usedBy, !usedBy.isEmpty {
-                            Text(usedBy.joined(separator: ", "))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+        if !items.isEmpty || !runs.isEmpty {
+            Section("Working On") {
+                ForEach(items) { item in
+                    ItemLine(item: item, note: Self.note(for: item.agentStage))
+                }
+                ForEach(busy) { run in
+                    HStack(spacing: 10) {
+                        StateDot(level: .good)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(run.title)
+                                .lineLimit(1)
+                            if let started = run.startedAt {
+                                Text("\(run.kind) · started \(started, format: .relative(presentation: .named))")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
-                    ForEach(account.windows ?? [], id: \.self) { window in
-                        LimitBar(window: window)
-                    }
+                    .accessibilityElement(children: .combine)
+                }
+                let idle = runs.count - busy.count
+                if idle > 0 {
+                    Text(idle == 1 ? "1 idle session" : "\(idle) idle sessions")
+                        .foregroundStyle(.secondary)
                 }
             }
         }
     }
 }
 
-private struct LimitBar: View {
+// MARK: Limits
+
+private struct LimitRow: View {
+    let account: AgentAccount
     let window: AgentWindow
 
-    private var isNearLimit: Bool {
-        window.usedPercent >= 90
+    // "Claude plan" and "Current week" read as "Claude · Current week".
+    private var title: String {
+        let name = account.name.replacingOccurrences(of: " plan", with: "")
+        return "\(name) · \(window.label)"
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(window.label)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
                 Spacer()
-                Text("\(Int(window.usedPercent.rounded())) %")
+                Text(percent(window.usedPercent))
                     .monospacedDigit()
-                    .foregroundStyle(isNearLimit ? .red : .primary)
+                    .foregroundStyle(window.usedPercent >= 90 ? .red : .primary)
             }
-            .font(.footnote)
-            ProgressView(value: min(window.usedPercent, 100), total: 100)
-                .tint(isNearLimit ? .red : .agent)
+            ShareBar(percent: window.usedPercent)
             if let resets = window.resetsAt {
                 Text("Resets \(resets, format: .relative(presentation: .named))")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: Jobs
+
+// A job that failed, or the time of its next run.
+private struct JobRow: View {
+    let job: AgentJob
+
+    private var level: AgentLevel {
+        if job.isFailing { return .problem }
+        if !job.enabled || job.lastStatus == nil { return .idle }
+        return .good
+    }
+
+    private var detail: Text {
+        if job.isFailing, let last = job.lastRunAt {
+            return Text("Failed \(last, format: .relative(presentation: .named))")
+        }
+        if !job.enabled { return Text("Paused") }
+        guard let next = job.nextRunAt else { return Text(job.schedule) }
+        if next <= .now { return Text("\(job.schedule) · due") }
+        return Text("\(job.schedule) · next \(next, format: .relative(presentation: .named))")
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            StateDot(level: level)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(job.name)
+                detail
+                    .font(.subheadline)
+                    .foregroundStyle(job.isFailing ? .red : .secondary)
             }
         }
         .accessibilityElement(children: .combine)
     }
 }
 
-private struct SpendCard: View {
-    let accounts: [AgentAccount]
+private struct JobsSection: View {
+    let jobs: [AgentJob]
 
-    private var total: (today: Double, week: Double, month: Double, estimated: Bool) {
-        accounts.compactMap(\.spend).reduce((0, 0, 0, false)) {
-            ($0.0 + $1.today, $0.1 + $1.week, $0.2 + $1.month, $0.3 || $1.estimated)
+    // Failing jobs first, then by the next run.
+    private var ordered: [AgentJob] {
+        jobs.sorted { left, right in
+            if left.isFailing != right.isFailing { return left.isFailing }
+            return (left.nextRunAt ?? .distantFuture) < (right.nextRunAt ?? .distantFuture)
         }
     }
+
+    var body: some View {
+        let ordered = ordered
+        // Every failing job, and the next ones to fill three rows.
+        let shown = Array(ordered.prefix(max(3, ordered.count(where: \.isFailing))))
+        Section("Scheduled Jobs") {
+            ForEach(shown) { job in
+                NavigationLink {
+                    JobDetailView(job: job)
+                } label: {
+                    JobRow(job: job)
+                }
+            }
+            if ordered.count > shown.count {
+                NavigationLink("All \(ordered.count) Jobs") {
+                    Form {
+                        ForEach(ordered) { job in
+                            NavigationLink {
+                                JobDetailView(job: job)
+                            } label: {
+                                JobRow(job: job)
+                            }
+                        }
+                    }
+                    .formStyle(.grouped)
+                    .navigationTitle("Scheduled Jobs")
+                }
+            }
+        }
+    }
+}
+
+private struct JobDetailView: View {
+    let job: AgentJob
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Schedule", value: job.enabled ? job.schedule : "Paused")
+                if let next = job.nextRunAt, job.enabled {
+                    LabeledContent("Next run") {
+                        Text(next, format: .relative(presentation: .named))
+                    }
+                }
+                LabeledContent("Last run") {
+                    if let last = job.lastRunAt {
+                        Text("\(last, format: .relative(presentation: .named)), \(job.isFailing ? "failed" : "ok")")
+                            .foregroundStyle(job.isFailing ? .red : .secondary)
+                    } else {
+                        Text("Not yet")
+                    }
+                }
+                if job.failureStreak > 1 {
+                    LabeledContent("Failed in a row", value: "\(job.failureStreak)")
+                }
+            } footer: {
+                if let error = job.lastError { Text(error).foregroundStyle(.red) }
+            }
+            Section("This Week") {
+                LabeledContent("Model runs", value: "\(job.runsWeek)")
+                LabeledContent("Tokens", value: tokens(job.tokensWeek))
+                if let seconds = job.lastDurationS {
+                    LabeledContent(
+                        "Last model run",
+                        value: Duration.seconds(seconds).formatted(.units(width: .abbreviated, maximumUnitCount: 2)),
+                    )
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle(job.name)
+    }
+}
+
+// MARK: Spend
+
+private struct SpendSection: View {
+    let accounts: [AgentAccount]
+
+    private var paid: [AgentAccount] {
+        accounts.filter { $0.kind == .api }
+    }
+
+    private var plans: [AgentAccount] {
+        accounts.filter { $0.kind == .subscription && ($0.daily ?? []).contains { $0.tokens > 0 } }
+    }
+
+    var body: some View {
+        let spends = paid.compactMap(\.spend)
+        Section {
+            if !spends.isEmpty {
+                NavigationLink {
+                    SpendView(accounts: paid)
+                } label: {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Today")
+                        Spacer()
+                        Text(money(spends.reduce(0) { $0 + $1.today }))
+                            .monospacedDigit()
+                        Text("· \(money(spends.reduce(0) { $0 + $1.month })) in 30 days")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            if !plans.isEmpty {
+                NavigationLink {
+                    PlanUsageView(accounts: plans)
+                } label: {
+                    LabeledContent(
+                        "Plan usage",
+                        value: "\(tokens(plans.flatMap { $0.daily ?? [] }.reduce(0) { $0 + $1.tokens })) tokens",
+                    )
+                }
+            }
+        } header: {
+            Text("Spend")
+        } footer: {
+            if spends.contains(where: \.estimated) {
+                Text("API keys, estimated from the providers' prices. Plans are counted in tokens.")
+            }
+        }
+    }
+}
+
+private struct SpendView: View {
+    let accounts: [AgentAccount]
 
     private struct Bar: Identifiable {
         var day: Date
@@ -473,242 +599,147 @@ private struct SpendCard: View {
     private var bars: [Bar] {
         accounts.flatMap { account in
             (account.daily ?? []).compactMap { day in
-                guard let date = day.day, let cost = day.cost else { return nil }
+                guard let date = day.day, let cost = day.cost, cost > 0 else { return nil }
                 return Bar(day: date, account: account.name, cost: cost)
             }
         }
     }
 
-    private var models: [AgentModelUse] {
-        accounts.flatMap { $0.models ?? [] }
-            .filter { ($0.cost ?? 0) > 0 }
-            .sorted { ($0.cost ?? 0) > ($1.cost ?? 0) }
-    }
-
     var body: some View {
-        let total = total
-        Card(title: "Spend", systemImage: "dollarsign.circle") {
-            HStack(alignment: .firstTextBaseline, spacing: 20) {
-                figure(total.today, "Today")
-                figure(total.week, "7 days")
-                figure(total.month, "30 days")
+        let spends = accounts.compactMap(\.spend)
+        Form {
+            Section {
+                LabeledContent("Today", value: money(spends.reduce(0) { $0 + $1.today }))
+                LabeledContent("7 days", value: money(spends.reduce(0) { $0 + $1.week }))
+                LabeledContent("30 days", value: money(spends.reduce(0) { $0 + $1.month }))
             }
-            if total.estimated {
-                Text("Estimated from the providers' prices. API keys only; plans are under Plan Limits.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Chart(bars) { bar in
-                BarMark(x: .value("Day", bar.day, unit: .day), y: .value("Cost", bar.cost))
-                    .foregroundStyle(by: .value("Account", bar.account))
-            }
-            .chartForegroundStyleScale(range: [Color.agent, Color.agent.opacity(0.45), Color.secondary])
-            .chartYAxis {
-                AxisMarks { value in
-                    AxisGridLine()
-                    AxisValueLabel {
-                        if let cost = value.as(Double.self) { Text(money(cost)) }
+            Section("Per Day") {
+                Chart(bars) { bar in
+                    BarMark(x: .value("Day", bar.day, unit: .day), y: .value("Cost", bar.cost))
+                        .foregroundStyle(by: .value("Account", bar.account))
+                }
+                .chartYAxis {
+                    AxisMarks { value in
+                        AxisGridLine()
+                        AxisValueLabel { if let cost = value.as(Double.self) { Text(money(cost)) } }
                     }
                 }
+                .frame(height: 180)
+                .padding(.vertical, 8)
             }
-            .chartLegend(accounts.count > 1 ? .visible : .hidden)
-            .frame(height: 120)
-            .accessibilityLabel("Spend per day over 30 days")
-            if !models.isEmpty {
-                VStack(spacing: 6) {
-                    ForEach(models) { model in
-                        HStack(alignment: .firstTextBaseline) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(model.model)
-                                    .font(.subheadline)
-                                Text("\(model.sessions) sessions, \(tokens(model.tokens)) tokens")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text(money(model.cost ?? 0))
-                                .font(.subheadline)
-                                .monospacedDigit()
+            ForEach(accounts) { account in
+                Section(account.name) {
+                    ForEach(account.models ?? []) { model in
+                        LabeledContent {
+                            Text(money(model.cost ?? 0)).monospacedDigit()
+                        } label: {
+                            Text(model.model)
+                            Text("\(model.sessions) sessions · \(tokens(model.tokens)) tokens")
                         }
                     }
                 }
             }
         }
-    }
-
-    private func figure(_ amount: Double, _ label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(money(amount))
-                .font(.title3.weight(.semibold))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .accessibilityElement(children: .combine)
+        .formStyle(.grouped)
+        .navigationTitle("Spend")
     }
 }
 
-// Tokens used on plans, which have no price per token.
-private struct PlanTokensCard: View {
+private struct PlanUsageView: View {
     let accounts: [AgentAccount]
 
     var body: some View {
-        Card(title: "Plan Usage", systemImage: "chart.bar") {
+        Form {
             ForEach(accounts) { account in
-                let days = account.daily ?? []
-                let total = days.reduce(0) { $0 + $1.tokens }
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(account.name)
-                            .font(.subheadline.weight(.medium))
-                        Spacer()
-                        Text("\(tokens(total)) tokens in 30 days")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Chart(days) { day in
+                Section {
+                    Chart(account.daily ?? []) { day in
                         if let date = day.day {
                             BarMark(x: .value("Day", date, unit: .day), y: .value("Tokens", day.tokens))
-                                .foregroundStyle(Color.agent)
                         }
                     }
                     .chartYAxis {
                         AxisMarks { value in
                             AxisGridLine()
-                            AxisValueLabel {
-                                if let count = value.as(Int.self) { Text(tokens(count)) }
-                            }
+                            AxisValueLabel { if let count = value.as(Int.self) { Text(tokens(count)) } }
                         }
                     }
-                    .frame(height: 90)
+                    .frame(height: 140)
+                    .padding(.vertical, 8)
                     ForEach(account.models ?? []) { model in
-                        LabeledContent(model.model, value: "\(tokens(model.tokens)), \(model.sessions) sessions")
-                            .font(.footnote)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: Jobs
-
-private struct JobsCard: View {
-    let jobs: [AgentJob]
-    @State private var openJob: String?
-
-    // Failing jobs first, then by the next run.
-    private var ordered: [AgentJob] {
-        jobs.sorted { left, right in
-            if left.isFailing != right.isFailing { return left.isFailing }
-            return (left.nextRunAt ?? .distantFuture) < (right.nextRunAt ?? .distantFuture)
-        }
-    }
-
-    var body: some View {
-        Card(title: "Scheduled Jobs", systemImage: "clock.arrow.circlepath") {
-            ForEach(ordered) { job in
-                JobRow(job: job, isOpen: openJob == job.name) {
-                    withAnimation(.snappy) { openJob = openJob == job.name ? nil : job.name }
-                }
-                if job.id != ordered.last?.id { Divider() }
-            }
-        }
-    }
-}
-
-private struct JobRow: View {
-    let job: AgentJob
-    let isOpen: Bool
-    let toggle: () -> Void
-
-    private var color: Color {
-        if job.isFailing { return .red }
-        if !job.enabled || job.lastStatus == nil { return .secondary }
-        return .agent
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button(action: toggle) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    StateDot(color: color)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(job.name)
-                            .font(.subheadline.weight(.medium))
-                        HStack(spacing: 4) {
-                            if job.isFailing {
-                                Text("Failed")
-                                    .foregroundStyle(.red)
-                                Text("·")
-                                    .foregroundStyle(.secondary)
-                            }
-                            Text(job.enabled ? job.schedule : "Paused")
-                                .foregroundStyle(.secondary)
+                        LabeledContent {
+                            Text(tokens(model.tokens)).monospacedDigit()
+                        } label: {
+                            Text(model.model)
+                            Text("\(model.sessions) sessions")
                         }
-                        .font(.caption)
                     }
-                    Spacer(minLength: 8)
-                    if let next = job.nextRunAt, next <= .now {
-                        // The report is a little older than now, so a run it names as next
-                        // may be over already.
-                        Text("Due")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else if let next = job.nextRunAt {
-                        Text(next, format: .relative(presentation: .named))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                } header: {
+                    Text(account.name)
+                } footer: {
+                    if let usedBy = account.usedBy, !usedBy.isEmpty {
+                        Text("Used by \(usedBy.joined(separator: " and ")) in the last 30 days.")
                     }
                 }
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint(isOpen ? "Hides the details" : "Shows the details")
-            if isOpen {
-                VStack(alignment: .leading, spacing: 4) {
-                    if let last = job.lastRunAt {
-                        LabeledContent("Last run") {
-                            Text("\(last, format: .relative(presentation: .named)), \(job.isFailing ? "failed" : "ok")")
-                        }
-                    } else {
-                        LabeledContent("Last run", value: "Not yet")
-                    }
-                    if job.failureStreak > 1 {
-                        LabeledContent("Failed in a row", value: "\(job.failureStreak)")
-                    }
-                    if let error = job.lastError {
-                        Text(error)
-                            .foregroundStyle(.red)
-                    }
-                    LabeledContent("Woke a model this week", value: "\(job.runsWeek) times")
-                    if job.tokensWeek > 0 {
-                        LabeledContent("Tokens this week", value: tokens(job.tokensWeek))
-                    }
-                    if let seconds = job.lastDurationS {
-                        LabeledContent(
-                            "Last model run took",
-                            value: Duration.seconds(seconds).formatted(.units(
-                                width: .abbreviated,
-                                maximumUnitCount: 2,
-                            )),
-                        )
-                    }
-                }
-                .font(.footnote)
-                .padding(.leading, 16)
             }
         }
+        .formStyle(.grouped)
+        .navigationTitle("Plan Usage")
     }
 }
 
 // MARK: Machine
 
-private struct MachineCard: View {
+private func memoryShare(_ host: AgentHost) -> Double {
+    host.memoryTotal > 0 ? Double(host.memoryUsed) / Double(host.memoryTotal) * 100 : 0
+}
+
+private func diskShare(_ host: AgentHost) -> Double {
+    host.diskTotal > 0 ? Double(host.diskUsed) / Double(host.diskTotal) * 100 : 0
+}
+
+private struct MeterRow: View {
+    let label: String
+    let value: Double
+    let detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(label)
+                Spacer()
+                Text(detail)
+                    .foregroundStyle(.secondary)
+                Text(percent(value))
+                    .monospacedDigit()
+                    .frame(minWidth: 44, alignment: .trailing)
+            }
+            ShareBar(percent: value)
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct MachineSection: View {
+    let host: AgentHost
+
+    var body: some View {
+        Section(host.name) {
+            MeterRow(label: "CPU", value: host.cpuPercent, detail: "\(host.cores) cores")
+            MeterRow(
+                label: "Memory",
+                value: memoryShare(host),
+                detail: "\(bytes(host.memoryUsed)) of \(bytes(host.memoryTotal))",
+            )
+            MeterRow(label: "Disk", value: diskShare(host), detail: "\(bytes(host.diskTotal - host.diskUsed)) free")
+            NavigationLink("Programs and History") {
+                MachineView(host: host)
+            }
+        }
+    }
+}
+
+private struct MachineView: View {
     enum Sorting: String, CaseIterable, Identifiable {
         case memory = "Memory"
         case cpu = "CPU"
@@ -720,83 +751,30 @@ private struct MachineCard: View {
 
     // Highest first by what is chosen.
     private var programs: [AgentProcess] {
-        let sorted = switch sorting {
+        switch sorting {
         case .memory: host.top.sorted { $0.memory > $1.memory }
         case .cpu: host.top.sorted { $0.cpuPercent > $1.cpuPercent }
         }
-        return Array(sorted.prefix(6))
     }
 
-    // The share of the machine a program takes, 0 to 1: of all memory, or of all cores.
+    // The share of the machine a program takes: of all memory, or of all cores.
     private func share(_ process: AgentProcess) -> Double {
         switch sorting {
-        case .memory: host.memoryTotal > 0 ? Double(process.memory) / Double(host.memoryTotal) : 0
-        case .cpu: process.cpuPercent / 100
+        case .memory: host.memoryTotal > 0 ? Double(process.memory) / Double(host.memoryTotal) * 100 : 0
+        case .cpu: process.cpuPercent
         }
     }
 
-    private var memoryShare: Double {
-        host.memoryTotal > 0 ? Double(host.memoryUsed) / Double(host.memoryTotal) * 100 : 0
-    }
-
-    private var diskShare: Double {
-        host.diskTotal > 0 ? Double(host.diskUsed) / Double(host.diskTotal) * 100 : 0
-    }
-
     var body: some View {
-        Card(title: host.name, systemImage: "desktopcomputer") {
-            Text([host.chip, host.cores > 0 ? "\(host.cores) cores" : nil, host.os].compactMap(\.self)
-                .joined(separator: " · "))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            HStack(alignment: .top, spacing: 16) {
-                Meter(
-                    label: "CPU",
-                    percent: host.cpuPercent,
-                    detail: host.load.first.map { "Load \($0.formatted(.number.precision(.fractionLength(1))))" },
-                )
-                Meter(
-                    label: "Memory",
-                    percent: memoryShare,
-                    detail: "\(bytes(host.memoryUsed)) of \(bytes(host.memoryTotal))",
-                )
-                Meter(label: "Disk", percent: diskShare, detail: "\(bytes(host.diskTotal - host.diskUsed)) free")
-            }
-            if let free = host.memoryFreePercent {
-                Text(free < 20 ? "Memory is tight: \(Int(free)) % free." :
-                    "Memory pressure is low: \(Int(free)) % free.")
-                    .font(.caption)
-                    .foregroundStyle(free < 20 ? .red : .secondary)
-            }
-            if host.series.count > 1 {
-                Chart(host.series) { sample in
-                    LineMark(x: .value("Time", sample.at), y: .value("CPU", sample.cpuPercent))
-                        .foregroundStyle(Color.agent)
-                        .interpolationMethod(.monotone)
+        Form {
+            Section("Programs") {
+                Picker("Sort by", selection: $sorting) {
+                    ForEach(Sorting.allCases) { Text($0.rawValue).tag($0) }
                 }
-                .chartYScale(domain: 0 ... 100)
-                .chartYAxis {
-                    AxisMarks(values: [0, 50, 100]) { value in
-                        AxisGridLine()
-                        AxisValueLabel { if let v = value.as(Int.self) { Text("\(v) %") } }
-                    }
-                }
-                .frame(height: 80)
-                .accessibilityLabel("CPU over the last 24 hours")
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Programs")
-                        .font(.subheadline.weight(.medium))
-                    Spacer()
-                    Picker("Sort by", selection: $sorting) {
-                        ForEach(Sorting.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
-                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
                 ForEach(programs) { process in
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 6) {
                         HStack(alignment: .firstTextBaseline) {
                             Text(process.count > 1 ? "\(process.name) (\(process.count))" : process.name)
                                 .lineLimit(1)
@@ -804,51 +782,55 @@ private struct MachineCard: View {
                             Text(sorting == .memory ? bytes(process.memory) :
                                 "\(process.cpuPercent.formatted(.number.precision(.fractionLength(1)))) %")
                                 .monospacedDigit()
-                            Text("\(Int((share(process) * 100).rounded())) %")
-                                .monospacedDigit()
                                 .foregroundStyle(.secondary)
-                                .frame(minWidth: 40, alignment: .trailing)
                         }
-                        .font(.footnote)
-                        ProgressView(value: min(max(share(process), 0), 1))
-                            .tint(.agent)
-                            .scaleEffect(y: 0.6, anchor: .center)
+                        ShareBar(percent: share(process))
                     }
                     .accessibilityElement(children: .combine)
                 }
             }
-            Text("Up \(duration(host.uptimeS))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-private struct Meter: View {
-    let label: String
-    let percent: Double
-    let detail: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text("\(Int(percent.rounded())) %")
-                .font(.title3.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(percent >= 90 ? .red : .primary)
-            ProgressView(value: min(max(percent, 0), 100), total: 100)
-                .tint(percent >= 90 ? .red : .agent)
-            if let detail {
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+            if host.series.count > 1 {
+                Section("CPU, Last 24 Hours") {
+                    Chart(host.series) { sample in
+                        AreaMark(x: .value("Time", sample.at), y: .value("CPU", sample.cpuPercent))
+                            .foregroundStyle(.green.opacity(0.15))
+                            .interpolationMethod(.monotone)
+                        LineMark(x: .value("Time", sample.at), y: .value("CPU", sample.cpuPercent))
+                            .foregroundStyle(.green)
+                            .interpolationMethod(.monotone)
+                    }
+                    .chartYScale(domain: 0 ... 100)
+                    .chartYAxis {
+                        AxisMarks(values: [0, 50, 100]) { value in
+                            AxisGridLine()
+                            AxisValueLabel { if let v = value.as(Int.self) { Text("\(v) %") } }
+                        }
+                    }
+                    .frame(height: 140)
+                    .padding(.vertical, 8)
+                }
+            }
+            Section {
+                if let chip = host.chip { LabeledContent("Chip", value: chip) }
+                if let os = host.os { LabeledContent("System", value: os) }
+                if let load = host.load.first {
+                    LabeledContent("Load", value: load.formatted(.number.precision(.fractionLength(2))))
+                }
+                if let free = host.memoryFreePercent {
+                    LabeledContent("Memory free", value: percent(free))
+                }
+                LabeledContent("Swap", value: bytes(host.swapUsed))
+                LabeledContent(
+                    "Up",
+                    value: Duration.seconds(host.uptimeS).formatted(.units(
+                        allowed: [.days, .hours, .minutes],
+                        width: .abbreviated,
+                        maximumUnitCount: 2,
+                    )),
+                )
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        .formStyle(.grouped)
+        .navigationTitle(host.name)
     }
 }

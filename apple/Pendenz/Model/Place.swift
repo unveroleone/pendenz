@@ -22,7 +22,7 @@ enum Place: Hashable {
         case .project: "number"
         case .completed: "checkmark.circle"
         case .trash: "trash"
-        case .agents: "sparkles"
+        case .agents: "cpu"
         }
     }
 }
