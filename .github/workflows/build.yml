@@ -77,9 +77,48 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+  # The pendenz command for agents' machines, attached to the release with install.sh. Built
+  # on native runners. The Linux builds link glibc of Ubuntu 22.04, so they run on most systems
+  # from that age on.
+  binaries:
+    name: Build the command for ${{ matrix.name }}
+    needs: check
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        include:
+          - name: macos-arm64
+            runner: macos-15
+          - name: linux-x86_64
+            runner: ubuntu-22.04
+          - name: linux-arm64
+            runner: ubuntu-22.04-arm
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the Rust toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - name: Build
+        run: cargo build --release --locked --bin pendenz
+      - name: Pack
+        run: |
+          tar -czf "pendenz-${{ matrix.name }}.tar.gz" -C target/release pendenz
+          ./target/release/pendenz --version
+      - name: Keep the build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pendenz-${{ matrix.name }}
+          path: pendenz-${{ matrix.name }}.tar.gz
+          retention-days: 7
+
   publish:
     name: Report and release
-    needs: build
+    needs: [build, binaries]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.binaries.result != 'failure' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -106,3 +145,26 @@ jobs:
           case "$version" in *-*) prerelease=--prerelease ;; *) prerelease= ;; esac
           notes=$(printf 'Image: `%s:%s` (linux/amd64, linux/arm64)\n\nUpdate a server with `update.sh %s`.' "$IMAGE" "$version" "$version")
           gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --notes "$notes" $prerelease
+      - name: Check out the installer
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: deploy/install.sh
+          sparse-checkout-cone-mode: false
+      - name: Fetch the builds of the command
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: pendenz-*
+          path: dist
+          merge-multiple: true
+      - name: Attach the command and its installer
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cp deploy/install.sh dist/install.sh
+          (cd dist && sha256sum pendenz-*.tar.gz > SHA256SUMS)
+          gh release upload "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS dist/install.sh --clobber

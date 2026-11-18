@@ -57,7 +57,7 @@ pub struct AppState {
 }
 
 #[derive(Parser)]
-#[command(about = "Pendenz server, its admin commands, and the MCP server and command line for agents", after_help = agent::cli::NOTES)]
+#[command(version, about = "Pendenz server, its admin commands, and the MCP server and command line for agents", after_help = agent::cli::NOTES)]
 struct Args {
     #[arg(long, env = "DATABASE_URL", default_value = "sqlite://data/pendenz.db")]
     database_url: String,

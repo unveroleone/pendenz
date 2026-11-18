@@ -123,8 +123,8 @@ private struct ConnectAgentView: View {
         guard let code else { return "" }
         return """
         curl -fsSL https://github.com/unveroleone/pendenz/releases/latest/download/install.sh | sh
-        pendenz connect \(server) \(code.code)
-        pendenz report install
+        ~/.local/bin/pendenz connect \(server) \(code.code)
+        ~/.local/bin/pendenz report install
         """
     }
 
