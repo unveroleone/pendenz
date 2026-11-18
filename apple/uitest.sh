@@ -59,6 +59,17 @@ seed items unused-item '{"title": "Project item", "project_id": "unused-project"
 seed items trashed '{"title": "Trashed item", "trashed": true}'
 seed notes trashed-note '{"body": "Trashed note", "trashed": true}'
 seed items paragraphs '{"title": "Paragraphs"}'
+# For the search. Its ID goes to the test, so the order of the seeds does not matter.
+searched="$(curl -fs -X POST "$local_url/api/items" -H 'Content-Type: application/json' \
+    -H 'Idempotency-Key: seed-search' \
+    -d '{"title": "Lighthouse keeper", "description": "Bring the brass lantern", "tags": ["coastal"]}')"
+search_id="$(printf '%s' "$searched" | sed 's/.*[{,]"id":\([0-9]*\).*/\1/')"
+case "$search_id" in
+'' | *[!0-9]*)
+    echo "The search item was not seeded: $searched" >&2
+    exit 1
+    ;;
+esac
 n=0
 for title in "Drag A" "Drag B" "Drag C" "Swipe left" "Swipe right"; do
     n=$((n + 1))
@@ -93,4 +104,5 @@ if [ -n "$frames" ]; then
 fi
 
 TEST_RUNNER_PENDENZ_LOCAL="$local_url" TEST_RUNNER_PENDENZ_PAIRED="$paired_url" TEST_RUNNER_PENDENZ_CODE="$code" \
+    TEST_RUNNER_PENDENZ_SEARCH_ID="$search_id" \
     xcodebuild "$@"
