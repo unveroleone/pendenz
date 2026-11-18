@@ -720,26 +720,9 @@ private struct MeterRow: View {
     }
 }
 
+// The machine's load, with its programs, its last day and its details folded in below, so
+// they open in place.
 private struct MachineSection: View {
-    let host: AgentHost
-
-    var body: some View {
-        Section(host.name) {
-            MeterRow(label: "CPU", value: host.cpuPercent, detail: "\(host.cores) cores")
-            MeterRow(
-                label: "Memory",
-                value: memoryShare(host),
-                detail: "\(bytes(host.memoryUsed)) of \(bytes(host.memoryTotal))",
-            )
-            MeterRow(label: "Disk", value: diskShare(host), detail: "\(bytes(host.diskTotal - host.diskUsed)) free")
-            NavigationLink("Programs and History") {
-                MachineView(host: host)
-            }
-        }
-    }
-}
-
-private struct MachineView: View {
     enum Sorting: String, CaseIterable, Identifiable {
         case memory = "Memory"
         case cpu = "CPU"
@@ -748,6 +731,9 @@ private struct MachineView: View {
 
     let host: AgentHost
     @AppStorage("agentsProcessSorting") private var sorting = Sorting.memory
+    @AppStorage("agentsProgramsOpen") private var isProgramsOpen = false
+    @AppStorage("agentsHistoryOpen") private var isHistoryOpen = false
+    @AppStorage("agentsMachineOpen") private var isDetailsOpen = false
 
     // Highest first by what is chosen.
     private var programs: [AgentProcess] {
@@ -766,8 +752,15 @@ private struct MachineView: View {
     }
 
     var body: some View {
-        Form {
-            Section("Programs") {
+        Section(host.name) {
+            MeterRow(label: "CPU", value: host.cpuPercent, detail: "\(host.cores) cores")
+            MeterRow(
+                label: "Memory",
+                value: memoryShare(host),
+                detail: "\(bytes(host.memoryUsed)) of \(bytes(host.memoryTotal))",
+            )
+            MeterRow(label: "Disk", value: diskShare(host), detail: "\(bytes(host.diskTotal - host.diskUsed)) free")
+            DisclosureGroup("Programs", isExpanded: $isProgramsOpen) {
                 Picker("Sort by", selection: $sorting) {
                     ForEach(Sorting.allCases) { Text($0.rawValue).tag($0) }
                 }
@@ -779,10 +772,13 @@ private struct MachineView: View {
                             Text(process.count > 1 ? "\(process.name) (\(process.count))" : process.name)
                                 .lineLimit(1)
                             Spacer()
-                            Text(sorting == .memory ? bytes(process.memory) :
-                                "\(process.cpuPercent.formatted(.number.precision(.fractionLength(1)))) %")
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
+                            Text(
+                                sorting == .memory
+                                    ? bytes(process.memory)
+                                    : "\(process.cpuPercent.formatted(.number.precision(.fractionLength(1)))) %",
+                            )
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
                         }
                         ShareBar(percent: share(process))
                     }
@@ -790,7 +786,7 @@ private struct MachineView: View {
                 }
             }
             if host.series.count > 1 {
-                Section("CPU, Last 24 Hours") {
+                DisclosureGroup("CPU, Last 24 Hours", isExpanded: $isHistoryOpen) {
                     Chart(host.series) { sample in
                         AreaMark(x: .value("Time", sample.at), y: .value("CPU", sample.cpuPercent))
                             .foregroundStyle(.green.opacity(0.15))
@@ -808,9 +804,10 @@ private struct MachineView: View {
                     }
                     .frame(height: 140)
                     .padding(.vertical, 8)
+                    .accessibilityLabel("CPU over the last 24 hours")
                 }
             }
-            Section {
+            DisclosureGroup("Details", isExpanded: $isDetailsOpen) {
                 if let chip = host.chip { LabeledContent("Chip", value: chip) }
                 if let os = host.os { LabeledContent("System", value: os) }
                 if let load = host.load.first {
@@ -822,15 +819,14 @@ private struct MachineView: View {
                 LabeledContent("Swap", value: bytes(host.swapUsed))
                 LabeledContent(
                     "Up",
-                    value: Duration.seconds(host.uptimeS).formatted(.units(
-                        allowed: [.days, .hours, .minutes],
-                        width: .abbreviated,
-                        maximumUnitCount: 2,
-                    )),
+                    value: Duration.seconds(host.uptimeS)
+                        .formatted(.units(
+                            allowed: [.days, .hours, .minutes],
+                            width: .abbreviated,
+                            maximumUnitCount: 2,
+                        )),
                 )
             }
         }
-        .formStyle(.grouped)
-        .navigationTitle(host.name)
     }
 }
