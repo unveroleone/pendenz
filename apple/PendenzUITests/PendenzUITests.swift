@@ -211,6 +211,9 @@ final class PendenzUITests: XCTestCase {
         let reopened = app.textViews["Notes"].exists ? app.textViews["Notes"] : app.textFields["Notes"]
         XCTAssertTrue(reopened.waitForExistence(timeout: 5))
         XCTAssertEqual(reopened.value as? String, expected, "The detail shows the line breaks.")
+        // The window would open the next launch on this item again.
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(reopened.waitForNonExistence(timeout: 5))
     }
 
     private func description(of title: String, on server: String) throws -> String? {
