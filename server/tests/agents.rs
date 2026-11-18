@@ -229,13 +229,14 @@ async fn an_agent_connects_once_with_a_code_from_the_owner() {
     assert_eq!(made["scopes"], json!(["report"]));
     let code = made["code"].as_str().unwrap().to_lowercase();
 
-    let (status, connected) = post(&server, None, "/agents/connect", json!({"code": code})).await;
+    let (status, connected) =
+        post(&server, None, "/agent-codes/redeem", json!({"code": code})).await;
     assert_eq!(status, 200, "{connected}");
     assert_eq!(connected["agent"]["id"], "mac-mini");
     let token = connected["token"].as_str().unwrap().to_owned();
     // The code works once.
     assert_eq!(
-        post(&server, None, "/agents/connect", json!({"code": code}))
+        post(&server, None, "/agent-codes/redeem", json!({"code": code}))
             .await
             .0,
         400
@@ -265,7 +266,7 @@ async fn an_agent_connects_once_with_a_code_from_the_owner() {
     let (_, second) = post(
         &server,
         None,
-        "/agents/connect",
+        "/agent-codes/redeem",
         json!({"code": made["code"]}),
     )
     .await;

@@ -526,7 +526,7 @@ async fn main() -> anyhow::Result<()> {
         // Added after the layer above: a device that pairs has no token yet.
         .route("/pair", post(devices::pair))
         // The same for an agent that connects with a code from the app.
-        .route("/agents/connect", post(agents::connect));
+        .route("/agent-codes/redeem", post(agents::connect));
     // What clients call this server, for the hosted MCP endpoint's host check.
     let origin = std::env::var("PENDENZ_ORIGIN")
         .ok()

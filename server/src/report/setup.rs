@@ -77,7 +77,7 @@ pub async fn connect(server: &str, code: &str) -> anyhow::Result<Value> {
         .timeout(std::time::Duration::from_secs(20))
         .build()?;
     let response = http
-        .post(format!("{server}/api/agents/connect"))
+        .post(format!("{server}/api/agent-codes/redeem"))
         .json(&json!({"code": code}))
         .send()
         .await?;
@@ -148,10 +148,9 @@ fn job_path(home: &Path) -> String {
 }
 
 pub fn install() -> anyhow::Result<Value> {
+    // The job does not get this shell's environment, so it needs the saved connection.
     anyhow::ensure!(
-        saved().is_some()
-            || (std::env::var("PENDENZ_API_URL").is_ok()
-                && std::env::var("PENDENZ_API_TOKEN").is_ok()),
+        saved().is_some(),
         "Connect this machine first: pendenz connect <server> <code>"
     );
     let exe = std::env::current_exe()?;

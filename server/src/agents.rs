@@ -56,6 +56,21 @@ pub async fn put_report(
 
     let _guard = state.writer.lock().await;
     let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
+    // The agent may have been revoked while this request waited for the lock, and its report
+    // removed: it must not come back.
+    let allowed: bool = sqlx::query_scalar(concat!(
+        "SELECT EXISTS(SELECT 1 FROM tokens WHERE actor_id = ? AND revoked = 0 \
+         AND (',' || scopes || ',') LIKE '%,report,%' \
+         AND (expires_at IS NULL OR expires_at > ",
+        now!(),
+        "))"
+    ))
+    .bind(&identity.actor.id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if !allowed {
+        return Err(ApiError::unauthorized());
+    }
     // A report that arrives after a newer one, such as a retry, does not replace it.
     let stored: Option<(String, String)> =
         sqlx::query_as("SELECT sent_at, received_at FROM agent_reports WHERE actor_id = ?")

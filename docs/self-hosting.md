@@ -165,7 +165,7 @@ curl -fsSL https://github.com/unveroleone/pendenz/releases/latest/download/insta
 - `pendenz connect` trades the code for a new agent with its own token and saves both in `~/.config/pendenz/agent.json`, readable by that user alone. The agent commands of that user take the server and token from there when `PENDENZ_API_URL` and `PENDENZ_API_TOKEN` are not set. The code works once, for ten minutes, and the app chooses what the agent may do: send its status only (`report`), or also read and change items (`report`, `read`, `write`).
 - `pendenz report install` runs `pendenz report` every two minutes, as a LaunchAgent on macOS (log in `~/Library/Logs/pendenz-report.log`) or a systemd user timer on Linux. `pendenz report uninstall` stops it.
 
-The same works by hand: `pendenz add-agent` and `pendenz issue-token --scopes report` on the server, and the token in `PENDENZ_API_TOKEN` on the agent's machine.
+The same works by hand: `pendenz add-agent` and `pendenz issue-token --scopes report` on the server, and `PENDENZ_API_URL` and `PENDENZ_API_TOKEN` for `pendenz report` on the agent's machine, run by a scheduler of your own. `pendenz report install` needs the connection that `pendenz connect` saved, since the scheduled job does not see the shell's environment.
 
 ### Status reports
 

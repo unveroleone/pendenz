@@ -252,7 +252,7 @@ The device routes and `PATCH /api/settings` need a human token with `approve` (`
 
 ### Connecting an agent
 
-An agent can be connected from the app, the way a device is paired. `POST /api/agent-codes` (owner with `approve`) makes a one-time code with a name and the scopes: `report` alone, or `report`, `read` and `write`. `POST /api/agents/connect` takes the code without a token, uses it up and creates the agent and its token in the same transaction, like `/api/pair`. The code is stored as a hash, works once and for ten minutes. The scopes come from the code, never from the agent, and are filtered to those an agent may hold. A lost answer leaves an agent without a working token: the owner revokes it and makes a new code.
+An agent can be connected from the app, the way a device is paired. `POST /api/agent-codes` (owner with `approve`) makes a one-time code with a name and the scopes: `report` alone, or `report`, `read` and `write`. `POST /api/agent-codes/redeem` takes the code without a token, uses it up and creates the agent and its token in the same transaction, like `/api/pair`. The code is stored as a hash, works once and for ten minutes. The scopes come from the code, never from the agent, and are filtered to those an agent may hold. A lost answer leaves an agent without a working token: the owner revokes it and makes a new code.
 
 `DELETE /api/agents/<id>` (owner with `approve`) revokes every token of an agent and removes its report. The actor stays, so the activity log and the rows it wrote still name it.
 
