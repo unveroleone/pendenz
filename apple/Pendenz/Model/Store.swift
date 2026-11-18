@@ -64,6 +64,10 @@ final class Store {
     // The server's settings as it last confirmed them, kept per server on this device. Missing
     // until a server new enough for files has answered.
     private(set) var settings: ServerSettings?
+    // The comments of each item, oldest first, with the waiting changes laid over them.
+    private(set) var comments: [Int: [Comment]] = [:]
+    // Who writes comments, by actor ID, kept per server on this device.
+    private(set) var authors: [String: Author] = [:]
 
     // How long a completed item stays in its list, so a second tap can take it back.
     private static let lingerTime: TimeInterval = 2
@@ -72,6 +76,9 @@ final class Store {
     @ObservationIgnored private var items: [Int: Item] = [:]
     @ObservationIgnored private var projectsByID: [String: Project] = [:]
     @ObservationIgnored private var notesByID: [Int: Note] = [:]
+    // Every comment this device holds, deleted ones too while the app runs, so an older
+    // answer cannot bring one back.
+    @ObservationIgnored private var commentsByID: [Int: Comment] = [:]
     @ObservationIgnored private var outbox: [PendingEntry] = []
     @ObservationIgnored private var inFlightKey: String?
     // The server IDs of items that were added here since launch, by their local ID. A screen can
@@ -88,6 +95,9 @@ final class Store {
     @ObservationIgnored private var unsavedItems: [Int: Item] = [:]
     @ObservationIgnored private var unsavedProjects: [String: Project] = [:]
     @ObservationIgnored private var unsavedNotes: [Int: Note] = [:]
+    @ObservationIgnored private var unsavedComments: [Int: Comment] = [:]
+    // The author IDs that were asked for since launch and that the server did not name.
+    @ObservationIgnored private var askedAuthors: Set<String> = []
     // Called when the server no longer takes this device's token.
     @ObservationIgnored var onUnauthorized: (() -> Void)?
     @ObservationIgnored private var wantsSync = false
@@ -120,6 +130,10 @@ final class Store {
         items = Dictionary(snapshot.items.map { ($0.id, $0) }, uniquingKeysWith: { $1 })
         projectsByID = Dictionary(snapshot.projects.map { ($0.id, $0) }, uniquingKeysWith: { $1 })
         notesByID = Dictionary(snapshot.notes.map { ($0.id, $0) }, uniquingKeysWith: { $1 })
+        commentsByID = Dictionary(snapshot.comments.map { ($0.id, $0) }, uniquingKeysWith: { $1 })
+        authors = Self.keptAuthors[api.baseURL.absoluteString].flatMap {
+            try? JSONDecoder().decode([String: Author].self, from: $0)
+        } ?? [:]
         outbox = snapshot.outbox
         cursor = snapshot.cursor
         // What the server was when it last refused a change, until it answers again.
@@ -204,9 +218,15 @@ final class Store {
                 items.removeAll()
                 projectsByID.removeAll()
                 notesByID.removeAll()
+                commentsByID.removeAll()
+                // An agent may have another name on the restored server.
+                authors = [:]
+                askedAuthors.removeAll()
+                Self.keptAuthors[api.baseURL.absoluteString] = nil
                 unsavedItems.removeAll()
                 unsavedProjects.removeAll()
                 unsavedNotes.removeAll()
+                unsavedComments.removeAll()
                 disk.dropRows()
                 // The copies are named by their content, so they would stay right. They go
                 // anyway: the restored server may no longer hold these files at all.
@@ -218,6 +238,7 @@ final class Store {
                 case .item(let item): merge(item)
                 case .project(let project): merge(project)
                 case .note(let note): merge(note)
+                case .comment(let comment): merge(comment)
                 case .other: continue
                 }
             }
@@ -226,6 +247,30 @@ final class Store {
             save()
         }
         if !isClosed { isCurrent = true }
+        await learnAuthors()
+    }
+
+    // The names of the authors of the comments here, asked for once per launch for an ID this
+    // device does not know yet, until the server has answered. A comment without a known name
+    // shows its author's ID.
+    private func learnAuthors() async {
+        let unknown = Set(commentsByID.values.map(\.authorId))
+            .subtracting(authors.keys).subtracting(askedAuthors)
+        guard !unknown.isEmpty, !isClosed else { return }
+        // Without an answer the next sync asks again.
+        guard let named = try? await api.authors(), !isClosed else { return }
+        askedAuthors.formUnion(unknown)
+        var known = authors
+        for author in named {
+            known[author.id] = author
+        }
+        authors = known
+        Self.keptAuthors[api.baseURL.absoluteString] = try? JSONEncoder().encode(known)
+    }
+
+    private static var keptAuthors: [String: Data] {
+        get { UserDefaults.standard.dictionary(forKey: "commentAuthors") as? [String: Data] ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: "commentAuthors") }
     }
 
     // A server that is new enough now gets the changes that waited for its update, in the
@@ -267,18 +312,25 @@ final class Store {
         unsavedNotes[note.id] = note
     }
 
+    private func merge(_ comment: Comment) {
+        if let known = commentsByID[comment.id], known.seq > comment.seq { return }
+        commentsByID[comment.id] = comment
+        unsavedComments[comment.id] = comment
+    }
+
     // Rows, cursor and outbox changes reach the disk in one step. False when they did not.
     @discardableResult
     private func save() -> Bool {
         disk.put(
             items: Array(unsavedItems.values), projects: Array(unsavedProjects.values),
-            notes: Array(unsavedNotes.values), cursor: cursor,
+            notes: Array(unsavedNotes.values), comments: Array(unsavedComments.values), cursor: cursor,
         )
         let isSaved = disk.commit()
         if !isSaved { reportStorageProblem() }
         unsavedItems.removeAll()
         unsavedProjects.removeAll()
         unsavedNotes.removeAll()
+        unsavedComments.removeAll()
         return isSaved
     }
 
@@ -299,6 +351,7 @@ final class Store {
         disk.erase()
         attachments.erase()
         Self.keptSettings[api.baseURL.absoluteString] = nil
+        Self.keptAuthors[api.baseURL.absoluteString] = nil
     }
 
     // MARK: Settings
@@ -416,6 +469,20 @@ final class Store {
                     if id > 0 {
                         try await merge(api.removeFile(fileID, from: id, key: entry.key))
                     }
+                case .updateComment(let id, let commentID, let patch):
+                    let known = if let comment = commentsByID[commentID] {
+                        comment
+                    } else {
+                        try await fetchComments(of: id).first { $0.id == commentID }
+                    }
+                    // Gone on the server: there is nothing to change.
+                    if let known, !known.deleted {
+                        try await merge(api.update(
+                            comment: commentID, of: id, patch: patch, version: known.version, key: entry.key,
+                        ))
+                    }
+                case .deleteComment(let id, let commentID):
+                    try await merge(api.delete(comment: commentID, of: id, key: entry.key))
                 }
                 finish(entry)
                 rebases = 0
@@ -443,11 +510,19 @@ final class Store {
                     notesByID[id] = note
                     unsavedNotes[id] = note
                     rekey(entry)
-                case .create, .createNote, .createProject, .updateProject, .deleteProject, .addFile, .removeFile:
+                case .updateComment(let id, let commentID, _):
+                    rebases += 1
+                    // Missing from the answer: deleted meanwhile. The next try finds it gone.
+                    let current = try await fetchComments(of: id)
+                    if !current.contains(where: { $0.id == commentID }) { forgetComment(commentID) }
+                    rekey(entry)
+                case .create, .createNote, .createProject, .updateProject, .deleteProject, .addFile, .removeFile,
+                     .deleteComment:
                     finish(entry)
                 }
             } catch APIError.status(404, _?) {
                 // The row is gone, or hidden from this token. There is nothing to change.
+                if case .deleteComment(_, let commentID) = entry.write { forgetComment(commentID) }
                 finish(entry)
             } catch APIError.status(let code, let message?) where (400 ..< 500).contains(code) && code != 401 {
                 // Refused for good. An answer without the API's own message did not come from
@@ -540,6 +615,25 @@ final class Store {
         return item
     }
 
+    // A comment the server no longer has. Gone from the disk with the next save, and kept in
+    // memory as deleted, so an older answer cannot bring it back.
+    private func forgetComment(_ id: Int) {
+        guard var comment = commentsByID[id], !comment.deleted else { return }
+        comment.deleted = true
+        commentsByID[id] = comment
+        unsavedComments[id] = comment
+    }
+
+    // The server's comments of an item replace the ones here, whatever their sequence numbers.
+    private func fetchComments(of id: Int) async throws -> [Comment] {
+        let current = try await api.comments(of: id)
+        for comment in current {
+            commentsByID[comment.id] = comment
+            unsavedComments[comment.id] = comment
+        }
+        return current
+    }
+
     private func fetchNote(_ id: Int) async throws -> Note {
         let note = try await api.note(id)
         merge(note)
@@ -570,12 +664,15 @@ final class Store {
         publish()
     }
 
+    // The row read again goes to the disk with the new key: a retry after a restart sends that
+    // key with the version it was made for. With the old row the request would differ, and the
+    // server would refuse the key.
     private func rekey(_ entry: PendingEntry) {
         guard let index = outbox.firstIndex(where: { $0.key == entry.key }) else { return }
         disk.remove(key: entry.key)
         outbox[index].key = UUID().uuidString
         disk.put(outbox[index])
-        disk.commit()
+        save()
     }
 
     // The server gave a new item its ID. Later changes to it were queued under the local one.
@@ -643,6 +740,8 @@ final class Store {
         case .addFile(_, let file) where file.width != nil: "An image was not saved. \(reason)"
         case .addFile(_, let file): "“\(file.name)” was not saved. \(reason)"
         case .removeFile: "A file was not removed. \(reason)"
+        case .updateComment: "A change to a comment was not saved. \(reason)"
+        case .deleteComment: "A comment was not deleted. \(reason)"
         }
     }
 
@@ -711,6 +810,44 @@ final class Store {
         } else {
             enqueue(.update(itemID: id, patch: patch))
         }
+    }
+
+    // MARK: Comments
+
+    // The comments of an item, oldest first, also under the local ID it had before the server
+    // answered.
+    func comments(of id: Int) -> [Comment] {
+        comments[serverIDs[id] ?? id] ?? []
+    }
+
+    // The name a comment is shown with: "You" for the owner, an agent by its name.
+    func authorName(_ id: String) -> String {
+        guard let author = authors[id] else { return id == "owner" ? "You" : id }
+        return author.isOwner ? "You" : author.name
+    }
+
+    // A new text or the outdated mark. Edits made in a row to the same comment are sent as
+    // one request.
+    func update(_ comment: Comment, _ patch: CommentPatch) {
+        if let last = outbox.indices.last, outbox[last].key != inFlightKey,
+           case .updateComment(comment.itemId, comment.id, var waiting) = outbox[last].write
+        {
+            waiting.merge(patch)
+            // A new request needs a new key, as for an item.
+            disk.remove(key: outbox[last].key)
+            outbox[last].key = UUID().uuidString
+            outbox[last].write = .updateComment(itemID: comment.itemId, commentID: comment.id, patch: waiting)
+            disk.put(outbox[last])
+            if !disk.commit() { reportStorageProblem() }
+            publish()
+            Task { await sync() }
+        } else {
+            enqueue(.updateComment(itemID: comment.itemId, commentID: comment.id, patch: patch))
+        }
+    }
+
+    func delete(_ comment: Comment) {
+        enqueue(.deleteComment(itemID: comment.itemId, commentID: comment.id))
     }
 
     // Completes an item. It stays in its list for a moment, and a second tap in that time
@@ -1249,6 +1386,7 @@ final class Store {
         var view = items
         var noteView = notesByID
         var projectView = projectsByID
+        var commentView = commentsByID
         // Nothing stays filed under a deleted project. The server moves the rows itself; this
         // shows it before its answer and its changes have arrived.
         func unfile(_ gone: Set<String>) {
@@ -1305,6 +1443,13 @@ final class Store {
                 if !file.isUnwanted { waitingAttachments[id, default: []].append(file) }
             case .removeFile(let id, let fileID):
                 view[id]?.files.removeAll { $0.id == fileID }
+            case .updateComment(_, let commentID, let patch):
+                if var comment = commentView[commentID] {
+                    patch.apply(to: &comment)
+                    commentView[commentID] = comment
+                }
+            case .deleteComment(_, let commentID):
+                commentView[commentID]?.deleted = true
             }
         }
         let listed = noteView.values.filter { !$0.trashed }.sorted(by: Self.byPinThenEdit)
@@ -1341,6 +1486,9 @@ final class Store {
         if binned != trashedItems { trashedItems = binned }
         if binnedNotes != trashedNotes { trashedNotes = binnedNotes }
         if waitingAttachments != waitingFiles { waitingFiles = waitingAttachments }
+        let shownComments = Dictionary(grouping: commentView.values.filter { !$0.deleted }, by: \.itemId)
+            .mapValues { $0.sorted { $0.id < $1.id } }
+        if shownComments != comments { comments = shownComments }
         if outbox.count != pendingCount { pendingCount = outbox.count }
         let held = outbox.contains(where: { $0.heldFor != nil }) ? waitingForUpdate().count : 0
         if held != heldCount { heldCount = held }

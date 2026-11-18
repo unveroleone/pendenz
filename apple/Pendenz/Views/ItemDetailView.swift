@@ -45,10 +45,34 @@ struct ItemDetailView: View {
                         .focused($focus, equals: .title)
                         .labelsHidden()
                 }
-                TextField("Notes", text: $notes, prompt: Text("Notes"), axis: .vertical)
-                    .lineLimit(2 ... 12)
+                // A text editor, not a text field: Return starts a new line on every platform,
+                // where a field on the Mac ends the editing.
+                TextEditor(text: $notes)
+                    .font(.body)
+                    .scrollContentBackground(.hidden)
+                    // About two lines, as the field before it: the body text is 17 points on
+                    // iOS and 13 on the Mac.
+                    #if os(iOS)
+                    .frame(minHeight: 60)
+                    #else
+                    .frame(minHeight: 34)
+                    #endif
+                    // The editor insets its text by five points, and on iOS by eight from the
+                    // top. This lines it up with the other rows.
+                    .padding(.horizontal, -5)
+                    #if os(iOS)
+                    .padding(.vertical, -8)
+                    #endif
                     .focused($focus, equals: .notes)
-                    .labelsHidden()
+                    .overlay(alignment: .topLeading) {
+                        if notes.isEmpty {
+                            Text("Notes")
+                                .foregroundStyle(Self.placeholder)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .accessibilityLabel("Notes")
             }
             Section("Steps") {
                 ForEach($lines) { $line in
@@ -82,6 +106,7 @@ struct ItemDetailView: View {
                 }
             }
             ItemAttachmentsSection(item: item)
+            ItemCommentsSection(itemID: item.id)
             Section {
                 Toggle("Date", isOn: hasDate(item))
                     .selectionTint()
@@ -182,6 +207,13 @@ struct ItemDetailView: View {
     }
 
     // MARK: Text
+
+    // The color the system gives the placeholder of a text field, which a text editor lacks.
+    #if os(macOS)
+    private static let placeholder = Color(nsColor: .placeholderTextColor)
+    #else
+    private static let placeholder = Color(uiColor: .placeholderText)
+    #endif
 
     private var isEditingLines: Bool {
         switch focus {

@@ -44,6 +44,19 @@ final class StoredNote {
 }
 
 @Model
+final class StoredComment {
+    @Attribute(.unique) var id: Int
+    var itemID: Int
+    var payload: Data
+
+    init(id: Int, itemID: Int, payload: Data) {
+        self.id = id
+        self.itemID = itemID
+        self.payload = payload
+    }
+}
+
+@Model
 final class StoredWrite {
     @Attribute(.unique) var key: String
     var order: Int
@@ -82,6 +95,7 @@ final class LocalStore {
         var items: [Item] = []
         var projects: [Project] = []
         var notes: [Note] = []
+        var comments: [Comment] = []
         var cursor = 0
         var outbox: [PendingEntry] = []
         // A photo an older build left waiting could not be moved yet. Its folder has to stay.
@@ -95,7 +109,8 @@ final class LocalStore {
     // 4: a note's row says whether it is locked.
     // 5: an item's row lists its files.
     // 6: an item's pictures are among its files.
-    private static let format = 6
+    // 7: comments are kept.
+    private static let format = 7
 
     // Kept alive here: a context whose container is gone traps on its first fetch.
     private let container: ModelContainer
@@ -109,7 +124,14 @@ final class LocalStore {
 
     init(server: URL) {
         self.server = server.absoluteString
-        let schema = Schema([StoredItem.self, StoredProject.self, StoredNote.self, StoredWrite.self, StoredState.self])
+        let schema = Schema([
+            StoredItem.self,
+            StoredProject.self,
+            StoredNote.self,
+            StoredComment.self,
+            StoredWrite.self,
+            StoredState.self,
+        ])
         do {
             container = try ModelContainer(for: schema)
             isDurable = true
@@ -148,13 +170,13 @@ final class LocalStore {
             for row in closed where (try? decoder.decode(Item.self, from: row.payload))?.trashed == true {
                 row.isTrashed = true
             }
-            if state.format < 6 {
+            if state.format < 7 {
                 // Rows stored by an older build lack a field: when a project was made, when an
                 // item was completed, whether a note is locked, which files an item has, its
                 // pictures among them. Such a build stored a row without a list it did not know,
-                // and its cursor has passed that row. The server sends every row again from the start, and each
-                // replaces
-                // the one kept here. The waiting changes stay.
+                // or skipped the comments, and its cursor has passed that row. The server sends
+                // every row again from the start, and each replaces the one kept here. The
+                // waiting changes stay.
                 state.cursor = 0
                 snapshot.cursor = 0
             }
@@ -217,12 +239,16 @@ final class LocalStore {
             let listed =
                 FetchDescriptor<StoredNote>(predicate: #Predicate { !$0.isTrashed || noteTargets.contains($0.id) })
             snapshot.notes = try context.fetch(listed).map { try decoder.decode(Note.self, from: $0.payload) }
+            // A deleted comment is removed from the disk, so every row here is shown.
+            snapshot.comments = try context.fetch(FetchDescriptor<StoredComment>())
+                .map { try decoder.decode(Comment.self, from: $0.payload) }
         } catch {
             // The rows were written by an older build. Load them again from the server.
             try? wipe(includingOutbox: false)
             snapshot.items = []
             snapshot.projects = []
             snapshot.notes = []
+            snapshot.comments = []
             snapshot.cursor = 0
         }
         return snapshot
@@ -272,7 +298,7 @@ final class LocalStore {
     }
 
     // Stages rows and the cursor. Nothing is on disk until `commit`.
-    func put(items: [Item], projects: [Project], notes: [Note], cursor: Int) {
+    func put(items: [Item], projects: [Project], notes: [Note], comments: [Comment], cursor: Int) {
         guard !isClosed else { return }
         // Plain keys on disk. The snake case of the API is only for the wire: converting keys
         // there and back does not return every name unchanged.
@@ -289,6 +315,15 @@ final class LocalStore {
         for note in notes {
             guard let payload = try? encoder.encode(note) else { continue }
             context.insert(StoredNote(id: note.id, isTrashed: note.trashed, payload: payload))
+        }
+        for comment in comments {
+            if comment.deleted {
+                let id = comment.id
+                try? context.delete(model: StoredComment.self, where: #Predicate { $0.id == id })
+                continue
+            }
+            guard let payload = try? encoder.encode(comment) else { continue }
+            context.insert(StoredComment(id: comment.id, itemID: comment.itemId, payload: payload))
         }
         state().cursor = cursor
     }
@@ -371,6 +406,7 @@ final class LocalStore {
         try context.delete(model: StoredItem.self)
         try context.delete(model: StoredProject.self)
         try context.delete(model: StoredNote.self)
+        try context.delete(model: StoredComment.self)
         if includingOutbox {
             try context.delete(model: StoredWrite.self)
         }

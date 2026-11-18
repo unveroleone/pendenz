@@ -183,6 +183,48 @@ final class PendenzUITests: XCTestCase {
         XCTAssertTrue(note.waitForNonExistence(timeout: 10), "The note went to the trash.")
     }
 
+    // Return in the description starts a new line, and the server keeps it.
+    func testDescriptionKeepsParagraphs() throws {
+        try XCTSkipIf(isSidebarLayout, "Runs on the iPhone layout.")
+        let server = try value("PENDENZ_LOCAL")
+        let app = try launch(tab: "tasks")
+        openInbox(app)
+        let item = row(app, "Paragraphs")
+        XCTAssertTrue(item.waitForExistence(timeout: 10))
+        item.tap()
+        let notes = app.textViews["Notes"].exists ? app.textViews["Notes"] : app.textFields["Notes"]
+        XCTAssertTrue(notes.waitForExistence(timeout: 5))
+        notes.tap()
+        notes.typeText("First line\n\nSecond paragraph")
+        app.buttons["Done"].firstMatch.tap()
+
+        let expected = "First line\n\nSecond paragraph"
+        var stored: String?
+        let deadline = Date.now.addingTimeInterval(15)
+        while stored != expected, Date.now < deadline {
+            stored = try description(of: "Paragraphs", on: server)
+            if stored != expected { Thread.sleep(forTimeInterval: 0.5) }
+        }
+        XCTAssertEqual(stored, expected, "The server keeps the line breaks.")
+
+        item.tap()
+        let reopened = app.textViews["Notes"].exists ? app.textViews["Notes"] : app.textFields["Notes"]
+        XCTAssertTrue(reopened.waitForExistence(timeout: 5))
+        XCTAssertEqual(reopened.value as? String, expected, "The detail shows the line breaks.")
+        // The window would open the next launch on this item again.
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(reopened.waitForNonExistence(timeout: 5))
+    }
+
+    private func description(of title: String, on server: String) throws -> String? {
+        var url = URLComponents(string: server + "/api/items")!
+        url.queryItems = [URLQueryItem(name: "q", value: title)]
+        let data = try Data(contentsOf: url.url!)
+        let body = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let items = body?["items"] as? [[String: Any]] ?? []
+        return items.first { $0["title"] as? String == title }?["description"] as? String
+    }
+
     func testPairsShowsDevicesAndUnpairs() throws {
         try XCTSkipIf(isSidebarLayout, "Runs on the iPhone layout.")
         let server = try value("PENDENZ_PAIRED")

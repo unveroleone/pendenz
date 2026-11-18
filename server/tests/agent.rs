@@ -533,6 +533,19 @@ async fn hosted_tools() {
         ("get_item", json!({"id": 1.5})),
         ("get_item", json!({})),
         ("get_item", json!({"id": 1, "activity": 101})),
+        (
+            "update_comment",
+            json!({"id": 1, "comment": "x", "version": 1, "outdated": true}),
+        ),
+        (
+            "update_comment",
+            json!({"id": 1, "comment": 1, "outdated": true}),
+        ),
+        (
+            "update_comment",
+            json!({"id": 1, "comment": 1, "version": 1, "body": " "}),
+        ),
+        ("delete_comment", json!({"id": 1})),
         ("create_item", json!({"item": {"title": "   "}})),
         (
             "create_item",
@@ -865,6 +878,116 @@ async fn hosted_tools() {
         "comment on a missing item",
         bot.call("add_comment", json!({"id": 999, "body": "x"}))
             .await,
+    );
+
+    // Comments are changed by their author; the owner may change any.
+    server
+        .api(
+            &server.owner,
+            "POST",
+            "/items/2/comments",
+            Some(json!({"body": "Ask at the counter."})),
+        )
+        .await;
+    t.add(
+        "mark comment outdated",
+        bot.call(
+            "update_comment",
+            json!({"id": "P-2", "comment": 1, "version": 1, "outdated": true, "key": "uc1"}),
+        )
+        .await,
+    );
+    t.add(
+        "mark comment outdated again with the key",
+        bot.call(
+            "update_comment",
+            json!({"id": "P-2", "comment": 1, "version": 1, "outdated": true, "key": "uc1"}),
+        )
+        .await,
+    );
+    t.add(
+        "get item with an outdated comment",
+        bot.call("get_item", json!({"id": 2, "activity": 2})).await,
+    );
+    t.add(
+        "edit comment with an old version",
+        bot.call(
+            "update_comment",
+            json!({"id": 2, "comment": 1, "version": 1, "body": "x"}),
+        )
+        .await,
+    );
+    t.add(
+        "edit comment without a change",
+        bot.call(
+            "update_comment",
+            json!({"id": 2, "comment": 1, "version": 2}),
+        )
+        .await,
+    );
+    t.add(
+        "edit the owner's comment",
+        bot.call(
+            "update_comment",
+            json!({"id": 2, "comment": 2, "version": 1, "outdated": true}),
+        )
+        .await,
+    );
+    t.add(
+        "delete the owner's comment",
+        bot.call("delete_comment", json!({"id": 2, "comment": 2}))
+            .await,
+    );
+    t.add(
+        "edit comment under another item",
+        bot.call(
+            "update_comment",
+            json!({"id": 1, "comment": 1, "version": 2, "body": "x"}),
+        )
+        .await,
+    );
+    t.add(
+        "owner edits the agent's comment",
+        owner
+            .call(
+                "update_comment",
+                json!({"id": 2, "comment": 1, "version": 2, "body": " Booked the photo for Friday. "}),
+            )
+            .await,
+    );
+    t.add(
+        "delete comment",
+        bot.call(
+            "delete_comment",
+            json!({"id": 2, "comment": 1, "key": "dc1"}),
+        )
+        .await,
+    );
+    t.add(
+        "delete comment again with the key",
+        bot.call(
+            "delete_comment",
+            json!({"id": 2, "comment": 1, "key": "dc1"}),
+        )
+        .await,
+    );
+    t.add(
+        "delete comment again",
+        bot.call("delete_comment", json!({"id": 2, "comment": 1}))
+            .await,
+    );
+    t.add(
+        "edit a deleted comment",
+        owner
+            .call(
+                "update_comment",
+                json!({"id": 2, "comment": 1, "version": 4, "outdated": false}),
+            )
+            .await,
+    );
+    t.add(
+        "get item after deleting a comment",
+        bot.call("get_item", json!({"id": 2, "activity": 3})).await,
     );
 
     // A picture sent by an app of 0.2.0 to the old image route is a file with a size.
@@ -1593,6 +1716,24 @@ async fn cli() {
             vec!["comment", "P-1", "--body", "Called, no answer."],
         ),
         ("comment empty", vec!["comment", "P-1"]),
+        (
+            "comment-update",
+            vec![
+                "comment-update",
+                "P-1",
+                "1",
+                "--json",
+                r#"{"version":1,"outdated":true}"#,
+                "--key",
+                "cu1",
+            ],
+        ),
+        (
+            "comment-update bad comment id",
+            vec!["comment-update", "P-1", "x", "--json", r#"{"version":1}"#],
+        ),
+        ("comment-delete", vec!["comment-delete", "P-1", "1"]),
+        ("comment-delete missing", vec!["comment-delete", "P-1", "1"]),
         (
             "add-file picture",
             vec!["add-file", "P-1", &png, "--key", "i1"],

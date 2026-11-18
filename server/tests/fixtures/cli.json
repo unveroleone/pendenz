@@ -655,9 +655,13 @@
         "author_id": "bot",
         "body": "Called, no answer.",
         "created_at": "<time>",
+        "deleted": false,
+        "edited_at": null,
         "id": 1,
         "item_id": 1,
-        "seq": 6
+        "outdated": false,
+        "seq": 6,
+        "version": 1
       }
     },
     "step": "comment"
@@ -669,6 +673,60 @@
       "stdout": ""
     },
     "step": "comment empty"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "author_id": "bot",
+        "body": "Called, no answer.",
+        "created_at": "<time>",
+        "deleted": false,
+        "edited_at": null,
+        "id": 1,
+        "item_id": 1,
+        "outdated": true,
+        "seq": 7,
+        "version": 2
+      }
+    },
+    "step": "comment-update"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Use a comment ID from the item's comments.",
+      "stdout": ""
+    },
+    "step": "comment-update bad comment id"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "author_id": "bot",
+        "body": "",
+        "created_at": "<time>",
+        "deleted": true,
+        "edited_at": null,
+        "id": 1,
+        "item_id": 1,
+        "outdated": true,
+        "seq": 8,
+        "version": 3
+      }
+    },
+    "step": "comment-delete"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "404: Not found.",
+      "stdout": ""
+    },
+    "step": "comment-delete missing"
   },
   {
     "answer": {
@@ -713,7 +771,7 @@
         "project_id": "home-lab",
         "remind_at": null,
         "repeat_rule": null,
-        "seq": 7,
+        "seq": 9,
         "source_url": null,
         "status": "doing",
         "tags": [],
@@ -786,7 +844,7 @@
         "project_id": "home-lab",
         "remind_at": null,
         "repeat_rule": null,
-        "seq": 8,
+        "seq": 10,
         "source_url": null,
         "status": "doing",
         "tags": [],
@@ -831,7 +889,7 @@
         "project_id": "home-lab",
         "remind_at": null,
         "repeat_rule": null,
-        "seq": 9,
+        "seq": 11,
         "source_url": null,
         "status": "doing",
         "tags": [],
@@ -876,7 +934,7 @@
         "project_id": "home-lab",
         "remind_at": null,
         "repeat_rule": null,
-        "seq": 9,
+        "seq": 11,
         "source_url": null,
         "status": "doing",
         "tags": [],
@@ -933,7 +991,7 @@
         "project_id": "home-lab",
         "remind_at": null,
         "repeat_rule": null,
-        "seq": 10,
+        "seq": 12,
         "source_url": null,
         "status": "doing",
         "tags": [],
@@ -967,7 +1025,7 @@
         "locked": false,
         "pinned": false,
         "project_id": null,
-        "seq": 11,
+        "seq": 13,
         "trashed": false,
         "updated_at": "<time>",
         "updated_by": "bot",
@@ -989,7 +1047,7 @@
         "locked": true,
         "pinned": false,
         "project_id": null,
-        "seq": 12,
+        "seq": 14,
         "trashed": false,
         "updated_at": "<time>",
         "updated_by": "bot",
@@ -1014,7 +1072,7 @@
             "locked": true,
             "pinned": false,
             "project_id": null,
-            "seq": 12,
+            "seq": 14,
             "trashed": false,
             "updated_at": "<time>",
             "updated_by": "bot",
@@ -1029,7 +1087,7 @@
             "locked": false,
             "pinned": false,
             "project_id": null,
-            "seq": 11,
+            "seq": 13,
             "trashed": false,
             "updated_at": "<time>",
             "updated_by": "bot",
@@ -1056,7 +1114,7 @@
             "locked": false,
             "pinned": false,
             "project_id": null,
-            "seq": 11,
+            "seq": 13,
             "trashed": false,
             "updated_at": "<time>",
             "updated_by": "bot",
@@ -1083,7 +1141,7 @@
           "locked": false,
           "pinned": false,
           "project_id": null,
-          "seq": 11,
+          "seq": 13,
           "trashed": false,
           "updated_at": "<time>",
           "updated_by": "bot",
@@ -1109,7 +1167,7 @@
           "locked": true,
           "pinned": false,
           "project_id": null,
-          "seq": 12,
+          "seq": 14,
           "trashed": false,
           "updated_at": "<time>",
           "updated_by": "bot",
@@ -1140,7 +1198,7 @@
         "locked": false,
         "pinned": true,
         "project_id": null,
-        "seq": 13,
+        "seq": 15,
         "trashed": false,
         "updated_at": "<time>",
         "updated_by": "bot",
@@ -1162,7 +1220,7 @@
         "locked": false,
         "pinned": true,
         "project_id": null,
-        "seq": 14,
+        "seq": 16,
         "trashed": false,
         "updated_at": "<time>",
         "updated_by": "bot",
@@ -1236,13 +1294,17 @@
           {
             "data": {
               "author_id": "bot",
-              "body": "Called, no answer.",
+              "body": "",
               "created_at": "<time>",
+              "deleted": true,
+              "edited_at": null,
               "id": 1,
               "item_id": 1,
-              "seq": 6
+              "outdated": true,
+              "seq": 8,
+              "version": 3
             },
-            "seq": 6,
+            "seq": 8,
             "type": "comment"
           },
           {
@@ -1266,7 +1328,7 @@
               "project_id": "home-lab",
               "remind_at": null,
               "repeat_rule": null,
-              "seq": 10,
+              "seq": 12,
               "source_url": null,
               "status": "doing",
               "tags": [],
@@ -1276,7 +1338,7 @@
               "updated_by": "bot",
               "version": 6
             },
-            "seq": 10,
+            "seq": 12,
             "type": "item"
           },
           {
@@ -1289,13 +1351,13 @@
               "locked": true,
               "pinned": false,
               "project_id": null,
-              "seq": 12,
+              "seq": 14,
               "trashed": false,
               "updated_at": "<time>",
               "updated_by": "bot",
               "version": 1
             },
-            "seq": 12,
+            "seq": 14,
             "type": "note"
           },
           {
@@ -1308,17 +1370,17 @@
               "locked": false,
               "pinned": true,
               "project_id": null,
-              "seq": 14,
+              "seq": 16,
               "trashed": false,
               "updated_at": "<time>",
               "updated_by": "bot",
               "version": 3
             },
-            "seq": 14,
+            "seq": 16,
             "type": "note"
           }
         ],
-        "cursor": 14,
+        "cursor": 16,
         "has_more": false,
         "reset": false,
         "settings": {
@@ -1374,17 +1436,21 @@
           {
             "data": {
               "author_id": "bot",
-              "body": "Called, no answer.",
+              "body": "",
               "created_at": "<time>",
+              "deleted": true,
+              "edited_at": null,
               "id": 1,
               "item_id": 1,
-              "seq": 6
+              "outdated": true,
+              "seq": 8,
+              "version": 3
             },
-            "seq": 6,
+            "seq": 8,
             "type": "comment"
           }
         ],
-        "cursor": 6,
+        "cursor": 8,
         "has_more": true,
         "reset": false,
         "settings": {
@@ -1448,7 +1514,7 @@
         "icon": "server.rack",
         "id": "home-lab",
         "name": "Homelab",
-        "seq": 16
+        "seq": 18
       }
     },
     "step": "project-delete"
@@ -1504,12 +1570,12 @@
         "hidden_from_agents": false,
         "id": 3,
         "images": [],
-        "position": 17,
+        "position": 19,
         "priority": 0,
         "project_id": null,
         "remind_at": null,
         "repeat_rule": null,
-        "seq": 17,
+        "seq": 19,
         "source_url": null,
         "status": "todo",
         "tags": [],
@@ -1541,12 +1607,12 @@
         "hidden_from_agents": false,
         "id": 4,
         "images": [],
-        "position": 18,
+        "position": 20,
         "priority": 0,
         "project_id": null,
         "remind_at": null,
         "repeat_rule": null,
-        "seq": 18,
+        "seq": 20,
         "source_url": null,
         "status": "todo",
         "tags": [],

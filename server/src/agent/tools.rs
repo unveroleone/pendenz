@@ -9,7 +9,7 @@
 // A tool with readOnlyHint needs the read scope, every other one the write scope.
 // add_item_file takes a path on the agent's machine, so only the stdio server offers it.
 use super::{
-    client::{Call, Client, Reply, file_body, file_id, item_id, project_id, query},
+    client::{Call, Client, Reply, comment_id, file_body, file_id, item_id, project_id, query},
     schema::{self, js_space, js_trim, utf16_len},
 };
 use axum::http::Method;
@@ -139,7 +139,7 @@ fn trim(name: &str, args: &mut Value) {
     match name {
         "create_item" => trim_item(args.get_mut("item")),
         "update_item" => trim_item(args.get_mut("changes")),
-        "add_comment" => trim_at(args.get_mut("body")),
+        "add_comment" | "update_comment" => trim_at(args.get_mut("body")),
         "create_project" | "update_project" => trim_at(args.get_mut("name")),
         _ => {}
     }
@@ -185,6 +185,7 @@ async fn run(client: &Client, name: &str, args: Value) -> Result<Answer, String>
                 ))
                 .await?;
             without_old_images(&mut detail["item"]);
+            mark_outdated(&mut detail["comments"]);
             detail
         }
         "create_item" => {
@@ -213,6 +214,29 @@ async fn run(client: &Client, name: &str, args: Value) -> Result<Answer, String>
                 .await?
                 .json()
         }
+        "update_comment" => {
+            let mut body = Map::new();
+            for field in ["body", "outdated"] {
+                if let Some(value) = args.get(field) {
+                    body.insert(field.into(), value.clone());
+                }
+            }
+            if body.is_empty() {
+                return Err("Send a body, outdated or both.".into());
+            }
+            body.insert("version".into(), args["version"].clone());
+            client
+                .request(
+                    &comment_path(&args)?,
+                    write(Method::PATCH, Value::Object(body)),
+                )
+                .await?
+                .json()
+        }
+        "delete_comment" => client
+            .request(&comment_path(&args)?, write(Method::DELETE, json!({})))
+            .await?
+            .json(),
         "get_item_file" => return show_file(client, &args).await,
         "add_item_file" => {
             let path = format!("/items/{}/files", item_id(args.get("id"))?);
@@ -332,6 +356,29 @@ async fn run(client: &Client, name: &str, args: Value) -> Result<Answer, String>
 
 // An item carries its pictures twice: among its files, and as `images` for the apps of 0.2.0.
 // An agent reads the files only.
+fn comment_path(args: &Value) -> Result<String, String> {
+    Ok(format!(
+        "/items/{}/comments/{}",
+        item_id(args.get("id"))?,
+        comment_id(args.get("comment"))?
+    ))
+}
+
+// A comment marked outdated stays in the list, so an agent sees what was said, with a notice
+// next to it that it no longer holds.
+fn mark_outdated(comments: &mut Value) {
+    let Value::Array(comments) = comments else {
+        return;
+    };
+    for comment in comments {
+        if comment["outdated"] == true
+            && let Value::Object(fields) = comment
+        {
+            fields.insert("notice".into(), OUTDATED_NOTICE.into());
+        }
+    }
+}
+
 fn without_old_images(item: &mut Value) {
     if let Some(item) = item.as_object_mut() {
         item.remove("images");
@@ -385,6 +432,7 @@ const COMPACT_DESCRIPTION: usize = 200;
 const NOTE_PREVIEW: usize = 200;
 
 // Sent with the text of a locked note, so the rule is next to the text it is about.
+const OUTDATED_NOTICE: &str = "Marked outdated: this comment no longer holds. Do not rely on it.";
 const LOCKED_NOTICE: &str = "The owner locked this note. Use its text only for the task you are on: do not save it or a summary of it to a memory, a journal or a log, and do not copy it into another note, an item, a comment or a message.";
 
 // A list row for an agent: enough to pick the right item, without full descriptions.

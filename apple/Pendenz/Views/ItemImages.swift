@@ -90,7 +90,7 @@ struct ItemImageTile: View {
     }
 }
 
-// Whether the clipboard holds a picture, and its bytes.
+// Whether the clipboard holds a picture, and its bytes. Text is copied here too.
 enum Clipboard {
     #if os(macOS)
     // The Mac sends no notice when the clipboard changes; the app coming to the front is the
@@ -105,6 +105,11 @@ enum Clipboard {
         let board = NSPasteboard.general
         return [NSPasteboard.PasteboardType.png, .tiff].lazy.compactMap { board.data(forType: $0) }.first
     }
+
+    static func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
     #else
     static let changed = UIPasteboard.changedNotification
 
@@ -114,6 +119,10 @@ enum Clipboard {
 
     static func image() -> Data? {
         UIPasteboard.general.image?.pngData()
+    }
+
+    static func copy(_ text: String) {
+        UIPasteboard.general.string = text
     }
     #endif
 }

@@ -4,6 +4,9 @@
 #   apple/uitest.sh                    all tests on the iPhone 18 Pro
 #   apple/uitest.sh "Pendenz iPad"     on another simulator
 #   apple/uitest.sh "iPhone 18 Pro" testReminderFires     one test
+# PENDENZ_UITEST_FRAMES=<dir> also saves a screenshot of the simulator about once a second into
+# <dir> while the tests run. The recorder stops with the script, also when the script is killed,
+# and after 1500 frames at most.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -18,11 +21,17 @@ bin="target/debug/pendenz"
 
 local_pid=""
 paired_pid=""
+recorder_pid=""
 cleanup() {
-    kill $local_pid $paired_pid 2>/dev/null || true
+    kill $recorder_pid $local_pid $paired_pid 2>/dev/null || true
     rm -rf "$work"
 }
+# EXIT alone does not run when the script is ended by a signal, which left the servers and a
+# screenshot loop running after a killed run.
 trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 DATABASE_URL="sqlite://$work/local.db" PENDENZ_AUTH_MODE=local PENDENZ_BIND=127.0.0.1:8792 "$bin" >"$work/local.log" 2>&1 &
 local_pid=$!
@@ -49,6 +58,7 @@ seed projects vacant '{"name": "Vacant project"}'
 seed items unused-item '{"title": "Project item", "project_id": "unused-project"}'
 seed items trashed '{"title": "Trashed item", "trashed": true}'
 seed notes trashed-note '{"body": "Trashed note", "trashed": true}'
+seed items paragraphs '{"title": "Paragraphs"}'
 # For the search. Its ID goes to the test, so the order of the seeds does not matter.
 searched="$(curl -fs -X POST "$local_url/api/items" -H 'Content-Type: application/json' \
     -H 'Idempotency-Key: seed-search' \
@@ -76,6 +86,23 @@ set -- test -project apple/Pendenz.xcodeproj -scheme Pendenz -destination "platf
 if [ -n "$only" ]; then
     set -- "$@" "-only-testing:PendenzUITests/PendenzUITests/$only"
 fi
+
+# The recorder also checks that this script is still alive, so it ends even after a kill -9.
+frames="${PENDENZ_UITEST_FRAMES:-}"
+if [ -n "$frames" ]; then
+    mkdir -p "$frames"
+    script_pid=$$
+    (
+        i=0
+        while [ "$i" -lt 1500 ] && kill -0 "$script_pid" 2>/dev/null; do
+            i=$((i + 1))
+            xcrun simctl io "$device" screenshot --type=jpeg "$frames/f$(printf %04d "$i").jpg" >/dev/null 2>&1 || true
+            sleep 0.6
+        done
+    ) &
+    recorder_pid=$!
+fi
+
 TEST_RUNNER_PENDENZ_LOCAL="$local_url" TEST_RUNNER_PENDENZ_PAIRED="$paired_url" TEST_RUNNER_PENDENZ_CODE="$code" \
     TEST_RUNNER_PENDENZ_SEARCH_ID="$search_id" \
     xcodebuild "$@"
