@@ -27,7 +27,7 @@ pub enum Command {
     /// Who you are, your scopes, the time zone, the projects and the allowed values.
     Workspace(Rest),
     /// List items. [--status open|todo|doing|done] [--project ID|inbox] [--q TEXT] [--tag TAG]
-    /// [--priority 0..4] [--due_after DATE] [--due_before DATE] [--sort newest|due|manual|...]
+    /// [--priority 0..4] [--stage new|none|...] [--due_after DATE] [--due_before DATE] [--sort newest|due|manual|...]
     /// [--archived true] [--trashed true] [--limit N] [--offset N]
     List(Rest),
     /// One item in full: ID [--activity N]

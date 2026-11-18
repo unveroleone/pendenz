@@ -356,6 +356,7 @@ Some choices in them:
 - `add_item_file` exists only over stdio, where a path means a file next to the agent. The hosted server would have to fetch an address or take megabytes of base64 from a model.
 - `get_item_file` reads the item's list first and fetches the bytes only for what it can show, so a large file is never pulled through the hosted endpoint.
 - A locked note comes from `get_note` with a `notice` next to the text, and from the list tools with its title and no preview, as in the app.
+- Every item has an `agent_stage` for the agent loop: `new` waits for triage, then `none`, `gathering`, `needs_answer`, `ready`, `running`, `review` or `declined`. An item the owner adds starts at `new`, one an agent adds at `none`. `update_item` (and `PATCH /api/items/<id>`) sets it for any token. When the owner changes the title or the description and sends no stage, the server puts the item back to `new`, unless it is `running` or `review`, so an agent finds what to triage with `list_items` and `stage: new` and needs no cursor of its own. The activity log records each change of stage.
 - Every write tool takes an optional `key`. An agent that retries after a timeout sends the same key and arguments, and the write cannot apply twice. Without one the adapter makes a fresh key per call.
 
 The server instructions tell the agent how to write titles, dates and notes, how to handle versions and conflicts, and what a locked or hidden row means. They are part of the design: the lock rule for agents is an instruction, not a barrier.
@@ -437,4 +438,4 @@ Left out of the product on purpose: folders for notes, rich text, nested subtask
 
 ## Not built yet
 
-[ROADMAP.md](../ROADMAP.md) lists what is planned. Two things in the code are reserved for later and change nothing today: the `propose` scope, and the field `agent_stage` on an item, which is `new` for an item the owner adds and `none` for one an agent adds.
+[ROADMAP.md](../ROADMAP.md) lists what is planned. The `propose` scope is reserved for later and changes nothing today.
