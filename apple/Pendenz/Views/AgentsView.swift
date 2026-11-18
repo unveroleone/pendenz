@@ -241,16 +241,16 @@ private struct StatusRow: View {
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
-            if failing > 0 {
-                Label(
-                    failing == 1 ? "1 job failed" : "\(failing) jobs failed",
-                    systemImage: "exclamationmark.circle.fill",
-                )
-                .font(.subheadline)
-                .foregroundStyle(.red)
-                .labelStyle(.titleAndIcon)
+                .lineLimit(1)
+                // On its own line, so it never squeezes the state on a narrow screen.
+                if failing > 0 {
+                    Label(
+                        failing == 1 ? "1 job failed" : "\(failing) jobs failed",
+                        systemImage: "exclamationmark.circle.fill",
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.red)
+                }
             }
         }
         .accessibilityElement(children: .combine)
