@@ -8,6 +8,7 @@ Tasks, reminders and notes for one person, with a server that agents can work fr
 - `docs/design.md` for how it works and why. Its section on what was left out on purpose lists protections a single-person server does without. Do not add those back without a discussion first.
 - `docs/self-hosting.md` for deployment, tokens, backups and the clients.
 - `CONTRIBUTING.md` for how changes are proposed and reviewed.
+- `.claude/skills/verify/SKILL.md` for the checks to run before a commit and a pull request, and how to report them.
 
 ## Stack
 
