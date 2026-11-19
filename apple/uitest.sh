@@ -32,18 +32,19 @@ if [ "$local_port" = "$paired_port" ]; then
 fi
 local_url="http://127.0.0.1:$local_port"
 paired_url="http://127.0.0.1:$paired_port"
-# A server left on a port, or another run's, would answer for ours: the tests would then seed
-# and run against it without noticing.
-for url in "$local_url" "$paired_url"; do
-    if curl -s -o /dev/null --max-time 2 "$url/healthz"; then
-        echo "Something already answers on $url. Set PENDENZ_UITEST_LOCAL_PORT and PENDENZ_UITEST_PAIRED_PORT to free ports." >&2
-        exit 1
-    fi
-done
 work="$(mktemp -d)"
 
 cargo build --quiet --bin pendenz
 bin="target/debug/pendenz"
+
+# A server left on a port, or another run's, would answer for ours: the tests would then seed
+# and run against it without noticing.
+for port in "$local_port" "$paired_port"; do
+    if lsof -nP -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
+        echo "Port $port is in use. Set PENDENZ_UITEST_LOCAL_PORT and PENDENZ_UITEST_PAIRED_PORT to free ports." >&2
+        exit 1
+    fi
+done
 
 local_pid=""
 paired_pid=""
@@ -65,16 +66,22 @@ code="$(DATABASE_URL="sqlite://$work/paired.db" "$bin" pairing-code | sed 's/.*"
 DATABASE_URL="sqlite://$work/paired.db" PENDENZ_AUTH_MODE=token PENDENZ_BIND="127.0.0.1:$paired_port" "$bin" >"$work/paired.log" 2>&1 &
 paired_pid=$!
 
+# Ready only when our own processes listen: if another run took a port in the meantime, ours
+# failed to bind and the other run's server would answer the health check.
+listens() {
+    [ "$(lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null)" = "$2" ]
+}
 up=""
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-    if curl -fs "$local_url/healthz" >/dev/null 2>&1 && curl -fs "$paired_url/healthz" >/dev/null 2>&1; then
+    if listens "$local_port" "$local_pid" && listens "$paired_port" "$paired_pid" &&
+        curl -fs "$local_url/healthz" >/dev/null 2>&1 && curl -fs "$paired_url/healthz" >/dev/null 2>&1; then
         up=yes
         break
     fi
     sleep 0.5
 done
 if [ -z "$up" ]; then
-    echo "The test servers did not start:" >&2
+    echo "The test servers did not start on ports $local_port and $paired_port:" >&2
     cat "$work/local.log" "$work/paired.log" >&2
     exit 1
 fi
