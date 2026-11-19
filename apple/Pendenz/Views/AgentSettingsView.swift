@@ -73,7 +73,11 @@ struct AgentSettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Agents")
-        .task { await session.agents?.refresh() }
+        // Asked again while open, so the Order row shows once a second agent reports.
+        .task {
+            await session.agents?.refresh()
+            await session.agents?.watch()
+        }
         .sheet(isPresented: $isConnecting) {
             NavigationStack {
                 ConnectAgentView()
@@ -122,24 +126,57 @@ private struct AgentOrderView: View {
     }
 
     var body: some View {
+        // One reading for the rows and the moves, so a list that changes while a row is
+        // dragged never moves another agent.
+        let shown = agents
+        let names = Dictionary(grouping: shown, by: \.name)
         List {
             Section {
-                ForEach(agents) { agent in
-                    Text(agent.name)
+                ForEach(Array(shown.enumerated()), id: \.element.id) { index, agent in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(agent.name)
+                        // Two agents of one name are told apart by their IDs.
+                        if names[agent.name, default: []].count > 1 {
+                            Text(agent.id)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    // The same moves without a drag: for VoiceOver, and in the menu of the row.
+                    .accessibilityAction(named: "Move Up") { move(shown, index, by: -1) }
+                    .accessibilityAction(named: "Move Down") { move(shown, index, by: 1) }
+                    .contextMenu {
+                        Button("Move Up", systemImage: "arrow.up") { move(shown, index, by: -1) }
+                            .disabled(index == 0)
+                        Button("Move Down", systemImage: "arrow.down") { move(shown, index, by: 1) }
+                            .disabled(index == shown.count - 1)
+                    }
                 }
                 .onMove { source, destination in
-                    var ids = agents.map(\.id)
+                    var ids = shown.map(\.id)
                     ids.move(fromOffsets: source, toOffset: destination)
                     order = ids.joined(separator: ",")
                 }
             } footer: {
-                Text("The Agents screen shows your agents in this order.")
+                Text(
+                    "Drag the agents into the order the Agents screen shows them in. The order is kept on this device.",
+                )
             }
         }
         #if os(iOS)
         .environment(\.editMode, .constant(.active))
         #endif
         .navigationTitle("Order")
+        .task { await session.agents?.watch() }
+    }
+
+    private func move(_ shown: [AgentEntry], _ index: Int, by step: Int) {
+        let target = index + step
+        guard shown.indices.contains(index), shown.indices.contains(target) else { return }
+        var ids = shown.map(\.id)
+        ids.swapAt(index, target)
+        order = ids.joined(separator: ",")
     }
 }
 

@@ -252,7 +252,8 @@ private struct AgentSwitcher: View {
                         Text(agent.name)
                             .lineLimit(1)
                     }
-                    .font(.subheadline.weight(isChosen ? .semibold : .regular))
+                    // One weight for both states: a bolder chosen pill would grow and push the next.
+                    .font(.subheadline.weight(.medium))
                     .padding(.horizontal, 14)
                     .frame(minHeight: 36)
                     .foregroundStyle(isChosen ? AnyShapeStyle(.background) : AnyShapeStyle(.primary))
