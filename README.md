@@ -189,7 +189,7 @@ curl -X POST http://127.0.0.1:8080/api/items \
 
 Run the app against it with the launch argument `-apiURL http://127.0.0.1:8080`, which skips pairing, or pair with `http://127.0.0.1:8080` and a code from `cargo run --bin pendenz -- pairing-code`.
 
-`pnpm check` runs clippy and the format checks, `pnpm test` runs the server's tests, and `pnpm check:swift` runs SwiftFormat on the app, as CI does. The tests include regression tests of the MCP tools and the CLI, which compare every answer with a recorded fixture. CI also builds the app for the iOS Simulator and the Mac. `apple/uitest.sh` runs the UI tests of the app in the Simulator against two servers it starts itself.
+`pnpm check` runs clippy and the format checks, `pnpm test` runs the server's tests, and `pnpm check:swift` runs SwiftFormat on the app, as CI does. The tests include regression tests of the MCP tools and the CLI, which compare every answer with a recorded fixture. CI also builds the app for the iOS Simulator and the Mac. `apple/uitest.sh` runs the UI tests of the app in the Simulator against two servers it starts itself, on ports 8792 and 8793 unless `PENDENZ_UITEST_LOCAL_PORT` and `PENDENZ_UITEST_PAIRED_PORT` name others.
 
 ```
 server/   Rust API, MCP server, agent CLI and migrations

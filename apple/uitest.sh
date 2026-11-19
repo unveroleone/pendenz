@@ -4,20 +4,47 @@
 #   apple/uitest.sh                    all tests on the iPhone 18 Pro
 #   apple/uitest.sh "Pendenz iPad"     on another simulator
 #   apple/uitest.sh "iPhone 18 Pro" testReminderFires     one test
+# PENDENZ_UITEST_SIMULATOR names the simulator when no argument does. PENDENZ_UITEST_LOCAL_PORT
+# and PENDENZ_UITEST_PAIRED_PORT move the two servers off 8792 and 8793. Two runs side by side
+# need their own ports and their own simulator, since each removes the app from its simulator
+# first, and their own checkout, since xcodebuild and cargo build in it.
 # PENDENZ_UITEST_FRAMES=<dir> also saves a screenshot of the simulator about once a second into
 # <dir> while the tests run. The recorder stops with the script, also when the script is killed,
 # and after 1500 frames at most.
 set -eu
 cd "$(dirname "$0")/.."
 
-device="${1:-iPhone 18 Pro}"
+device="${1:-${PENDENZ_UITEST_SIMULATOR:-iPhone 18 Pro}}"
 only="${2:-}"
-work="$(mktemp -d)"
-local_url="http://127.0.0.1:8792"
-paired_url="http://127.0.0.1:8793"
+local_port="${PENDENZ_UITEST_LOCAL_PORT:-8792}"
+paired_port="${PENDENZ_UITEST_PAIRED_PORT:-8793}"
+for port in "$local_port" "$paired_port"; do
+    case "$port" in
+    '' | *[!0-9]*)
+        echo "Not a port: $port" >&2
+        exit 1
+        ;;
+    esac
+done
+if [ "$local_port" = "$paired_port" ]; then
+    echo "The two servers need different ports, both are $local_port." >&2
+    exit 1
+fi
+local_url="http://127.0.0.1:$local_port"
+paired_url="http://127.0.0.1:$paired_port"
 
 cargo build --quiet --bin pendenz
 bin="target/debug/pendenz"
+
+# A server left on a port, or another run's, would answer for ours: the tests would then seed
+# and run against it without noticing.
+for port in "$local_port" "$paired_port"; do
+    if lsof -nP -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
+        echo "Port $port is in use. Set PENDENZ_UITEST_LOCAL_PORT and PENDENZ_UITEST_PAIRED_PORT to free ports." >&2
+        exit 1
+    fi
+done
+work="$(mktemp -d)"
 
 local_pid=""
 paired_pid=""
@@ -33,16 +60,31 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-DATABASE_URL="sqlite://$work/local.db" PENDENZ_AUTH_MODE=local PENDENZ_BIND=127.0.0.1:8792 "$bin" >"$work/local.log" 2>&1 &
+DATABASE_URL="sqlite://$work/local.db" PENDENZ_AUTH_MODE=local PENDENZ_BIND="127.0.0.1:$local_port" "$bin" >"$work/local.log" 2>&1 &
 local_pid=$!
 code="$(DATABASE_URL="sqlite://$work/paired.db" "$bin" pairing-code | sed 's/.*"code":"\([^"]*\)".*/\1/')"
-DATABASE_URL="sqlite://$work/paired.db" PENDENZ_AUTH_MODE=token PENDENZ_BIND=127.0.0.1:8793 "$bin" >"$work/paired.log" 2>&1 &
+DATABASE_URL="sqlite://$work/paired.db" PENDENZ_AUTH_MODE=token PENDENZ_BIND="127.0.0.1:$paired_port" "$bin" >"$work/paired.log" 2>&1 &
 paired_pid=$!
 
+# Ready only when our own processes listen: if another run took a port in the meantime, ours
+# failed to bind and the other run's server would answer the health check.
+listens() {
+    [ "$(lsof -nP -iTCP@127.0.0.1:"$1" -sTCP:LISTEN -t 2>/dev/null)" = "$2" ]
+}
+up=""
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-    curl -fs "$local_url/healthz" >/dev/null 2>&1 && curl -fs "$paired_url/healthz" >/dev/null 2>&1 && break
+    if listens "$local_port" "$local_pid" && listens "$paired_port" "$paired_pid" &&
+        curl -fs "$local_url/healthz" >/dev/null 2>&1 && curl -fs "$paired_url/healthz" >/dev/null 2>&1; then
+        up=yes
+        break
+    fi
     sleep 0.5
 done
+if [ -z "$up" ]; then
+    echo "The test servers did not start on ports $local_port and $paired_port:" >&2
+    cat "$work/local.log" "$work/paired.log" >&2
+    exit 1
+fi
 
 seed() {
     curl -fs -X POST "$local_url/api/$1" -H 'Content-Type: application/json' \
