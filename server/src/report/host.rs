@@ -3,7 +3,7 @@
 use super::{Host, Process, Sample};
 use chrono::{Duration as Span, Utc};
 use std::{collections::HashMap, path::PathBuf};
-use sysinfo::{Disks, MINIMUM_CPU_UPDATE_INTERVAL, ProcessesToUpdate, System};
+use sysinfo::{Disks, MINIMUM_CPU_UPDATE_INTERVAL, ProcessesToUpdate, System, ThreadKind};
 
 // The largest programs in memory and the busiest on the CPU, this many of each.
 const TOP: usize = 8;
@@ -39,8 +39,9 @@ fn measure() -> anyhow::Result<Host> {
     let mut programs: HashMap<String, Process> = HashMap::new();
     for process in system.processes().values() {
         // On Linux the threads of a process are listed too, each with the memory of the whole
-        // process: a program with seven threads of one name counted seven times over.
-        if process.thread_kind().is_some() {
+        // process: a program with seven threads of one name counted seven times over. Kernel
+        // workers such as kswapd are no part of another process and stay.
+        if process.thread_kind() == Some(ThreadKind::Userland) {
             continue;
         }
         let name = process.name().to_string_lossy().into_owned();
