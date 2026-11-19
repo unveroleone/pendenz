@@ -173,6 +173,10 @@ pub fn account_name(provider: &str, kind: AccountKind) -> String {
 // first to its last use.
 #[derive(Serialize, Deserialize, Default)]
 struct Ledger {
+    // A ledger of another version is started again from Hermes's totals.
+    #[serde(default)]
+    version: u32,
+    // Per row of Hermes's table, by its primary key.
     seen: HashMap<String, Seen>,
     // Per day, per account and model ("anthropic-api|claude-sonnet-5-5").
     days: BTreeMap<NaiveDate, BTreeMap<String, Used>>,
@@ -192,6 +196,9 @@ struct Used {
 }
 
 const LEDGER: &str = "hermes-usage.json";
+// 2: rows are told apart by address and task as well. Version 1 counted two rows of one session
+// as one row that changed on every run, so its days can hold the same usage many times over.
+const LEDGER_VERSION: u32 = 2;
 // A row unused for this long is forgotten; a session picked up after that counts in full again.
 const LEDGER_DAYS: i64 = 90;
 
@@ -229,6 +236,7 @@ async fn usage(path: &Path, state_dir: Option<&Path>) -> anyhow::Result<Vec<Acco
     let now = Utc::now().timestamp() as f64;
     let rows = sqlx::query(
         "SELECT u.session_id, u.model, u.billing_provider AS provider, \
+           u.billing_base_url AS base_url, u.billing_mode AS row_mode, u.task, \
            COALESCE(NULLIF(u.billing_mode, ''), s.billing_mode, '') AS mode, \
            COALESCE(u.first_seen, s.started_at) AS first_seen, \
            COALESCE(u.last_seen, u.first_seen, s.started_at) AS last_seen, \
@@ -249,8 +257,10 @@ async fn usage(path: &Path, state_dir: Option<&Path>) -> anyhow::Result<Vec<Acco
     let mut ledger: Ledger = ledger_path
         .as_ref()
         .and_then(|p| std::fs::read(p).ok())
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .and_then(|bytes| serde_json::from_slice::<Ledger>(&bytes).ok())
+        .filter(|ledger| ledger.version == LEDGER_VERSION)
         .unwrap_or_default();
+    ledger.version = LEDGER_VERSION;
     let today = Local::now().date_naive();
     let first = today - Span::days(29);
     let mut kinds: HashMap<String, (AccountKind, String)> = HashMap::new();
@@ -288,7 +298,10 @@ async fn usage(path: &Path, state_dir: Option<&Path>) -> anyhow::Result<Vec<Acco
             .max(0.0);
         let estimated = row.try_get::<Option<i64>, _>("estimated")?.unwrap_or(1) > 0;
 
-        let key = format!("{session}|{model}|{provider}|{mode}");
+        let base_url: String = row.try_get("base_url")?;
+        let row_mode: String = row.try_get("row_mode")?;
+        let task: String = row.try_get("task")?;
+        let key = format!("{session}|{model}|{provider}|{base_url}|{row_mode}|{task}");
         let before = ledger.seen.get(&key).cloned();
         ledger.seen.insert(
             key,
@@ -789,6 +802,81 @@ mod tests {
             schedule(&json!({"kind": "interval", "minutes": 120}), None),
             "Every 2 h"
         );
+    }
+
+    // Hermes keeps a row per session, model, provider, address, billing mode and task. Two rows of
+    // one session that differ only in the task once counted each other's totals as new usage on
+    // every run, which grew the spend by a dollar every two minutes.
+    #[tokio::test]
+    async fn counts_two_rows_of_one_session_once() {
+        let dir = std::env::temp_dir().join(format!("pendenz-hermes-usage-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = dir.join("state.db");
+        let mut db: SqliteConnection = SqliteConnectOptions::new()
+            .filename(&store)
+            .create_if_missing(true)
+            .connect()
+            .await
+            .unwrap();
+        let now = Utc::now().timestamp() as f64;
+        for statement in [
+            "CREATE TABLE sessions (id TEXT PRIMARY KEY, started_at REAL, billing_mode TEXT)",
+            "CREATE TABLE session_model_usage (session_id TEXT NOT NULL, model TEXT NOT NULL, \
+               billing_provider TEXT NOT NULL DEFAULT '', billing_base_url TEXT NOT NULL DEFAULT '', \
+               billing_mode TEXT NOT NULL DEFAULT '', task TEXT NOT NULL DEFAULT '', \
+               input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, \
+               cache_read_tokens INTEGER NOT NULL DEFAULT 0, cache_write_tokens INTEGER NOT NULL DEFAULT 0, \
+               estimated_cost_usd REAL NOT NULL DEFAULT 0, actual_cost_usd REAL NOT NULL DEFAULT 0, \
+               first_seen REAL, last_seen REAL, \
+               PRIMARY KEY (session_id, model, billing_provider, billing_base_url, billing_mode, task))",
+        ] {
+            sqlx::query(statement).execute(&mut db).await.unwrap();
+        }
+        sqlx::query("INSERT INTO sessions VALUES ('s1', ?, NULL)")
+            .bind(now - 60.0)
+            .execute(&mut db)
+            .await
+            .unwrap();
+        for (task, output, cost) in [("", 9000, 1.0), ("background_review", 2500, 0.1)] {
+            sqlx::query(
+                "INSERT INTO session_model_usage (session_id, model, billing_provider, \
+                   billing_base_url, task, output_tokens, estimated_cost_usd, first_seen, last_seen) \
+                 VALUES ('s1', 'claude-sonnet-5-5', 'anthropic', 'https://api.anthropic.com', ?, ?, ?, ?, ?)",
+            )
+            .bind(task)
+            .bind(output)
+            .bind(cost)
+            .bind(now - 30.0)
+            .bind(now - 30.0)
+            .execute(&mut db)
+            .await
+            .unwrap();
+        }
+        db.close().await.unwrap();
+
+        let state = dir.join("state");
+        for _ in 0..3 {
+            let accounts = usage(&store, Some(&state)).await.unwrap();
+            let api = accounts.iter().find(|a| a.id == "anthropic-api").unwrap();
+            assert_eq!(api.spend.as_ref().unwrap().month, 1.1);
+            assert_eq!(api.models[0].tokens.output, 11_500);
+        }
+
+        // A ledger from before the fix holds inflated days. It is dropped and rebuilt.
+        let ledger = state.join(LEDGER);
+        let mut old: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&ledger).unwrap()).unwrap();
+        old.as_object_mut().unwrap().remove("version");
+        for day in old["days"].as_object_mut().unwrap().values_mut() {
+            for used in day.as_object_mut().unwrap().values_mut() {
+                used["cost"] = json!(500.0);
+            }
+        }
+        std::fs::write(&ledger, serde_json::to_vec(&old).unwrap()).unwrap();
+        let accounts = usage(&store, Some(&state)).await.unwrap();
+        let api = accounts.iter().find(|a| a.id == "anthropic-api").unwrap();
+        assert_eq!(api.spend.as_ref().unwrap().month, 1.1);
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]
