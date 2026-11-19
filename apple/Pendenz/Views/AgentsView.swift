@@ -52,17 +52,10 @@ enum AgentLevel {
 struct AgentsView: View {
     @Environment(AgentBoard.self) private var board
     @SceneStorage("chosenAgent") private var chosenAgent = ""
+    @AppStorage(AgentBoard.orderKey) private var order = ""
 
-    // In a fixed order, so the switcher does not move each time a report comes in: the server
-    // lists the newest report first.
     private var agents: [AgentEntry] {
-        board.reporting.sorted {
-            switch $0.name.localizedStandardCompare($1.name) {
-            case .orderedAscending: true
-            case .orderedDescending: false
-            case .orderedSame: $0.id < $1.id
-            }
-        }
+        board.reporting(in: order)
     }
 
     private var entry: AgentEntry? {
@@ -264,7 +257,9 @@ private struct AgentSwitcher: View {
                     .background(
                         Capsule().fill(isChosen ? AnyShapeStyle(.primary) : AnyShapeStyle(.fill.tertiary)),
                     )
-                    .contentShape(Capsule())
+                    // The pill is drawn 36 points high and takes taps over 44.
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(agent.name), \(health.text)")
@@ -273,7 +268,9 @@ private struct AgentSwitcher: View {
             }
         }
         .padding(.horizontal)
-        .padding(.vertical, 8)
+        // More room below than above: the pills belong to the title, and the list starts after.
+        .padding(.top, 4)
+        .padding(.bottom, 12)
     }
 }
 

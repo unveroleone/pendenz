@@ -16,11 +16,18 @@ struct AgentSettingsView: View {
         session.agents?.connected ?? []
     }
 
+    private var reportingCount: Int {
+        session.agents?.reporting.count ?? 0
+    }
+
     var body: some View {
         Form {
             Section {
                 Picker("Show Agents", selection: $visibility) {
                     ForEach(AgentsVisibility.allCases) { Text($0.title).tag($0) }
+                }
+                if reportingCount > 1 {
+                    NavigationLink("Order") { AgentOrderView() }
                 }
             } footer: {
                 Text("Agents shows what your agents do and cost. Automatic shows it once an agent has sent a report.")
@@ -101,6 +108,38 @@ struct AgentSettingsView: View {
                 failure = error.localizedDescription
             }
         }
+    }
+}
+
+// The order of the agents at the top of the Agents screen, kept on this device. Dragged by its
+// handles; an agent that starts to report later is added at the end.
+private struct AgentOrderView: View {
+    @Environment(Session.self) private var session
+    @AppStorage(AgentBoard.orderKey) private var order = ""
+
+    private var agents: [AgentEntry] {
+        session.agents?.reporting(in: order) ?? []
+    }
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(agents) { agent in
+                    Text(agent.name)
+                }
+                .onMove { source, destination in
+                    var ids = agents.map(\.id)
+                    ids.move(fromOffsets: source, toOffset: destination)
+                    order = ids.joined(separator: ",")
+                }
+            } footer: {
+                Text("The Agents screen shows your agents in this order.")
+            }
+        }
+        #if os(iOS)
+        .environment(\.editMode, .constant(.active))
+        #endif
+        .navigationTitle("Order")
     }
 }
 
