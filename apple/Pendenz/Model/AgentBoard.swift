@@ -52,6 +52,29 @@ final class AgentBoard {
         list?.reporting ?? []
     }
 
+    // The agents that sent a report, in the order the owner set in Settings: the IDs saved under
+    // `orderKey` first, every other agent after them by name. A fixed order, since the server
+    // lists the newest report first and the switcher would move with every report.
+    func reporting(in savedOrder: String) -> [AgentEntry] {
+        let order = savedOrder.split(separator: ",").map(String.init)
+        return reporting.sorted { a, b in
+            switch (order.firstIndex(of: a.id), order.firstIndex(of: b.id)) {
+            case let (i?, j?): i < j
+            case (.some, nil): true
+            case (nil, .some): false
+            case (nil, nil):
+                switch a.name.localizedStandardCompare(b.name) {
+                case .orderedAscending: true
+                case .orderedDescending: false
+                case .orderedSame: a.id < b.id
+                }
+            }
+        }
+    }
+
+    // Where the order of the agents is kept on this device, as their IDs joined by commas.
+    static let orderKey = "agentOrder"
+
     // The agents that still have a working token, in the server's order.
     var connected: [AgentEntry] {
         list?.agents.filter { !$0.scopes.isEmpty } ?? []

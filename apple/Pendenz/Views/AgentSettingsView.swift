@@ -16,11 +16,18 @@ struct AgentSettingsView: View {
         session.agents?.connected ?? []
     }
 
+    private var reportingCount: Int {
+        session.agents?.reporting.count ?? 0
+    }
+
     var body: some View {
         Form {
             Section {
                 Picker("Show Agents", selection: $visibility) {
                     ForEach(AgentsVisibility.allCases) { Text($0.title).tag($0) }
+                }
+                if reportingCount > 1 {
+                    NavigationLink("Order") { AgentOrderView() }
                 }
             } footer: {
                 Text("Agents shows what your agents do and cost. Automatic shows it once an agent has sent a report.")
@@ -66,7 +73,11 @@ struct AgentSettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Agents")
-        .task { await session.agents?.refresh() }
+        // Asked again while open, so the Order row shows once a second agent reports.
+        .task {
+            await session.agents?.refresh()
+            await session.agents?.watch()
+        }
         .sheet(isPresented: $isConnecting) {
             NavigationStack {
                 ConnectAgentView()
@@ -113,6 +124,71 @@ struct AgentSettingsView: View {
                 failure = error.localizedDescription
             }
         }
+    }
+}
+
+// The order of the agents at the top of the Agents screen, kept on this device. Dragged by its
+// handles; an agent that starts to report later is added at the end.
+private struct AgentOrderView: View {
+    @Environment(Session.self) private var session
+    @AppStorage(AgentBoard.orderKey) private var order = ""
+
+    private var agents: [AgentEntry] {
+        session.agents?.reporting(in: order) ?? []
+    }
+
+    var body: some View {
+        // One reading for the rows and the moves, so a list that changes while a row is
+        // dragged never moves another agent.
+        let shown = agents
+        let names = Dictionary(grouping: shown, by: \.name)
+        List {
+            Section {
+                ForEach(Array(shown.enumerated()), id: \.element.id) { index, agent in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(agent.name)
+                        // Two agents of one name are told apart by their IDs.
+                        if names[agent.name, default: []].count > 1 {
+                            Text(agent.id)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    // The same moves without a drag: for VoiceOver, and in the menu of the row.
+                    .accessibilityAction(named: "Move Up") { move(shown, index, by: -1) }
+                    .accessibilityAction(named: "Move Down") { move(shown, index, by: 1) }
+                    .contextMenu {
+                        Button("Move Up", systemImage: "arrow.up") { move(shown, index, by: -1) }
+                            .disabled(index == 0)
+                        Button("Move Down", systemImage: "arrow.down") { move(shown, index, by: 1) }
+                            .disabled(index == shown.count - 1)
+                    }
+                }
+                .onMove { source, destination in
+                    var ids = shown.map(\.id)
+                    ids.move(fromOffsets: source, toOffset: destination)
+                    order = ids.joined(separator: ",")
+                }
+            } footer: {
+                Text(
+                    "Drag the agents into the order the Agents screen shows them in. The order is kept on this device.",
+                )
+            }
+        }
+        #if os(iOS)
+        .environment(\.editMode, .constant(.active))
+        #endif
+        .navigationTitle("Order")
+        .task { await session.agents?.watch() }
+    }
+
+    private func move(_ shown: [AgentEntry], _ index: Int, by step: Int) {
+        let target = index + step
+        guard shown.indices.contains(index), shown.indices.contains(target) else { return }
+        var ids = shown.map(\.id)
+        ids.swapAt(index, target)
+        order = ids.joined(separator: ",")
     }
 }
 
