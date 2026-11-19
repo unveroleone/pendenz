@@ -16,8 +16,10 @@ struct ItemDetailView: View {
     @State private var notes = ""
     @State private var lines: [ChecklistLine] = []
     @State private var newLine = ""
-    // A long description shows its start until "More" or a tap opens it.
+    // A long description shows its start until "More" opens it.
     @State private var showsAllNotes = false
+    // A tap on that text swaps in the editor, which then takes the focus.
+    @State private var isEditingNotes = false
     // The question behind the detail's own trash button.
 
     var body: some View {
@@ -47,17 +49,10 @@ struct ItemDetailView: View {
                         .focused($focus, equals: .title)
                         .labelsHidden()
                 }
-                if focus != .notes, !showsAllNotes, Self.isLong(notes) {
-                    notesPreview
+                if !isEditingNotes, focus != .notes, Self.isLong(notes) {
+                    notesText
                 } else {
-                    // One row: a sibling would be a row of its own in the form.
-                    VStack(spacing: 6) {
-                        notesEditor
-                        if showsAllNotes, focus != .notes, Self.isLong(notes) {
-                            Button("Less") { withAnimation { showsAllNotes = false } }
-                                .notesToggle()
-                        }
-                    }
+                    notesEditor
                 }
             }
             Section("Steps") {
@@ -167,7 +162,10 @@ struct ItemDetailView: View {
         .modifier(ItemAttachmentDrop(itemID: itemID))
         .onAppear { load(item) }
         .onDisappear(perform: saveText)
-        .onChange(of: focus) { old, _ in save(old) }
+        .onChange(of: focus) { old, new in
+            save(old)
+            if old == .notes, new != .notes { isEditingNotes = false }
+        }
         .onChange(of: title) { _, text in
             // Return ends the title instead of starting a second line.
             if text.contains("\n") {
@@ -200,6 +198,9 @@ struct ItemDetailView: View {
         TextEditor(text: $notes)
             .font(.body)
             .scrollContentBackground(.hidden)
+            // The form scrolls, the editor grows. One that scrolls itself comes in at a few
+            // lines and scrolls inside until the text changes.
+            .scrollDisabled(true)
             // About two lines, as the field before it: the body text is 17 points on
             // iOS and 13 on the Mac.
             #if os(iOS)
@@ -225,27 +226,36 @@ struct ItemDetailView: View {
             .accessibilityLabel("Notes")
     }
 
-    // The start of a long description: six lines, then "More". The whole of it is one tap away,
-    // and a tap on the text starts editing as the editor would.
-    private var notesPreview: some View {
+    // A long description is read as text: six lines and "More", or all of it and "Less". A tap
+    // on the six lines opens all of it, a tap on all of it swaps in the editor and starts
+    // editing. Text, not the editor, and not straight from six lines to the editor: an editor
+    // that joins the form keeps the height of the row it replaces and scrolls inside.
+    private var notesText: some View {
+        // One row: a sibling would be a row of its own in the form.
         VStack(alignment: .leading, spacing: 6) {
             Text(notes)
-                .lineLimit(6)
+                .lineLimit(showsAllNotes ? nil : 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
-                .onTapGesture(perform: editNotes)
+                .onTapGesture {
+                    if showsAllNotes {
+                        editNotes()
+                    } else {
+                        withAnimation { showsAllNotes = true }
+                    }
+                }
                 .accessibilityLabel("Notes")
                 .accessibilityValue(notes)
                 .accessibilityAddTraits(.isButton)
-                .accessibilityHint("Edits the notes")
-            Button("More") { withAnimation { showsAllNotes = true } }
+                .accessibilityHint(showsAllNotes ? "Edits the notes" : "Shows all of the notes")
+            Button(showsAllNotes ? "Less" : "More") { withAnimation { showsAllNotes.toggle() } }
                 .notesToggle()
         }
     }
 
     private func editNotes() {
-        showsAllNotes = true
-        // The editor joins the form with this change; it takes the focus once it is there.
+        isEditingNotes = true
+        // The editor replaces the text only with this change; it takes the focus once it is there.
         Task { focus = .notes }
     }
 
@@ -453,10 +463,12 @@ struct ItemDetailView: View {
 
 private extension View {
     // "More" and "Less" under the description: small, at the trailing edge, in the tint.
+    // The word is small; the finger gets the 44 points around it.
     func notesToggle() -> some View {
         font(.subheadline.weight(.semibold))
             .foregroundStyle(.tint)
             .buttonStyle(.plain)
+            .contentShape(.rect.inset(by: -13))
             .frame(maxWidth: .infinity, alignment: .trailing)
     }
 }
