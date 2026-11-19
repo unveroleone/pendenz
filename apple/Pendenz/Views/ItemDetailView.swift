@@ -16,6 +16,11 @@ struct ItemDetailView: View {
     @State private var notes = ""
     @State private var lines: [ChecklistLine] = []
     @State private var newLine = ""
+    // A long description shows its start until "More" opens it.
+    @State private var showsAllNotes = false
+    // A tap on that text swaps in the editor, which then takes the focus.
+    @State private var isEditingNotes = false
+    @State private var notesFold = NotesFold()
     // The question behind the detail's own trash button.
 
     var body: some View {
@@ -45,34 +50,11 @@ struct ItemDetailView: View {
                         .focused($focus, equals: .title)
                         .labelsHidden()
                 }
-                // A text editor, not a text field: Return starts a new line on every platform,
-                // where a field on the Mac ends the editing.
-                TextEditor(text: $notes)
-                    .font(.body)
-                    .scrollContentBackground(.hidden)
-                    // About two lines, as the field before it: the body text is 17 points on
-                    // iOS and 13 on the Mac.
-                    #if os(iOS)
-                    .frame(minHeight: 60)
-                    #else
-                    .frame(minHeight: 34)
-                    #endif
-                    // The editor insets its text by five points, and on iOS by eight from the
-                    // top. This lines it up with the other rows.
-                    .padding(.horizontal, -5)
-                    #if os(iOS)
-                    .padding(.vertical, -8)
-                    #endif
-                    .focused($focus, equals: .notes)
-                    .overlay(alignment: .topLeading) {
-                        if notes.isEmpty {
-                            Text("Notes")
-                                .foregroundStyle(Self.placeholder)
-                                .allowsHitTesting(false)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    .accessibilityLabel("Notes")
+                if !isEditingNotes, focus != .notes, Self.isLong(notes) {
+                    notesText
+                } else {
+                    notesEditor
+                }
             }
             Section("Steps") {
                 ForEach($lines) { $line in
@@ -181,7 +163,10 @@ struct ItemDetailView: View {
         .modifier(ItemAttachmentDrop(itemID: itemID))
         .onAppear { load(item) }
         .onDisappear(perform: saveText)
-        .onChange(of: focus) { old, _ in save(old) }
+        .onChange(of: focus) { old, new in
+            save(old)
+            if old == .notes, new != .notes { isEditingNotes = false }
+        }
         .onChange(of: title) { _, text in
             // Return ends the title instead of starting a second line.
             if text.contains("\n") {
@@ -207,6 +192,100 @@ struct ItemDetailView: View {
     }
 
     // MARK: Text
+
+    // A text editor, not a text field: Return starts a new line on every platform, where a field
+    // on the Mac ends the editing.
+    private var notesEditor: some View {
+        TextEditor(text: $notes)
+            .font(.body)
+            .scrollContentBackground(.hidden)
+            // The form scrolls, the editor grows. One that scrolls itself comes in at a few
+            // lines and scrolls inside until the text changes.
+            .scrollDisabled(true)
+            // About two lines, as the field before it: the body text is 17 points on
+            // iOS and 13 on the Mac.
+            #if os(iOS)
+            .frame(minHeight: 60)
+            #else
+            .frame(minHeight: 34)
+            #endif
+            // The editor insets its text by five points, and on iOS by eight from the
+            // top. This lines it up with the other rows.
+            .padding(.horizontal, -5)
+            #if os(iOS)
+            .padding(.vertical, -8)
+            #endif
+            .focused($focus, equals: .notes)
+            .overlay(alignment: .topLeading) {
+                if notes.isEmpty {
+                    Text("Notes")
+                        .foregroundStyle(Self.placeholder)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+            .accessibilityLabel("Notes")
+    }
+
+    // A long description is read as text: six lines and "More", or all of it and "Less". A tap
+    // on the six lines opens all of it, a tap on all of it swaps in the editor and starts
+    // editing. Text, not the editor, and not straight from six lines to the editor: an editor
+    // that joins the form keeps the height of the row it replaces and scrolls inside.
+    private var notesText: some View {
+        // One row: a sibling would be a row of its own in the form.
+        VStack(alignment: .leading, spacing: 6) {
+            // A button, so the keyboard and VoiceOver reach the editor as a tap does.
+            Button {
+                if notesFold.cutsOff, !showsAllNotes {
+                    withAnimation { showsAllNotes = true }
+                } else {
+                    editNotes()
+                }
+            } label: {
+                Text(notes)
+                    .lineLimit(showsAllNotes ? nil : 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                    .background { notesMeasure }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Notes")
+            .accessibilityValue(notes)
+            .accessibilityHint(notesFold.cutsOff && !showsAllNotes ? "Shows all of the notes" : "Edits the notes")
+            // Only when six lines hide something: in a wide window a long text can fit.
+            if notesFold.cutsOff {
+                Button(showsAllNotes ? "Less" : "More") { withAnimation { showsAllNotes.toggle() } }
+                    .notesToggle()
+            }
+        }
+    }
+
+    // The heights of the text at six lines and in full, at the row's width and text size,
+    // measured out of sight. They tell whether six lines cut anything off.
+    private var notesMeasure: some View {
+        ZStack(alignment: .topLeading) {
+            Text(notes)
+                .lineLimit(6)
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self, of: \.size.height) { notesFold.six = $0 }
+            Text(notes)
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self, of: \.size.height) { notesFold.full = $0 }
+        }
+        .hidden()
+        .accessibilityHidden(true)
+    }
+
+    private func editNotes() {
+        isEditingNotes = true
+        // The editor replaces the text only with this change; it takes the focus once it is there.
+        Task { focus = .notes }
+    }
+
+    // Long enough to push the rest of the item down: more than about six lines of text.
+    private static func isLong(_ text: String) -> Bool {
+        text.count > 280 || text.split(separator: "\n", omittingEmptySubsequences: false).count > 6
+    }
 
     // The color the system gives the placeholder of a text field, which a text editor lacks.
     #if os(macOS)
@@ -402,5 +481,27 @@ struct ItemDetailView: View {
         } set: { isHidden in
             store.update(itemID, ItemPatch(hiddenFromAgents: isHidden))
         }
+    }
+}
+
+private extension View {
+    // "More" and "Less" under the description: small, at the trailing edge, in the tint.
+    // The word is small; the finger gets the 44 points around it.
+    func notesToggle() -> some View {
+        font(.subheadline.weight(.semibold))
+            .foregroundStyle(.tint)
+            .buttonStyle(.plain)
+            .contentShape(.rect.inset(by: -13))
+            .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+}
+
+// The measured heights behind "More": six lines of the description and all of it.
+private struct NotesFold: Equatable {
+    var six: CGFloat = 0
+    var full: CGFloat = 0
+
+    var cutsOff: Bool {
+        full > six + 1
     }
 }
