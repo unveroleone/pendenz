@@ -127,7 +127,7 @@ docker compose exec api pendenz list-tokens
 docker compose exec api pendenz revoke-token <token id>
 ```
 
-`--days <n>` sets an expiry; without it a token does not expire.
+`--days <n>` sets an expiry; without it a token does not expire. `pendenz rename-agent --id my-agent --name "New name"` renames an agent everywhere, its past comments and activity included.
 
 | Scope | Allows |
 |---|---|

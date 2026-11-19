@@ -81,6 +81,13 @@ enum Command {
         #[arg(long)]
         name: String,
     },
+    /// Rename an agent. Its comments and its entries in the activity log show the new name too.
+    RenameAgent {
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        name: String,
+    },
     /// Issue a bearer token. The token is printed once and stored only as a hash.
     IssueToken {
         #[arg(long)]
@@ -167,6 +174,19 @@ async fn add_agent(db: &SqlitePool, id: &str, name: &str) -> anyhow::Result<()> 
         .bind(name)
         .execute(db)
         .await?;
+    println!("{}", json!({"id": id, "name": name, "kind": "agent"}));
+    Ok(())
+}
+
+async fn rename_agent(db: &SqlitePool, id: &str, name: &str) -> anyhow::Result<()> {
+    let name = valid_name(name)?;
+    let renamed = sqlx::query("UPDATE actors SET name = ? WHERE id = ? AND kind = 'agent'")
+        .bind(name)
+        .bind(id)
+        .execute(db)
+        .await?
+        .rows_affected();
+    anyhow::ensure!(renamed == 1, "No agent with this ID");
     println!("{}", json!({"id": id, "name": name, "kind": "agent"}));
     Ok(())
 }
@@ -406,6 +426,7 @@ async fn main() -> anyhow::Result<()> {
     match args.command.unwrap_or(Command::Serve) {
         Command::SetOwnerName { name } => return set_owner_name(&db, &name).await,
         Command::AddAgent { id, name } => return add_agent(&db, &id, &name).await,
+        Command::RenameAgent { id, name } => return rename_agent(&db, &id, &name).await,
         Command::IssueToken {
             actor,
             label,
