@@ -32,7 +32,6 @@ if [ "$local_port" = "$paired_port" ]; then
 fi
 local_url="http://127.0.0.1:$local_port"
 paired_url="http://127.0.0.1:$paired_port"
-work="$(mktemp -d)"
 
 cargo build --quiet --bin pendenz
 bin="target/debug/pendenz"
@@ -45,6 +44,7 @@ for port in "$local_port" "$paired_port"; do
         exit 1
     fi
 done
+work="$(mktemp -d)"
 
 local_pid=""
 paired_pid=""
@@ -69,7 +69,7 @@ paired_pid=$!
 # Ready only when our own processes listen: if another run took a port in the meantime, ours
 # failed to bind and the other run's server would answer the health check.
 listens() {
-    [ "$(lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null)" = "$2" ]
+    [ "$(lsof -nP -iTCP@127.0.0.1:"$1" -sTCP:LISTEN -t 2>/dev/null)" = "$2" ]
 }
 up=""
 for _ in 1 2 3 4 5 6 7 8 9 10; do
