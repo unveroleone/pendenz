@@ -20,6 +20,7 @@ struct ItemDetailView: View {
     @State private var showsAllNotes = false
     // A tap on that text swaps in the editor, which then takes the focus.
     @State private var isEditingNotes = false
+    @State private var notesFold = NotesFold()
     // The question behind the detail's own trash button.
 
     var body: some View {
@@ -233,24 +234,46 @@ struct ItemDetailView: View {
     private var notesText: some View {
         // One row: a sibling would be a row of its own in the form.
         VStack(alignment: .leading, spacing: 6) {
-            Text(notes)
-                .lineLimit(showsAllNotes ? nil : 6)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(.rect)
-                .onTapGesture {
-                    if showsAllNotes {
-                        editNotes()
-                    } else {
-                        withAnimation { showsAllNotes = true }
-                    }
+            // A button, so the keyboard and VoiceOver reach the editor as a tap does.
+            Button {
+                if notesFold.cutsOff, !showsAllNotes {
+                    withAnimation { showsAllNotes = true }
+                } else {
+                    editNotes()
                 }
-                .accessibilityLabel("Notes")
-                .accessibilityValue(notes)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHint(showsAllNotes ? "Edits the notes" : "Shows all of the notes")
-            Button(showsAllNotes ? "Less" : "More") { withAnimation { showsAllNotes.toggle() } }
-                .notesToggle()
+            } label: {
+                Text(notes)
+                    .lineLimit(showsAllNotes ? nil : 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                    .background { notesMeasure }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Notes")
+            .accessibilityValue(notes)
+            .accessibilityHint(notesFold.cutsOff && !showsAllNotes ? "Shows all of the notes" : "Edits the notes")
+            // Only when six lines hide something: in a wide window a long text can fit.
+            if notesFold.cutsOff {
+                Button(showsAllNotes ? "Less" : "More") { withAnimation { showsAllNotes.toggle() } }
+                    .notesToggle()
+            }
         }
+    }
+
+    // The heights of the text at six lines and in full, at the row's width and text size,
+    // measured out of sight. They tell whether six lines cut anything off.
+    private var notesMeasure: some View {
+        ZStack(alignment: .topLeading) {
+            Text(notes)
+                .lineLimit(6)
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self, of: \.size.height) { notesFold.six = $0 }
+            Text(notes)
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self, of: \.size.height) { notesFold.full = $0 }
+        }
+        .hidden()
+        .accessibilityHidden(true)
     }
 
     private func editNotes() {
@@ -470,5 +493,15 @@ private extension View {
             .buttonStyle(.plain)
             .contentShape(.rect.inset(by: -13))
             .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+}
+
+// The measured heights behind "More": six lines of the description and all of it.
+private struct NotesFold: Equatable {
+    var six: CGFloat = 0
+    var full: CGFloat = 0
+
+    var cutsOff: Bool {
+        full > six + 1
     }
 }
