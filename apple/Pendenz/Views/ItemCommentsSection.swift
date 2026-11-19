@@ -23,8 +23,10 @@ struct ItemCommentsSection: View {
             } header: {
                 header(count: all.count)
             }
+            #if os(iOS)
             // A folded section is its header alone, without the gap of an empty card below it.
             .listSectionSpacing(isFolded ? .compact : .default)
+            #endif
         }
     }
 
