@@ -38,6 +38,11 @@ fn measure() -> anyhow::Result<Host> {
     // divided by the cores to match the machine's total.
     let mut programs: HashMap<String, Process> = HashMap::new();
     for process in system.processes().values() {
+        // On Linux the threads of a process are listed too, each with the memory of the whole
+        // process: a program with seven threads of one name counted seven times over.
+        if process.thread_kind().is_some() {
+            continue;
+        }
         let name = process.name().to_string_lossy().into_owned();
         if name.is_empty() {
             continue;
