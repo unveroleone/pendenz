@@ -16,6 +16,8 @@ struct ItemDetailView: View {
     @State private var notes = ""
     @State private var lines: [ChecklistLine] = []
     @State private var newLine = ""
+    // A long description shows its start until "More" or a tap opens it.
+    @State private var showsAllNotes = false
     // The question behind the detail's own trash button.
 
     var body: some View {
@@ -45,34 +47,18 @@ struct ItemDetailView: View {
                         .focused($focus, equals: .title)
                         .labelsHidden()
                 }
-                // A text editor, not a text field: Return starts a new line on every platform,
-                // where a field on the Mac ends the editing.
-                TextEditor(text: $notes)
-                    .font(.body)
-                    .scrollContentBackground(.hidden)
-                    // About two lines, as the field before it: the body text is 17 points on
-                    // iOS and 13 on the Mac.
-                    #if os(iOS)
-                    .frame(minHeight: 60)
-                    #else
-                    .frame(minHeight: 34)
-                    #endif
-                    // The editor insets its text by five points, and on iOS by eight from the
-                    // top. This lines it up with the other rows.
-                    .padding(.horizontal, -5)
-                    #if os(iOS)
-                    .padding(.vertical, -8)
-                    #endif
-                    .focused($focus, equals: .notes)
-                    .overlay(alignment: .topLeading) {
-                        if notes.isEmpty {
-                            Text("Notes")
-                                .foregroundStyle(Self.placeholder)
-                                .allowsHitTesting(false)
-                                .accessibilityHidden(true)
+                if focus != .notes, !showsAllNotes, Self.isLong(notes) {
+                    notesPreview
+                } else {
+                    // One row: a sibling would be a row of its own in the form.
+                    VStack(spacing: 6) {
+                        notesEditor
+                        if showsAllNotes, focus != .notes, Self.isLong(notes) {
+                            Button("Less") { withAnimation { showsAllNotes = false } }
+                                .notesToggle()
                         }
                     }
-                    .accessibilityLabel("Notes")
+                }
             }
             Section("Steps") {
                 ForEach($lines) { $line in
@@ -207,6 +193,66 @@ struct ItemDetailView: View {
     }
 
     // MARK: Text
+
+    // A text editor, not a text field: Return starts a new line on every platform, where a field
+    // on the Mac ends the editing.
+    private var notesEditor: some View {
+        TextEditor(text: $notes)
+            .font(.body)
+            .scrollContentBackground(.hidden)
+            // About two lines, as the field before it: the body text is 17 points on
+            // iOS and 13 on the Mac.
+            #if os(iOS)
+            .frame(minHeight: 60)
+            #else
+            .frame(minHeight: 34)
+            #endif
+            // The editor insets its text by five points, and on iOS by eight from the
+            // top. This lines it up with the other rows.
+            .padding(.horizontal, -5)
+            #if os(iOS)
+            .padding(.vertical, -8)
+            #endif
+            .focused($focus, equals: .notes)
+            .overlay(alignment: .topLeading) {
+                if notes.isEmpty {
+                    Text("Notes")
+                        .foregroundStyle(Self.placeholder)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+            .accessibilityLabel("Notes")
+    }
+
+    // The start of a long description: six lines, then "More". The whole of it is one tap away,
+    // and a tap on the text starts editing as the editor would.
+    private var notesPreview: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(notes)
+                .lineLimit(6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+                .onTapGesture(perform: editNotes)
+                .accessibilityLabel("Notes")
+                .accessibilityValue(notes)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Edits the notes")
+            Button("More") { withAnimation { showsAllNotes = true } }
+                .notesToggle()
+        }
+    }
+
+    private func editNotes() {
+        showsAllNotes = true
+        // The editor joins the form with this change; it takes the focus once it is there.
+        Task { focus = .notes }
+    }
+
+    // Long enough to push the rest of the item down: more than about six lines of text.
+    private static func isLong(_ text: String) -> Bool {
+        text.count > 280 || text.split(separator: "\n", omittingEmptySubsequences: false).count > 6
+    }
 
     // The color the system gives the placeholder of a text field, which a text editor lacks.
     #if os(macOS)
@@ -402,5 +448,15 @@ struct ItemDetailView: View {
         } set: { isHidden in
             store.update(itemID, ItemPatch(hiddenFromAgents: isHidden))
         }
+    }
+}
+
+private extension View {
+    // "More" and "Less" under the description: small, at the trailing edge, in the tint.
+    func notesToggle() -> some View {
+        font(.subheadline.weight(.semibold))
+            .foregroundStyle(.tint)
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .trailing)
     }
 }
