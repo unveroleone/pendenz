@@ -240,7 +240,9 @@ private struct AgentSwitcher: View {
     private var pills: some View {
         HStack(spacing: 8) {
             ForEach(agents) { agent in
-                let health = agentHealth(agent.report, age: board.age(of: agent))
+                let health = agent.isReportUnreadable
+                    ? (text: "Report not readable", level: AgentLevel.warning)
+                    : agentHealth(agent.report, age: board.age(of: agent))
                 let isChosen = agent.id == chosen
                 Button {
                     choose(agent.id)
