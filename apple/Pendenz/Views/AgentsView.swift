@@ -56,7 +56,13 @@ struct AgentsView: View {
     // In a fixed order, so the switcher does not move each time a report comes in: the server
     // lists the newest report first.
     private var agents: [AgentEntry] {
-        board.reporting.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        board.reporting.sorted {
+            switch $0.name.localizedStandardCompare($1.name) {
+            case .orderedAscending: true
+            case .orderedDescending: false
+            case .orderedSame: $0.id < $1.id
+            }
+        }
     }
 
     private var entry: AgentEntry? {
@@ -228,37 +234,46 @@ private struct AgentSwitcher: View {
     let choose: (String) -> Void
 
     var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(agents) { agent in
-                    let health = agentHealth(agent.report, age: board.age(of: agent))
-                    let isChosen = agent.id == chosen
-                    Button {
-                        choose(agent.id)
-                    } label: {
-                        HStack(spacing: 6) {
-                            StateDot(level: health.level)
-                            Text(agent.name)
-                                .lineLimit(1)
-                        }
-                        .font(.subheadline.weight(isChosen ? .semibold : .regular))
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: 36)
-                        .foregroundStyle(isChosen ? AnyShapeStyle(.background) : AnyShapeStyle(.primary))
-                        .background(
-                            Capsule().fill(isChosen ? AnyShapeStyle(.primary) : AnyShapeStyle(.fill.tertiary)),
-                        )
-                        .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(agent.name), \(health.text)")
-                    .accessibilityAddTraits(isChosen ? .isSelected : [])
-                }
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                pills
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            .scrollIndicators(.hidden)
+            // A choice kept from before may be off the edge when there are many agents.
+            .onAppear { proxy.scrollTo(chosen, anchor: .center) }
         }
-        .scrollIndicators(.hidden)
+    }
+
+    private var pills: some View {
+        HStack(spacing: 8) {
+            ForEach(agents) { agent in
+                let health = agentHealth(agent.report, age: board.age(of: agent))
+                let isChosen = agent.id == chosen
+                Button {
+                    choose(agent.id)
+                } label: {
+                    HStack(spacing: 6) {
+                        StateDot(level: health.level)
+                        Text(agent.name)
+                            .lineLimit(1)
+                    }
+                    .font(.subheadline.weight(isChosen ? .semibold : .regular))
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 36)
+                    .foregroundStyle(isChosen ? AnyShapeStyle(.background) : AnyShapeStyle(.primary))
+                    .background(
+                        Capsule().fill(isChosen ? AnyShapeStyle(.primary) : AnyShapeStyle(.fill.tertiary)),
+                    )
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(agent.name), \(health.text)")
+                .accessibilityAddTraits(isChosen ? .isSelected : [])
+                .id(agent.id)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
     }
 }
 
