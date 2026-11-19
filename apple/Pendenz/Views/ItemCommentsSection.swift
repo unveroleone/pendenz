@@ -2,43 +2,82 @@ import SwiftUI
 
 // The comments on an item, oldest first, mostly the questions, plans and results of agents. The
 // section is only there when the item has comments, and it shows the latest one: the earlier
-// ones open with a row above it. A long press or a right click edits a comment, marks it as
+// ones open with a row above it. The header folds the whole section away, and the app keeps
+// that choice for every item. A long press or a right click edits a comment, marks it as
 // outdated or deletes it; on the iPhone and iPad a swipe does the same.
 struct ItemCommentsSection: View {
     @Environment(Store.self) private var store
     let itemID: Int
 
+    @AppStorage("commentsFolded") private var isFolded = false
     @State private var showsEarlier = false
 
     var body: some View {
         let all = store.comments(of: itemID)
         if let latest = all.last {
             let earlier = all.dropLast()
-            Section("Comments") {
-                if !earlier.isEmpty {
-                    Button {
-                        withAnimation { showsEarlier.toggle() }
-                    } label: {
-                        HStack {
-                            Text(showsEarlier ? "Hide Earlier Comments" : earlierTitle(earlier.count))
-                            Spacer()
-                            Image(systemName: "chevron.down")
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .rotationEffect(.degrees(showsEarlier ? 180 : 0))
-                        }
-                        .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    if showsEarlier {
-                        ForEach(earlier) { CommentRow(comment: $0) }
-                    }
+            Section {
+                if !isFolded {
+                    rows(latest: latest, earlier: earlier)
                 }
-                // By its ID: when a newer comment arrives, this row's state stays with its own.
-                CommentRow(comment: latest)
-                    .id(latest.id)
+            } header: {
+                header(count: all.count)
+            }
+            #if os(iOS)
+            // A folded section is its header alone, without the gap of an empty card below it.
+            .listSectionSpacing(isFolded ? .compact : .default)
+            #endif
+        }
+    }
+
+    // The section's title is the control: the whole width answers a tap, and the count stays
+    // in sight while the comments are folded away.
+    private func header(count: Int) -> some View {
+        Button {
+            withAnimation { isFolded.toggle() }
+        } label: {
+            HStack(spacing: 6) {
+                Text("Comments")
+                Text(count, format: .number)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isFolded ? -90 : 0))
+                    .accessibilityHidden(true)
+            }
+            // Taller to the finger than to the eye: the header keeps the height of the others.
+            .contentShape(.rect.inset(by: -10))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(count == 1 ? "1 Comment" : "\(count) Comments")
+        .accessibilityValue(isFolded ? "Folded" : "Shown")
+        .accessibilityHint(isFolded ? "Shows the comments" : "Folds the comments away")
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder
+    private func rows(latest: Comment, earlier: ArraySlice<Comment>) -> some View {
+        if !earlier.isEmpty {
+            Button {
+                withAnimation { showsEarlier.toggle() }
+            } label: {
+                // Words alone: the chevron belongs to the header, which folds the whole section.
+                Text(showsEarlier ? "Hide Earlier Comments" : earlierTitle(earlier.count))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            if showsEarlier {
+                ForEach(earlier) { CommentRow(comment: $0) }
             }
         }
+        // By its ID: when a newer comment arrives, this row's state stays with its own.
+        CommentRow(comment: latest)
+            .id(latest.id)
     }
 
     private func earlierTitle(_ count: Int) -> String {
