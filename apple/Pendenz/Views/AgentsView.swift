@@ -51,11 +51,16 @@ enum AgentLevel {
 // their own, so the list stays short on the iPhone.
 struct AgentsView: View {
     @Environment(AgentBoard.self) private var board
-    @State private var chosenAgent: String?
+    @SceneStorage("chosenAgent") private var chosenAgent = ""
+
+    // In a fixed order, so the switcher does not move each time a report comes in: the server
+    // lists the newest report first.
+    private var agents: [AgentEntry] {
+        board.reporting.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
 
     private var entry: AgentEntry? {
-        let reporting = board.reporting
-        return reporting.first { $0.id == chosenAgent } ?? reporting.first
+        agents.first { $0.id == chosenAgent } ?? agents.first
     }
 
     var body: some View {
@@ -68,7 +73,7 @@ struct AgentsView: View {
                     ),
                 )
             } else if let entry, let report = entry.report {
-                AgentForm(entry: entry, report: report, chosenAgent: $chosenAgent)
+                AgentForm(entry: entry, report: report)
             } else if board.list == nil, board.problem == nil {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -84,6 +89,12 @@ struct AgentsView: View {
                 }
             }
         }
+        // Above every state of the screen, so an unreadable report never hides the way back.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if agents.count > 1, let entry {
+                AgentSwitcher(agents: agents, chosen: entry.id) { chosenAgent = $0 }
+            }
+        }
         .navigationTitle("Agents")
         .refreshable { await board.refresh() }
         .task { await board.watch() }
@@ -95,7 +106,6 @@ private struct AgentForm: View {
     @Environment(Store.self) private var store
     let entry: AgentEntry
     let report: AgentReport
-    @Binding var chosenAgent: String?
 
     private var waiting: [Item] {
         store.openItems.filter { ["needs_answer", "review"].contains($0.agentStage) }
@@ -113,11 +123,6 @@ private struct AgentForm: View {
 
     var body: some View {
         Form {
-            if board.reporting.count > 1 {
-                Picker("Agent", selection: Binding { entry.id } set: { chosenAgent = $0 }) {
-                    ForEach(board.reporting) { Text($0.name).tag($0.id) }
-                }
-            }
             Section {
                 NavigationLink {
                     AgentDetailView(entry: entry, report: report)
@@ -204,6 +209,59 @@ private struct ShareBar: View {
 
 // MARK: Status
 
+// How an agent is doing, from its report and how old that is.
+private func agentHealth(_ report: AgentReport?, age: TimeInterval?) -> (text: String, level: AgentLevel) {
+    guard let report, (age ?? .infinity) <= AgentBoard.staleAfter else { return ("No recent report", .idle) }
+    switch report.agent?.health {
+    case .online, nil: return ("Online", .good)
+    case .degraded: return ("Partly working", .warning)
+    case .offline: return ("Offline", .problem)
+    }
+}
+
+// One pill per agent that reports, with the state of each, so another agent is one tap away.
+// The chosen pill is filled like the app's other selected controls: black, or white in dark mode.
+private struct AgentSwitcher: View {
+    @Environment(AgentBoard.self) private var board
+    let agents: [AgentEntry]
+    let chosen: String
+    let choose: (String) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(agents) { agent in
+                    let health = agentHealth(agent.report, age: board.age(of: agent))
+                    let isChosen = agent.id == chosen
+                    Button {
+                        choose(agent.id)
+                    } label: {
+                        HStack(spacing: 6) {
+                            StateDot(level: health.level)
+                            Text(agent.name)
+                                .lineLimit(1)
+                        }
+                        .font(.subheadline.weight(isChosen ? .semibold : .regular))
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 36)
+                        .foregroundStyle(isChosen ? AnyShapeStyle(.background) : AnyShapeStyle(.primary))
+                        .background(
+                            Capsule().fill(isChosen ? AnyShapeStyle(.primary) : AnyShapeStyle(.fill.tertiary)),
+                        )
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(agent.name), \(health.text)")
+                    .accessibilityAddTraits(isChosen ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+        .scrollIndicators(.hidden)
+    }
+}
+
 private struct StatusRow: View {
     let entry: AgentEntry
     let report: AgentReport
@@ -214,12 +272,7 @@ private struct StatusRow: View {
     }
 
     private var health: (text: String, level: AgentLevel) {
-        if (age ?? .infinity) > AgentBoard.staleAfter { return ("No recent report", .idle) }
-        switch report.agent?.health {
-        case .online, nil: return ("Online", .good)
-        case .degraded: return ("Partly working", .warning)
-        case .offline: return ("Offline", .problem)
-        }
+        agentHealth(report, age: age)
     }
 
     var body: some View {
