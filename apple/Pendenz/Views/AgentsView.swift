@@ -271,8 +271,7 @@ private struct AgentSwitcher: View {
         }
         .padding(.horizontal)
         // More room below than above: the pills belong to the title, and the list starts after.
-        .padding(.top, 4)
-        .padding(.bottom, 12)
+        .padding(.bottom, 20)
     }
 }
 
