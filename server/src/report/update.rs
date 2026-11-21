@@ -10,7 +10,7 @@ use std::{
 };
 
 const REPO: &str = "unveroleone/pendenz";
-// A failed try is not repeated for the same version before this long.
+// After a failed try, whatever version it was for, the next waits this long.
 const RETRY: chrono::TimeDelta = chrono::TimeDelta::hours(6);
 const ASSET_LIMIT: usize = 100 * 1024 * 1024;
 const SUMS_LIMIT: usize = 64 * 1024;
@@ -47,12 +47,18 @@ fn asset() -> Option<&'static str> {
     }
 }
 
-// A build from a checkout replaces nothing: `cargo` owns it.
-fn built_by_cargo(exe: &Path) -> bool {
-    let parts: Vec<_> = exe.components().map(|c| c.as_os_str().to_owned()).collect();
-    parts
-        .windows(2)
-        .any(|w| w[0] == "target" && (w[1] == "debug" || w[1] == "release"))
+// A binary that another tool put there is that tool's to update: a build in a checkout, one
+// from `cargo install`, and one reached through a link, as a package manager sets it up.
+fn managed_elsewhere(exe: &Path, canonical: &Path) -> bool {
+    let parts: Vec<_> = canonical
+        .components()
+        .map(|c| c.as_os_str().to_owned())
+        .collect();
+    exe != canonical
+        || parts
+            .windows(2)
+            .any(|w| w[0] == "target" && (w[1] == "debug" || w[1] == "release"))
+        || parts.windows(2).any(|w| w[0] == ".cargo" && w[1] == "bin")
 }
 
 // Brings the binary up to the server's version when it is behind. Prints one line when it
@@ -62,11 +68,12 @@ pub async fn follow(server_version: &str) {
     let Some(version) = wanted(own, server_version) else {
         return;
     };
-    match tokio::time::timeout(Duration::from_secs(240), replace(own, &version)).await {
+    // Shorter than the two minutes between reports.
+    match tokio::time::timeout(Duration::from_secs(100), replace(own, &version)).await {
         Ok(Ok(Some(done))) => println!("{done}"),
         Ok(Ok(None)) => {}
         Ok(Err(error)) => eprintln!("update to {version}: {error:#}"),
-        Err(_) => eprintln!("update to {version}: took longer than 4 minutes"),
+        Err(_) => eprintln!("update to {version}: took longer than 100 s"),
     }
 }
 
@@ -74,8 +81,9 @@ async fn replace(own: &str, version: &str) -> anyhow::Result<Option<String>> {
     let Some(asset) = asset() else {
         return Ok(None);
     };
-    let exe = std::fs::canonicalize(std::env::current_exe()?)?;
-    if built_by_cargo(&exe) {
+    let path = std::path::absolute(std::env::current_exe()?)?;
+    let exe = std::fs::canonicalize(&path)?;
+    if managed_elsewhere(&path, &exe) {
         return Ok(None);
     }
     let dir = exe
@@ -98,39 +106,51 @@ async fn replace(own: &str, version: &str) -> anyhow::Result<Option<String>> {
     if lock.try_lock().is_err() {
         return Ok(None);
     }
-    // Another job may have replaced the file since this process started.
-    if let Some(installed) = installed_version(&exe).await
-        && wanted(&installed, version).is_none()
-    {
+    // Another job may have replaced the file since this process started. A file whose version
+    // cannot be read is left alone.
+    let Some(installed) = installed_version(&exe).await else {
+        return Ok(None);
+    };
+    if wanted(&installed, version).is_none() {
         return Ok(None);
     }
+    // The record of a try is removed when it succeeds, so one that is there failed.
     let record = dir.join(".pendenz-update.json");
     let now = chrono::Utc::now();
     if let Some(tried) = std::fs::read(&record)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Tried>(&bytes).ok())
-        && tried.version == version
         && now - tried.at < RETRY
     {
         return Ok(None);
     }
+    // Written beside and renamed, so a link in its place is replaced, not followed.
+    let temporary = dir.join(format!(".pendenz-update.json.{}", std::process::id()));
     std::fs::write(
-        &record,
+        &temporary,
         serde_json::to_vec(&Tried {
             version: version.to_owned(),
             at: now,
         })?,
     )?;
+    std::fs::rename(&temporary, &record)?;
 
     let base = std::env::var("PENDENZ_DOWNLOAD_URL")
         .ok()
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| format!("https://github.com/{REPO}/releases/download/v{version}"));
     let base = base.trim_end_matches('/');
+    // GitHub sends a release file on through a redirect; a mirror on this machine needs none,
+    // and must not hand the download on to a remote host over plain HTTP.
+    let local = loopback(base);
     let http = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::limited(5))
-        .https_only(!loopback(base))
-        .timeout(Duration::from_secs(120))
+        .redirect(if local {
+            reqwest::redirect::Policy::none()
+        } else {
+            reqwest::redirect::Policy::limited(5)
+        })
+        .https_only(!local)
+        .timeout(Duration::from_secs(90))
         .build()?;
     let sums = download(&http, &format!("{base}/SHA256SUMS"), SUMS_LIMIT).await?;
     let sums = String::from_utf8(sums)?;
@@ -170,6 +190,7 @@ async fn replace(own: &str, version: &str) -> anyhow::Result<Option<String>> {
         says.as_deref().unwrap_or("nothing")
     );
     std::fs::rename(&fresh, &exe)?;
+    let _ = std::fs::remove_file(&record);
     Ok(Some(format!(
         "Updated pendenz from {own} to {version}, the server's version."
     )))
@@ -229,6 +250,9 @@ async fn installed_version(binary: &PathBuf) -> Option<String> {
         .await
         .ok()?
         .ok()?;
+    if !output.status.success() {
+        return None;
+    }
     let text = String::from_utf8(output.stdout).ok()?;
     Some(text.trim().strip_prefix("pendenz ")?.to_owned())
 }
@@ -250,10 +274,14 @@ mod tests {
     }
 
     #[test]
-    fn leaves_a_cargo_build_alone() {
-        assert!(built_by_cargo(Path::new(
-            "/src/pendenz/target/debug/pendenz"
-        )));
-        assert!(!built_by_cargo(Path::new("/home/a/.local/bin/pendenz")));
+    fn leaves_other_tools_binaries_alone() {
+        let alone = |p: &str| managed_elsewhere(Path::new(p), Path::new(p));
+        assert!(alone("/src/pendenz/target/debug/pendenz"));
+        assert!(alone("/home/a/.cargo/bin/pendenz"));
+        assert!(!alone("/home/a/.local/bin/pendenz"));
+        assert!(managed_elsewhere(
+            Path::new("/opt/homebrew/bin/pendenz"),
+            Path::new("/opt/homebrew/Cellar/pendenz/0.5.3/bin/pendenz")
+        ));
     }
 }

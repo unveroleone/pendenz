@@ -218,8 +218,8 @@ Changes to `compose.yaml` or `update.sh` reach the host only when you copy the f
 The job that `pendenz report install` sets up follows the server: when the answer to a report names a newer release in `Pendenz-Version`, the job downloads that release's build for the machine, checks it against the release's `SHA256SUMS` as `install.sh` does, runs it once to read its version, and puts it in place of the old file. Running processes such as `pendenz mcp` keep the old file until they start again.
 
 - It never takes a version newer than the server's, never a pre-release, and never goes back to an older one. A report sent by hand, `pendenz mcp` and the server never update.
-- A failed try is printed to the job's log and tried again for the same version after six hours. The report itself goes out either way.
-- It leaves a binary alone that sits in a Cargo `target/` folder or in a folder the user cannot write to. The lock and the record of the last try lie next to the binary (`.pendenz-update.lock`, `.pendenz-update.json`).
+- A failed try is printed to the job's log, and the next try waits six hours. The report itself goes out first either way.
+- It leaves a binary alone that another tool put there: one in a Cargo `target/` folder or in `~/.cargo/bin`, one reached through a link, as a package manager sets it up, and one in a folder the user cannot write to. The lock and the record of the last try lie next to the binary (`.pendenz-update.lock`, `.pendenz-update.json`).
 - `pendenz report install --no-update` writes a job without it. To go back to an older release, install it with `PENDENZ_VERSION=<version>` and `install.sh`, then `pendenz report install --no-update`, until the server runs that version too.
 
 When the image of the version you name already runs, the script stops before the backup and changes nothing.
