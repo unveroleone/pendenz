@@ -72,7 +72,7 @@ struct AgentsView: View {
                     ),
                 )
             } else if let entry, let report = entry.report {
-                AgentForm(entry: entry, report: report)
+                AgentForm(entry: entry, report: report, switcher: switcher(for: entry, isInList: true))
             } else if board.list == nil, board.problem == nil {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -88,15 +88,23 @@ struct AgentsView: View {
                 }
             }
         }
-        // Above every state of the screen, so an unreadable report never hides the way back.
+        // Above every other state of the screen, so an unreadable report never hides the way
+        // back. The form carries the pills in its list instead: pinned here, they stayed put
+        // while the large title moved with the list, and a pull to refresh drew the title
+        // below them.
         .safeAreaInset(edge: .top, spacing: 0) {
-            if agents.count > 1, let entry {
-                AgentSwitcher(agents: agents, chosen: entry.id) { chosenAgent = $0 }
+            if let entry, entry.isReportUnreadable || entry.report == nil {
+                switcher(for: entry, isInList: false)
             }
         }
         .navigationTitle("Agents")
         .refreshable { await board.refresh() }
         .task { await board.watch() }
+    }
+
+    private func switcher(for entry: AgentEntry, isInList: Bool) -> AgentSwitcher? {
+        guard agents.count > 1 else { return nil }
+        return AgentSwitcher(agents: agents, chosen: entry.id, isInList: isInList) { chosenAgent = $0 }
     }
 }
 
@@ -105,6 +113,7 @@ private struct AgentForm: View {
     @Environment(Store.self) private var store
     let entry: AgentEntry
     let report: AgentReport
+    let switcher: AgentSwitcher?
 
     private var waiting: [Item] {
         store.openItems.filter { ["needs_answer", "review"].contains($0.agentStage) }
@@ -122,6 +131,13 @@ private struct AgentForm: View {
 
     var body: some View {
         Form {
+            if let switcher {
+                Section {
+                    switcher
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
             Section {
                 NavigationLink {
                     AgentDetailView(entry: entry, report: report)
@@ -224,6 +240,8 @@ private struct AgentSwitcher: View {
     @Environment(AgentBoard.self) private var board
     let agents: [AgentEntry]
     let chosen: String
+    // In the form's list the row gives the margins and the room below.
+    let isInList: Bool
     let choose: (String) -> Void
 
     var body: some View {
@@ -232,6 +250,8 @@ private struct AgentSwitcher: View {
                 pills
             }
             .scrollIndicators(.hidden)
+            // In the list the pills line up with the rows, and scroll out to the screen's edges.
+            .scrollClipDisabled(isInList)
             // A choice kept from before may be off the edge when there are many agents.
             .onAppear { proxy.scrollTo(chosen, anchor: .center) }
         }
@@ -270,9 +290,9 @@ private struct AgentSwitcher: View {
                 .id(agent.id)
             }
         }
-        .padding(.horizontal)
+        .padding(.horizontal, isInList ? 0 : nil)
         // More room below than above: the pills belong to the title, and the list starts after.
-        .padding(.bottom, 20)
+        .padding(.bottom, isInList ? 0 : 20)
     }
 }
 

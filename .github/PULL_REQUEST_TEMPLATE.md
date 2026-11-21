@@ -10,7 +10,7 @@ Closes #
 
 ## Screenshots
 
-<!-- Required for every change you can see: before and after, for each layout it touches (iPhone, iPad, Mac), and dark mode when colors or selected controls change. A short recording for motion or gestures. Delete this section for changes without UI. -->
+<!-- Required for every change you can see: before and after, for each layout it touches (iPhone, iPad, Mac), in dark mode. A short recording for motion or gestures. Delete this section for changes without UI. -->
 
 | Before | After |
 | ------ | ----- |

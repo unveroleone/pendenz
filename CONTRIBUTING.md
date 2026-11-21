@@ -14,7 +14,7 @@ Check [ROADMAP.md](ROADMAP.md) and the open issues before you start, so two peop
 
 - **Keep it small and scoped.** One pull request does one thing. A fix does not carry a refactor, a rename or formatting changes elsewhere. If a change grows, split it.
 - **Explain why.** The description says what the change does, why it is needed, and links the issue or discussion.
-- **Show UI changes.** Every pull request that changes something you can see includes screenshots, or a short screen recording for motion or gestures, of before and after. Show each layout it touches: iPhone, iPad and Mac, and dark mode when it changes colors or a selected, filled or prominent control.
+- **Show UI changes.** Every pull request that changes something you can see includes screenshots, or a short screen recording for motion or gestures, of before and after. Show each layout it touches: iPhone, iPad and Mac, in dark mode. One appearance is enough.
 - **Test it yourself.** Run an app change in the Simulator or on your own device before you ask for a review, and say in the pull request where you ran it (device or simulator, and the OS version). A change that was only compiled is not ready.
 - **Keep the checks green.** CI runs the same checks as these commands, and all of them have to pass:
   - `pnpm check`: clippy, `cargo fmt` and Prettier. `pnpm format` fixes the formatting.
