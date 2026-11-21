@@ -88,7 +88,6 @@
             "needs_answer",
             "ready",
             "running",
-            "review",
             "declined"
           ],
           "type": "string"
@@ -299,7 +298,7 @@
           "additionalProperties": false,
           "properties": {
             "agent_stage": {
-              "description": "Where the item is in the agent loop: none = nothing for an agent, gathering = collecting context, needs_answer = a question waits for the owner, ready = a brief waits for the owner's yes, running = the work is under way, review = the result waits for the owner, declined = the owner said no. new means it waits for triage; the server sets it when the owner edits the title or the description.",
+              "description": "Where the item is in the agent loop: none = nothing for an agent, gathering = collecting context, needs_answer = a question waits for the owner, ready = a brief waits for the owner's yes, running = the work is under way, declined = the owner said no. new means it waits for triage; the server sets it when the owner edits the title or the description.",
               "enum": [
                 "new",
                 "none",
@@ -307,7 +306,6 @@
                 "needs_answer",
                 "ready",
                 "running",
-                "review",
                 "declined"
               ],
               "type": "string"
