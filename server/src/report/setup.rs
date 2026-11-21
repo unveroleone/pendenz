@@ -48,6 +48,27 @@ fn saved_path(profile: Option<&str>) -> Option<PathBuf> {
     config_dir().map(|d| d.join(file_name(profile)))
 }
 
+// The servers of every saved connection, the machine's and its profiles'.
+pub fn servers() -> std::collections::BTreeSet<String> {
+    let Some(dir) = config_dir() else {
+        return Default::default();
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Default::default();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter(|e| {
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            name.starts_with("agent") && name.ends_with(".json")
+        })
+        .filter_map(|e| std::fs::read(e.path()).ok())
+        .filter_map(|bytes| serde_json::from_slice::<Saved>(&bytes).ok())
+        .map(|saved| saved.server)
+        .collect()
+}
+
 pub fn saved(profile: Option<&str>) -> Option<Saved> {
     let bytes = std::fs::read(saved_path(profile)?).ok()?;
     serde_json::from_slice(&bytes).ok()

@@ -35,6 +35,8 @@ enum Transport {
         token: Option<String>,
         // Where new items come from, such as "telegram". The server records "mcp" without it.
         source: Option<String>,
+        // The version the server named in its last answer (`Pendenz-Version`).
+        version: std::sync::Mutex<Option<String>>,
     },
     Local {
         router: Router,
@@ -125,6 +127,7 @@ impl Client {
             base: saved.server,
             token: Some(saved.token),
             source: env("PENDENZ_SOURCE"),
+            version: Default::default(),
         })
     }
 
@@ -149,7 +152,16 @@ impl Client {
             base,
             token,
             source: env("PENDENZ_SOURCE"),
+            version: Default::default(),
         })
+    }
+
+    // The version the server named in its last answer, also one that refused the request.
+    pub fn server_version(&self) -> Option<String> {
+        match &self.0 {
+            Transport::Http { version, .. } => version.lock().expect("not poisoned").clone(),
+            Transport::Local { .. } => None,
+        }
     }
 
     pub fn local(router: Router, token: String) -> Self {
@@ -189,6 +201,7 @@ impl Client {
                 base,
                 token,
                 source,
+                version,
             } => {
                 let base = url::Url::parse(base).map_err(|_| "Invalid URL".to_owned())?;
                 let host = base.host_str().unwrap_or("");
@@ -227,6 +240,13 @@ impl Client {
                         format!("Could not reach the API: {}", reason(&error))
                     }
                 })?;
+                if let Some(value) = response
+                    .headers()
+                    .get("pendenz-version")
+                    .and_then(|v| v.to_str().ok())
+                {
+                    *version.lock().expect("not poisoned") = Some(value.to_owned());
+                }
                 if response.status().is_redirection() {
                     return Err(format!(
                         "The API answered {} with a redirect, which is not followed. Check PENDENZ_API_URL.",
