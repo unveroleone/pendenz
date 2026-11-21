@@ -1,5 +1,10 @@
 import SwiftUI
 
+private struct OpenNoteLock: Equatable {
+    let id: Int?
+    let isLocked: Bool?
+}
+
 private struct ReminderInput: Equatable {
     let items: [Item]
     let access: Reminders.Access
@@ -73,7 +78,9 @@ struct RootView: View {
                 let id = store.noteID(id)
                 if note.locked {
                     // Into Locked Notes, after the one question.
-                    Task { await navigation.openLockedNotes(note: id) }
+                    Task {
+                        if await navigation.openLockedNotes(note: id) { open(.notes) }
+                    }
                 } else {
                     open(.notes)
                     navigation.leaveLockedNotes()
@@ -158,6 +165,15 @@ struct RootView: View {
         .onChange(of: openRequest.noteID, initial: true) { takeRequests() }
         // A note asked for before the store had it.
         .onChange(of: store.phase) { takeRequests() }
+        .onChange(of: OpenNoteLock(
+            id: navigation.noteID,
+            isLocked: navigation.noteID.flatMap { store.note($0)?.locked },
+        )) { old, new in
+            // The same note, locked or unlocked: not another note that was opened.
+            if old.id == new.id, let isLocked = new.isLocked, old.isLocked != nil, old.isLocked != isLocked {
+                navigation.openNoteLockChanged(isLocked: isLocked)
+            }
+        }
         .onChange(of: NoteLock.shared.isOpen) { _, isOpen in
             if !isOpen { navigation.lockClosed(in: store) }
         }
