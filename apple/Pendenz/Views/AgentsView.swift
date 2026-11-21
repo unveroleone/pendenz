@@ -605,9 +605,10 @@ private struct JobDetailView: View {
         entry?.description(ofJob: opened.name)
     }
 
-    // A server older than job descriptions sends none, and cannot take one.
+    // A server older than job descriptions sends none, and cannot take one. Nor does the server
+    // take one for an agent without a working token.
     private var canWrite: Bool {
-        entry?.jobDescriptions != nil
+        entry.map { $0.jobDescriptions != nil && !$0.scopes.isEmpty } ?? false
     }
 
     var body: some View {
@@ -680,9 +681,11 @@ private struct JobDescriptionEditor: View {
     @Environment(\.dismiss) private var dismiss
     let agentID: String
     let job: String
-    let original: String
     let skillSummary: String?
 
+    // The line as it was when the editor opened, kept for as long as it is open: a refresh
+    // that brings another device's line must not make an untouched text look changed.
+    @State private var original: String
     @State private var text: String
     @State private var isSaving = false
     @State private var failure: String?
@@ -694,8 +697,8 @@ private struct JobDescriptionEditor: View {
     init(agentID: String, job: String, text: String, skillSummary: String?) {
         self.agentID = agentID
         self.job = job
-        original = text
         self.skillSummary = skillSummary
+        _original = State(initialValue: text)
         _text = State(initialValue: text)
     }
 
@@ -758,7 +761,7 @@ private struct JobDescriptionEditor: View {
         do {
             try await board.setJobDescription(agent: agentID, job: job, text: line)
             dismiss()
-        } catch APIError.status(404, nil), APIError.status(405, nil) {
+        } catch APIError.status(404, nil), APIError.status(405, _) {
             failure = "The server is older than job descriptions. Update it to write one."
         } catch APIError.status(404, _) {
             failure = "This agent is no longer connected."
