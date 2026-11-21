@@ -15,6 +15,7 @@ What is planned and not built yet, roughly in order. Each entry gets a GitHub is
 - **Menu bar capture on the Mac**, with a global hotkey.
 - **Images in notes and in quick add.** Items can carry images already.
 - **A reminder at the due time for a device that has not synced it.** A reminder made on another device shortly before it is due can come late today, because each device schedules its own.
+- **Locked notes in a list of their own**, like Locked chats in WhatsApp. The Notes list leaves them out, and a row at its top opens them on a screen of their own after Face ID. Another way: a row for an archive of notes, with the locked ones in it.
 - **An Apple Watch app.**
 - **More UI tests:** text dropped from another app, the actions on a notification, images, locking a note, and the Mac, where the test target does not run yet.
 
