@@ -717,8 +717,8 @@ fn jobs(cron: &Path) -> Vec<Job> {
 
 const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-// A job's schedule in words: "Every 5 min", "Hourly", "Daily 09:00, 13:00", "Sun 04:00".
-// Anything else is shown as written.
+// A job's schedule in words: "Every 5 min", "Hourly", "Daily 09:00, 13:00", "Sun 04:00",
+// "Every 30 min, 07:00–20:30". Anything else is shown as written.
 pub fn schedule(schedule: &Value, display: Option<&str>) -> String {
     let fallback = display
         .map(str::to_owned)
@@ -748,37 +748,127 @@ fn cron_words(expr: &str) -> Option<String> {
     if day != "*" || month != "*" {
         return None;
     }
-    let numbers = |field: &str, max: u32| -> Option<Vec<u32>> {
-        field
-            .split(',')
-            .map(|n| n.parse().ok().filter(|n| *n <= max))
-            .collect()
+    let minutes = cron_values(minute, 59)?;
+    let hours = cron_values(hour, 23)?;
+    let days = match weekday {
+        "*" => None,
+        field => Some(day_names(&cron_values(field, 7)?)),
     };
-    let minutes = numbers(minute, 59)?;
-    if hour == "*" && weekday == "*" && minutes.len() == 1 {
-        return Some(if minutes[0] == 0 {
-            "Hourly".into()
+    let text = if let Some(n) = cron_step(minute) {
+        let every = if n == 1 {
+            "Every minute".to_owned()
         } else {
-            format!("Hourly at :{:02}", minutes[0])
-        });
-    }
-    let hours = numbers(hour, 23)?;
-    let mut times: Vec<String> = Vec::new();
-    for h in &hours {
-        for m in &minutes {
-            times.push(format!("{h:02}:{m:02}"));
+            format!("Every {n} min")
+        };
+        match hour {
+            "*" => every,
+            _ => format!("{every}, {}", window(&hours, &minutes)?),
         }
-    }
-    let when = if weekday == "*" {
-        "Daily".to_owned()
+    } else if minutes.len() == 1 && hour == "*" {
+        match minutes[0] {
+            0 => "Hourly".to_owned(),
+            m => format!("Hourly at :{m:02}"),
+        }
+    } else if minutes.len() == 1
+        && let Some(n) = cron_step(hour)
+    {
+        match minutes[0] {
+            0 => format!("Every {n} h"),
+            m => format!("Every {n} h at :{m:02}"),
+        }
+    } else if minutes.len() == 1 && hours.len() > 2 && contiguous(&hours) {
+        format!("Hourly, {}", window(&hours, &minutes)?)
     } else {
-        let days = numbers(weekday, 7)?;
-        days.iter()
-            .map(|d| DAYS[(*d % 7) as usize])
-            .collect::<Vec<_>>()
-            .join(", ")
+        let times: Vec<String> = hours
+            .iter()
+            .flat_map(|h| minutes.iter().map(move |m| format!("{h:02}:{m:02}")))
+            .collect();
+        if times.len() > 12 {
+            return None;
+        }
+        let when = days.unwrap_or_else(|| "Daily".to_owned());
+        return Some(format!("{when} {}", times.join(", ")));
     };
-    Some(format!("{when} {}", times.join(", ")))
+    Some(match days {
+        Some(days) => format!("{text}, {days}"),
+        None => text,
+    })
+}
+
+// The values a cron field stands for, sorted: "*", "5", "1,3", "7-20", "*/10", "8-18/2".
+fn cron_values(field: &str, max: u32) -> Option<Vec<u32>> {
+    let mut values = Vec::new();
+    for part in field.split(',') {
+        let (range, step) = match part.split_once('/') {
+            Some((range, step)) => (range, step.parse().ok().filter(|s| *s > 0)?),
+            None => (part, 1),
+        };
+        let (first, last) = match range {
+            "*" => (0, max),
+            _ => match range.split_once('-') {
+                Some((a, b)) => (a.parse().ok()?, b.parse().ok()?),
+                None if step > 1 => (range.parse().ok()?, max),
+                None => {
+                    let n = range.parse().ok()?;
+                    (n, n)
+                }
+            },
+        };
+        if first > last || last > max {
+            return None;
+        }
+        values.extend((first..=last).step_by(step as usize));
+    }
+    values.sort_unstable();
+    values.dedup();
+    Some(values)
+}
+
+// The step of a field that runs all day or all hour: "*/30" is 30 and "*" is 1.
+fn cron_step(field: &str) -> Option<u32> {
+    match field {
+        "*" => Some(1),
+        _ => field.strip_prefix("*/")?.parse().ok().filter(|n| *n > 0),
+    }
+}
+
+fn contiguous(values: &[u32]) -> bool {
+    values.windows(2).all(|pair| pair[1] == pair[0] + 1)
+}
+
+// The first and the last run of the day, for hours that follow each other: "07:00–20:30".
+fn window(hours: &[u32], minutes: &[u32]) -> Option<String> {
+    if !contiguous(hours) {
+        return None;
+    }
+    let (first, last) = (hours.first()?, hours.last()?);
+    let (start, end) = (minutes.first()?, minutes.last()?);
+    Some(format!("{first:02}:{start:02}–{last:02}:{end:02}"))
+}
+
+// Weekdays in words, a run of three or more as a range: "Mon–Fri", "Sun, Tue, Thu".
+fn day_names(days: &[u32]) -> String {
+    let mut days: Vec<u32> = days.iter().map(|d| d % 7).collect();
+    days.sort_unstable();
+    days.dedup();
+    let mut parts = Vec::new();
+    let mut i = 0;
+    while i < days.len() {
+        let mut j = i;
+        while j + 1 < days.len() && days[j + 1] == days[j] + 1 {
+            j += 1;
+        }
+        if j - i >= 2 {
+            parts.push(format!(
+                "{}–{}",
+                DAYS[days[i] as usize], DAYS[days[j] as usize]
+            ));
+        } else {
+            parts.extend(days[i..=j].iter().map(|d| DAYS[*d as usize].to_owned()));
+        }
+        i = j + 1;
+    }
+    parts.join(", ")
 }
 
 #[cfg(test)]
