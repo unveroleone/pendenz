@@ -2,7 +2,7 @@ import SwiftUI
 
 struct TabShell: View {
     private enum AppTab: String, Hashable {
-        case reminders, tasks, notes, agents, search
+        case reminders, tasks, notes, agents
     }
 
     // Remembered per window, so two windows on an iPad do not switch each other's tab.
@@ -12,8 +12,12 @@ struct TabShell: View {
     @SceneStorage("tasksPlace") private var savedTasksPlace = ""
     // The tab named by the launch argument `-tab`. A window launched with it starts there and
     // leaves the remembered tab alone: what the scene restores arrives later and would win.
-    @State private var launchTab = Settings.openedTab.flatMap(AppTab.init(rawValue:))
+    // `-tab search` opens Tasks with its search field, which is where item search lives.
+    @State private var launchTab = Settings.openedTab
+        .flatMap { $0 == "search" ? .tasks : AppTab(rawValue: $0) }
+    // The item search of the Tasks tab. It has no tab of its own, so the tab bar keeps room.
     @State private var query = ""
+    @FocusState private var isSearchFieldFocused: Bool
     // `-place trash` or `-place completed` next to `-tab tasks` opens that list, which has no
     // tab of its own.
     @State private var tasksPath: [Place] = Settings.openedPlace
@@ -53,19 +57,28 @@ struct TabShell: View {
         switch tab {
         case .reminders: .reminders
         case .tasks: tasksPath.last ?? .inbox
-        case .notes, .agents, .search: .inbox
+        case .notes, .agents: .inbox
         }
     }
 
     var body: some View {
         TabView(selection: Binding { tab } set: { tab = $0 }) {
             Tab("Tasks", systemImage: "tray.full", value: AppTab.tasks) {
-                NavigationStack(path: $tasksPath) { TasksView() }
-                    .contentMargins(.bottom, QuickAddButton.clearance, for: .scrollContent)
-                    .overlay(alignment: .bottomTrailing) {
-                        // Nothing is added to the finished items or to the trash.
-                        if tasksPath.last != .trash, tasksPath.last != .completed { addButton }
-                    }
+                NavigationStack(path: $tasksPath) {
+                    TasksView(query: query)
+                        // Always shown: it is the only way to search on this layout.
+                        .searchable(
+                            text: $query,
+                            placement: Self.searchPlacement,
+                            prompt: "Search items",
+                        )
+                        .searchFocused($isSearchFieldFocused)
+                }
+                .contentMargins(.bottom, QuickAddButton.clearance, for: .scrollContent)
+                .overlay(alignment: .bottomTrailing) {
+                    // Nothing is added to the finished items or to the trash.
+                    if tasksPath.last != .trash, tasksPath.last != .completed { addButton }
+                }
             }
             Tab("Reminders", systemImage: Place.reminders.systemImage, value: AppTab.reminders) {
                 NavigationStack {
@@ -86,13 +99,6 @@ struct TabShell: View {
                     }
                 }
                 .badge(store.count(for: .agents))
-            }
-            Tab(value: AppTab.search, role: .search) {
-                NavigationStack {
-                    SearchResultsView(query: query)
-                        .navigationTitle("Search")
-                }
-                .searchable(text: $query, prompt: "Items")
             }
         }
         .sheet(isPresented: $isAdding) {
@@ -174,14 +180,16 @@ struct TabShell: View {
             case .notes: navigation.place = .notes
             case .agents: navigation.place = .agents
             case .tasks: navigation.place = tasksPath.last ?? .inbox
-            case .search: navigation.place = nil
             }
         }
-        // Also when it was asked for before this view existed, by the home screen menu.
+        // Search is the field on the first screen of Tasks. Also when it was asked for before
+        // this view existed, by the home screen menu or `-tab search`.
         .onChange(of: navigation.isSearchFocused, initial: true) { _, wanted in
             if wanted {
-                tab = .search
                 navigation.isSearchFocused = false
+                tab = .tasks
+                tasksPath = []
+                isSearchFieldFocused = true
             }
         }
         .onChange(of: navigation.wantsNewItem, initial: true) { _, wanted in
@@ -202,7 +210,16 @@ struct TabShell: View {
         }
         .task {
             if Settings.opensQuickAdd { isAdding = true }
+            if Settings.openedTab == "search" { navigation.isSearchFocused = true }
         }
+    }
+
+    private static var searchPlacement: SearchFieldPlacement {
+        #if os(iOS)
+        .navigationBarDrawer(displayMode: .always)
+        #else
+        .automatic
+        #endif
     }
 
     // Tasks opens on the list it was left on. Without a move: the list is where the tab
@@ -275,12 +292,40 @@ private struct NotesTab: View {
     }
 }
 
-// The Tasks tab: the inbox and every project.
+// The Tasks tab: the inbox and every project, or the items that match the search.
 struct TasksView: View {
     @Environment(Store.self) private var store
     @Environment(Navigation.self) private var navigation
+    let query: String
 
     var body: some View {
+        Group {
+            if query.trimmingCharacters(in: .whitespaces).isEmpty {
+                lists
+            } else {
+                SearchResultsView(query: query)
+            }
+        }
+        .navigationTitle("Tasks")
+        .navigationDestination(for: Place.self) { place in
+            if place == .trash {
+                TrashView()
+            } else if place == .completed {
+                CompletedView()
+            } else {
+                ItemListView(place: place)
+            }
+        }
+        .toolbar {
+            SettingsItem()
+            #if os(iOS)
+            ToolbarItem(placement: .topBarTrailing) { ProjectOrderMenu() }
+            #endif
+            SyncStatus()
+        }
+    }
+
+    private var lists: some View {
         List {
             OutdatedServerSection()
             PlaceLink(place: .inbox)
@@ -298,24 +343,7 @@ struct TasksView: View {
                 PlaceLink(place: .trash)
             }
         }
-        .navigationTitle("Tasks")
-        .navigationDestination(for: Place.self) { place in
-            if place == .trash {
-                TrashView()
-            } else if place == .completed {
-                CompletedView()
-            } else {
-                ItemListView(place: place)
-            }
-        }
         .refreshable { await store.sync() }
-        .toolbar {
-            SettingsItem()
-            #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) { ProjectOrderMenu() }
-            #endif
-            SyncStatus()
-        }
     }
 }
 
