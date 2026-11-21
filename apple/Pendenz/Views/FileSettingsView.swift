@@ -62,6 +62,7 @@ struct FileSettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Files")
+        .settingsPage()
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

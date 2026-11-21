@@ -29,6 +29,7 @@ struct NotificationSettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Notifications")
+        .settingsPage()
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

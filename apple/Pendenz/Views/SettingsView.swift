@@ -331,6 +331,42 @@ private struct CopyButton: View {
     }
 }
 
+// A page behind a row of the settings. The Mac's settings window centers its toolbar on a row
+// of its own, which would leave the back button alone in the middle, so there the page draws its
+// own at the leading edge, under the window's buttons.
+extension View {
+    func settingsPage() -> some View {
+        modifier(SettingsPageBack())
+    }
+}
+
+private struct SettingsPageBack: ViewModifier {
+    @Environment(\.dismiss) private var dismiss
+
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        content
+            .navigationBarBackButtonHidden()
+            .safeAreaInset(edge: .top, spacing: 0) {
+                HStack {
+                    Button("Back", systemImage: "chevron.left") { dismiss() }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.glass)
+                        .buttonBorderShape(.circle)
+                        .controlSize(.large)
+                        .keyboardShortcut("[", modifiers: .command)
+                        .help("Back")
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 4)
+            }
+        #else
+        content
+        #endif
+    }
+}
+
 // A group of settings with a page of its own, behind a row of the first page.
 enum SettingsPage: Hashable {
     case notifications

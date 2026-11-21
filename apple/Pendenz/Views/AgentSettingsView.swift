@@ -73,6 +73,7 @@ struct AgentSettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Agents")
+        .settingsPage()
         // Asked again while open, so the Order row shows once a second agent reports.
         .task {
             await session.agents?.refresh()
@@ -180,6 +181,7 @@ private struct AgentOrderView: View {
         .environment(\.editMode, .constant(.active))
         #endif
         .navigationTitle("Order")
+        .settingsPage()
         .task { await session.agents?.watch() }
     }
 
