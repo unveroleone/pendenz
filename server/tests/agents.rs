@@ -3,6 +3,7 @@
 mod support;
 
 use serde_json::{Value, json};
+use sqlx::Executor;
 use support::*;
 
 async fn put(server: &Server, token: &str, body: Value) -> (u16, Value) {
@@ -458,6 +459,34 @@ async fn only_the_owner_writes_what_a_job_does() {
     );
     let extra = json!({"job": "triage", "text": "Text.", "by": "me"});
     assert_eq!(describe(&server, &server.owner, "box", extra).await.0, 400);
+
+    // A name the report keeps as it is, tab included, can be described.
+    let tabbed = json!({"job": "a\tb", "text": "Tabbed."});
+    assert_eq!(describe(&server, &server.owner, "box", tabbed).await.0, 200);
+    describe(
+        &server,
+        &server.owner,
+        "box",
+        json!({"job": "a\tb", "text": ""}),
+    )
+    .await;
+
+    // An agent whose only token has expired is not connected.
+    server.token("lapsed", "report");
+    sqlx::SqlitePool::connect(&format!("sqlite://{}/pendenz.db", server.dir.display()))
+        .await
+        .unwrap()
+        .execute(
+            "UPDATE tokens SET expires_at = '2000-01-01T00:00:00.000Z' WHERE actor_id = 'lapsed'",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        describe(&server, &server.owner, "lapsed", line.clone())
+            .await
+            .0,
+        404
+    );
 
     // An empty text removes the line.
     let (status, written) = describe(

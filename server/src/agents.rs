@@ -417,9 +417,9 @@ pub struct DescriptionRequest {
 }
 
 // Sets or, with an empty text, removes the owner's line about one of an agent's jobs, inside the
-// caller's transaction. The agent has to exist and hold a token that is not revoked, so a line
-// cannot come back after the agent was taken off. The job is named as the agent's report names
-// it: trimmed and at most as long as a report keeps a name.
+// caller's transaction. The agent has to exist and hold a token that still works, so a line
+// cannot come back after the agent was taken off. The job is named exactly as the stored report
+// names it: trimmed and at most as long as a report keeps a name, whatever else it holds.
 pub async fn set_description(
     conn: &mut sqlx::SqliteConnection,
     agent: &str,
@@ -427,10 +427,7 @@ pub async fn set_description(
     text: &str,
 ) -> Result<Value> {
     let job = job.trim();
-    if job.is_empty()
-        || job.chars().count() > crate::report::NAME
-        || job.chars().any(char::is_control)
-    {
+    if job.is_empty() || job.chars().count() > crate::report::NAME {
         return Err(ApiError::bad(format!(
             "Name the job as the agent's report does, in 1 to {} characters.",
             crate::report::NAME
@@ -443,10 +440,13 @@ pub async fn set_description(
             "Write the description as one line of at most {DESCRIPTION} characters."
         )));
     }
-    let connected: bool = sqlx::query_scalar(
+    let connected: bool = sqlx::query_scalar(concat!(
         "SELECT EXISTS(SELECT 1 FROM actors a WHERE a.id = ? AND a.kind = 'agent' \
-         AND EXISTS(SELECT 1 FROM tokens t WHERE t.actor_id = a.id AND t.revoked = 0))",
-    )
+         AND EXISTS(SELECT 1 FROM tokens t WHERE t.actor_id = a.id AND t.revoked = 0 \
+         AND (t.expires_at IS NULL OR t.expires_at > ",
+        now!(),
+        ")))"
+    ))
     .bind(agent)
     .fetch_one(&mut *conn)
     .await?;

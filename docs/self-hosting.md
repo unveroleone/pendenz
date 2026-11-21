@@ -192,7 +192,7 @@ Each report belongs to one agent. A machine with two, such as two [Hermes profil
 Open a job on the Agents screen to see what it does. Write the line in the app (Edit Description), or on the server:
 
 ```sh
-docker compose exec api pendenz set-job-description --agent <agent id> --job "<job name>" --text "Sorts new items and asks about unclear ones."
+docker compose exec api pendenz set-job-description --agent "<agent id>" --job "<job name>" --text "Sorts new items and asks about unclear ones."
 ```
 
 Without `--text` the line is removed. Until a line is written, the screen shows the first sentence of the description of the skill the job runs, which the report finds in `<hermes home>/skills` and the folders of `skills.external_dirs` in the profile's `config.yaml`.
