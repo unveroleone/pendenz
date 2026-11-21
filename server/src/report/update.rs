@@ -47,18 +47,13 @@ fn asset() -> Option<&'static str> {
     }
 }
 
-// A binary that another tool put there is that tool's to update: a build in a checkout, one
-// from `cargo install`, and one reached through a link, as a package manager sets it up.
-fn managed_elsewhere(exe: &Path, canonical: &Path) -> bool {
-    let parts: Vec<_> = canonical
-        .components()
-        .map(|c| c.as_os_str().to_owned())
-        .collect();
-    exe != canonical
-        || parts
-            .windows(2)
-            .any(|w| w[0] == "target" && (w[1] == "debug" || w[1] == "release"))
-        || parts.windows(2).any(|w| w[0] == ".cargo" && w[1] == "bin")
+// Only a binary where install.sh puts it is this command's to update: one reached through a
+// link, built in a checkout, or put elsewhere by `cargo install` or a package manager belongs
+// to that tool. `exe` is the path the job runs, `canonical` the file behind it.
+fn installed_by_script(exe: &Path, canonical: &Path, home: &Path) -> bool {
+    let folder =
+        std::fs::canonicalize(home.join(".local/bin")).unwrap_or_else(|_| home.join(".local/bin"));
+    exe == canonical && canonical.parent() == Some(folder.as_path())
 }
 
 // Brings the binary up to the server's version when it is behind. Prints one line when it
@@ -83,7 +78,15 @@ async fn replace(own: &str, version: &str) -> anyhow::Result<Option<String>> {
     };
     let path = std::path::absolute(std::env::current_exe()?)?;
     let exe = std::fs::canonicalize(&path)?;
-    if managed_elsewhere(&path, &exe) {
+    let Some(home) = super::home() else {
+        return Ok(None);
+    };
+    if !installed_by_script(&path, &exe, &home) {
+        return Ok(None);
+    }
+    // Profiles that talk to different servers share this file; one server's version would
+    // move it past the other's.
+    if super::setup::servers().len() > 1 {
         return Ok(None);
     }
     let dir = exe
@@ -274,14 +277,16 @@ mod tests {
     }
 
     #[test]
-    fn leaves_other_tools_binaries_alone() {
-        let alone = |p: &str| managed_elsewhere(Path::new(p), Path::new(p));
-        assert!(alone("/src/pendenz/target/debug/pendenz"));
-        assert!(alone("/home/a/.cargo/bin/pendenz"));
-        assert!(!alone("/home/a/.local/bin/pendenz"));
-        assert!(managed_elsewhere(
-            Path::new("/opt/homebrew/bin/pendenz"),
-            Path::new("/opt/homebrew/Cellar/pendenz/0.5.3/bin/pendenz")
+    fn updates_only_where_install_sh_puts_it() {
+        let home = Path::new("/nonexistent/home");
+        let ours = |p: &str| installed_by_script(Path::new(p), Path::new(p), home);
+        assert!(ours("/nonexistent/home/.local/bin/pendenz"));
+        assert!(!ours("/src/pendenz/target/debug/pendenz"));
+        assert!(!ours("/nonexistent/home/.cargo/bin/pendenz"));
+        assert!(!installed_by_script(
+            Path::new("/nonexistent/home/.local/bin/pendenz"),
+            Path::new("/opt/homebrew/Cellar/pendenz/0.5.3/bin/pendenz"),
+            home
         ));
     }
 }

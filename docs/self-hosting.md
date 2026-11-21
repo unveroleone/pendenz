@@ -219,7 +219,9 @@ The job that `pendenz report install` sets up follows the server: when the answe
 
 - It never takes a version newer than the server's, never a pre-release, and never goes back to an older one. A report sent by hand, `pendenz mcp` and the server never update.
 - A failed try is printed to the job's log, and the next try waits six hours. The report itself goes out first either way.
-- It leaves a binary alone that another tool put there: one in a Cargo `target/` folder or in `~/.cargo/bin`, one reached through a link, as a package manager sets it up, and one in a folder the user cannot write to. The lock and the record of the last try lie next to the binary (`.pendenz-update.lock`, `.pendenz-update.json`).
+- It updates only a binary where `install.sh` puts it by default, `~/.local/bin/pendenz`, and not reached through a link. One built in a checkout, put in place by `cargo install` or a package manager, or installed with `PENDENZ_INSTALL_DIR` is updated the way it was installed.
+- It does not update while the machine's connections, its own and its profiles', point at more than one server, since one binary serves them all.
+- The lock and the record of the last try lie next to the binary (`.pendenz-update.lock`, `.pendenz-update.json`).
 - `pendenz report install --no-update` writes a job without it. To go back to an older release, install it with `PENDENZ_VERSION=<version>` and `install.sh`, then `pendenz report install --no-update`, until the server runs that version too.
 
 When the image of the version you name already runs, the script stops before the backup and changes nothing.
