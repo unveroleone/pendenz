@@ -66,8 +66,12 @@ pub async fn collect(home: PathBuf, state_dir: Option<PathBuf>) -> anyhow::Resul
             }),
         }
     }
-    let (mut agent, jobs) =
-        tokio::task::spawn_blocking(move || (gateway(&home), jobs(&home.join("cron")))).await?;
+    let skill_dirs = config.skill_dirs.clone();
+    let (mut agent, jobs) = tokio::task::spawn_blocking(move || {
+        let skills = super::skills::Skills::index(&home, &skill_dirs);
+        (gateway(&home), jobs(&home.join("cron"), &skills))
+    })
+    .await?;
     agent.version = version;
     agent.model = config.model.clone();
     agent.fallbacks = config.fallbacks.iter().map(|(_, m)| m.clone()).collect();
@@ -595,6 +599,8 @@ struct Config {
     model: Option<String>,
     provider: Option<String>,
     fallbacks: Vec<(String, String)>,
+    // `skills.external_dirs`: where Hermes looks for skills after its own folder.
+    skill_dirs: Vec<String>,
 }
 impl Config {
     fn read(path: &Path) -> Self {
@@ -604,6 +610,7 @@ impl Config {
         };
         let mut section = "";
         let mut fallback: Option<(Option<String>, Option<String>)> = None;
+        let mut in_dirs = false;
         let value = |line: &str| -> Option<String> {
             let (_, v) = line.split_once(':')?;
             let v = v.split(" #").next()?.trim().trim_matches(['"', '\'']);
@@ -625,6 +632,26 @@ impl Config {
                         config.model = value(trimmed);
                     } else if trimmed.starts_with("provider:") {
                         config.provider = value(trimmed);
+                    }
+                }
+                "skills" => {
+                    // `external_dirs:` with a list below it, `[a, b]`, or one folder.
+                    if indent == 2 {
+                        in_dirs = trimmed.starts_with("external_dirs:");
+                        if in_dirs && let Some(v) = value(trimmed) {
+                            let v = v.trim_start_matches('[').trim_end_matches(']');
+                            config.skill_dirs.extend(
+                                v.split(',')
+                                    .map(|d| d.trim().trim_matches(['"', '\'']).to_owned())
+                                    .filter(|d| !d.is_empty()),
+                            );
+                        }
+                    } else if in_dirs && let Some(item) = trimmed.strip_prefix("- ") {
+                        let item = item.split(" #").next().unwrap_or("").trim();
+                        let item = item.trim_matches(['"', '\'']);
+                        if !item.is_empty() {
+                            config.skill_dirs.push(item.to_owned());
+                        }
                     }
                 }
                 "fallback_providers" => {
@@ -677,6 +704,36 @@ struct CronJob {
     failure_streak: u32,
     last_error: Option<String>,
     last_delivery_error: Option<String>,
+    // Read as loose JSON, so a shape this command does not expect loses only the job's sentence.
+    #[serde(default)]
+    skills: Value,
+    #[serde(default)]
+    skill: Value,
+}
+
+impl CronJob {
+    // The skill that says what the job does: of the skills the job names, the one named like
+    // the job, else the first. A job that names none has none.
+    fn skill(&self, name: &str) -> Option<String> {
+        let mut names: Vec<&str> = match &self.skills {
+            Value::Array(list) => list.iter().filter_map(Value::as_str).collect(),
+            Value::String(one) => vec![one.as_str()],
+            _ => Vec::new(),
+        };
+        if let Value::String(one) = &self.skill {
+            names.push(one);
+        }
+        let names: Vec<&str> = names
+            .into_iter()
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .collect();
+        names
+            .iter()
+            .find(|n| **n == name)
+            .or(names.first())
+            .map(|n| (*n).to_owned())
+    }
 }
 fn yes() -> bool {
     true
@@ -697,7 +754,7 @@ fn time(value: Option<&str>) -> Option<DateTime<Utc>> {
         .map(|t| t.with_timezone(&Utc))
 }
 
-fn jobs(cron: &Path) -> Vec<Job> {
+fn jobs(cron: &Path, skills: &super::skills::Skills) -> Vec<Job> {
     let list: Vec<CronJob> = std::fs::read(cron.join("jobs.json"))
         .ok()
         .and_then(|bytes| {
@@ -738,8 +795,10 @@ fn jobs(cron: &Path) -> Vec<Job> {
                 }
             });
             let failing = status.as_deref() == Some("error") || job.failure_streak > 0;
+            let name = job.name.clone().unwrap_or_else(|| job.id.clone());
+            let skill_summary = job.skill(&name).and_then(|skill| skills.summary(&skill));
             Job {
-                name: job.name.unwrap_or(job.id),
+                name,
                 schedule: schedule(&job.schedule, job.schedule_display.as_deref()),
                 enabled: job.enabled,
                 last_run_at: time(job.last_run_at.as_deref()),
@@ -756,6 +815,7 @@ fn jobs(cron: &Path) -> Vec<Job> {
                 runs_week,
                 tokens_week,
                 last_duration_s,
+                skill_summary,
             }
         })
         .collect();

@@ -37,6 +37,8 @@ enum Transport {
         source: Option<String>,
         // The version the server named in its last answer (`Pendenz-Version`).
         version: std::sync::Mutex<Option<String>>,
+        // The status of its last answer.
+        status: std::sync::Mutex<Option<u16>>,
     },
     Local {
         router: Router,
@@ -128,6 +130,7 @@ impl Client {
             token: Some(saved.token),
             source: env("PENDENZ_SOURCE"),
             version: Default::default(),
+            status: Default::default(),
         })
     }
 
@@ -153,6 +156,7 @@ impl Client {
             token,
             source: env("PENDENZ_SOURCE"),
             version: Default::default(),
+            status: Default::default(),
         })
     }
 
@@ -160,6 +164,14 @@ impl Client {
     pub fn server_version(&self) -> Option<String> {
         match &self.0 {
             Transport::Http { version, .. } => version.lock().expect("not poisoned").clone(),
+            Transport::Local { .. } => None,
+        }
+    }
+
+    // The status of the server's last answer, also one that refused the request.
+    pub fn last_status(&self) -> Option<u16> {
+        match &self.0 {
+            Transport::Http { status, .. } => *status.lock().expect("not poisoned"),
             Transport::Local { .. } => None,
         }
     }
@@ -202,7 +214,10 @@ impl Client {
                 token,
                 source,
                 version,
+                status,
             } => {
+                // A request that gets no answer leaves no status behind from an earlier one.
+                *status.lock().expect("not poisoned") = None;
                 let base = url::Url::parse(base).map_err(|_| "Invalid URL".to_owned())?;
                 let host = base.host_str().unwrap_or("");
                 if base.scheme() != "https" && !LOOPBACK.contains(&host) {
@@ -247,6 +262,7 @@ impl Client {
                 {
                     *version.lock().expect("not poisoned") = Some(value.to_owned());
                 }
+                *status.lock().expect("not poisoned") = Some(response.status().as_u16());
                 if response.status().is_redirection() {
                     return Err(format!(
                         "The API answered {} with a redirect, which is not followed. Check PENDENZ_API_URL.",

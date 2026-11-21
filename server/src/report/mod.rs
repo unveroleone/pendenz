@@ -4,8 +4,9 @@ mod claude;
 mod hermes;
 mod host;
 pub mod setup;
+mod skills;
 mod text;
-mod update;
+pub mod update;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
@@ -225,6 +226,9 @@ pub struct Job {
     pub tokens_week: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_duration_s: Option<f64>,
+    // The first sentence of the description of the skill the job runs, never its prompt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill_summary: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -402,6 +406,11 @@ impl Report {
                     .as_deref()
                     .map(|v| text::cut(&text::clean(v), DETAIL));
                 job.last_duration_s = job.last_duration_s.map(|v| finite(v).max(0.0));
+                job.skill_summary = job
+                    .skill_summary
+                    .as_deref()
+                    .map(|v| text::cut(&text::clean(v), DETAIL))
+                    .filter(|v| !v.is_empty());
                 count(&mut job.tokens_week);
             }
         }

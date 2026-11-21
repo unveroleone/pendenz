@@ -32,6 +32,15 @@ fn release(version: &str) -> Option<(u64, u64, u64)> {
     parts.next().is_none().then_some(version)
 }
 
+// Whether a server of this version is an older release than this binary, so it may not know a
+// field this binary sends.
+pub fn older_than_this(server: &str) -> bool {
+    match (release(server), release(env!("CARGO_PKG_VERSION"))) {
+        (Some(server), Some(own)) => server < own,
+        _ => false,
+    }
+}
+
 // The newer release the server runs, when there is one to take.
 pub fn wanted(own: &str, server: &str) -> Option<String> {
     let (own, target) = (release(own)?, release(server)?);
