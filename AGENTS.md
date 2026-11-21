@@ -147,7 +147,8 @@ The notes are for the person who updates: what they will notice and what they ha
 
 ### Locked notes
 
-- Every screen that shows text of a note has to ask `NoteLock.shared.isOpen` first for a locked one: the row shows no preview, the search matches the title only, and the editor shows the placeholder.
+- Locked notes are not in the Notes list. They are in Locked Notes, the first row there, which is `NotesView` with `showsLocked` over Notes (`navigation.isInLockedNotes`). Every way to a locked note, the row, Spotlight, Shortcuts and `-note`, goes through `Navigation.openLockedNotes`, which asks once and sets the area and the note only after the answer. `lockClosed` takes the window out again when the lock closes, and `openNoteLockChanged` moves it with the open note when that note is locked or unlocked, here or on another device.
+- Every screen that shows text of a note has to ask `NoteLock.shared.isOpen` first for a locked one: Locked Notes lists nothing while it is closed, a row elsewhere (Trash) shows no preview, the search of Notes leaves locked notes out, and the editor shows the placeholder.
 - `NoteLock` closes when the app leaves the front, and ignores that while the system asks for the face or the finger, because its sheet takes the front too. In the Simulator the system may ask for a passcode that a script cannot type; to see the opened state there, add a temporary launch-argument hook that sets `isOpen`, and remove it before committing.
 
 ### Agents

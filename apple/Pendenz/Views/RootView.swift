@@ -1,5 +1,10 @@
 import SwiftUI
 
+private struct OpenNoteLock: Equatable {
+    let id: Int?
+    let isLocked: Bool?
+}
+
 private struct ReminderInput: Equatable {
     let items: [Item]
     let access: Reminders.Access
@@ -68,11 +73,25 @@ struct RootView: View {
             if store.item(id) != nil { navigation.itemID = id }
         }
         if let id = openRequest.noteID {
-            openRequest.noteID = nil
-            if store.note(id) != nil {
-                open(.notes)
-                navigation.noteID = store.noteID(id)
+            if let note = store.note(id) {
+                openRequest.noteID = nil
+                let id = store.noteID(id)
+                if note.locked {
+                    // Into Locked Notes, after the one question.
+                    Task {
+                        if await navigation.openLockedNotes(note: id) { open(.notes) }
+                    }
+                } else {
+                    open(.notes)
+                    navigation.leaveLockedNotes()
+                    navigation.noteID = id
+                }
+            } else if store.isCurrent || store.phase != .idle && store.phase != .syncing {
+                // Gone from the server too, or the sync failed: it is not waited for longer,
+                // so it cannot pull the window away later.
+                openRequest.noteID = nil
             }
+            // Otherwise it waits for the first sync, which may bring the note.
         }
     }
 
@@ -144,6 +163,20 @@ struct RootView: View {
         .onChange(of: openRequest.place, initial: true) { takeRequests() }
         .onChange(of: openRequest.itemID, initial: true) { takeRequests() }
         .onChange(of: openRequest.noteID, initial: true) { takeRequests() }
+        // A note asked for before the store had it.
+        .onChange(of: store.phase) { takeRequests() }
+        .onChange(of: OpenNoteLock(
+            id: navigation.noteID,
+            isLocked: navigation.noteID.flatMap { store.note($0)?.locked },
+        )) { old, new in
+            // The same note, locked or unlocked: not another note that was opened.
+            if old.id == new.id, let isLocked = new.isLocked, old.isLocked != nil, old.isLocked != isLocked {
+                navigation.openNoteLockChanged(isLocked: isLocked)
+            }
+        }
+        .onChange(of: NoteLock.shared.isOpen) { _, isOpen in
+            if !isOpen { navigation.lockClosed(in: store) }
+        }
         #if os(macOS)
         // A request that came while no window was in front waits for the next one.
         .onChange(of: appearsActive) { takeRequests() }

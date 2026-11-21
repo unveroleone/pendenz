@@ -159,7 +159,7 @@ This flag is the one barrier between agents and private data. The model provider
 
 A note can be locked (`locked`). The lock is not an access rule: `visible_note` and the hidden filter do not look at it. It does two things:
 
-- The app asks for Face ID or Touch ID before it shows the text.
+- The app keeps locked notes out of the Notes list and its search, in Locked Notes, the first row of Notes. Going in asks for Face ID or Touch ID once, and the notes in there open without another question. Leaving the app closes the lock, and with it Locked Notes. A note that is locked or unlocked while it is open stays open and takes the window to its side. Spotlight and Shortcuts still find a locked note by its title, and open it in Locked Notes after the same question.
 - An agent still reads the note, marked `locked: true`, and the tool instructions tell it to use the text only for the task at hand and never to save or copy it.
 
 Anyone may lock a note, agents included, because an agent knows when it writes something private. Only the owner's tokens can remove a lock (`guard_unlock` in [`notes.rs`](../server/src/notes.rs)); an agent whose write would unlock gets 403. An agent can still edit and append to a locked note, and the lock stays.
