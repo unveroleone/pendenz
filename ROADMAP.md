@@ -15,7 +15,6 @@ What is planned and not built yet, roughly in order. Each entry gets a GitHub is
 - **Menu bar capture on the Mac**, with a global hotkey.
 - **Images in notes and in quick add.** Items can carry images already.
 - **A reminder at the due time for a device that has not synced it.** A reminder made on another device shortly before it is due can come late today, because each device schedules its own.
-- **A short description per job on the Agents screen**, shown when a job is opened, so a job's name is not the only hint of what it does. It cannot come from the job's prompt, since a report carries no prompt text: the description of the skill the job runs, or a line the owner writes, are the candidates.
 - **An Apple Watch app.**
 - **More UI tests:** text dropped from another app, the actions on a notification, images, locking a note, and the Mac, where the test target does not run yet.
 
