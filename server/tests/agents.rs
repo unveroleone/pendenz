@@ -359,3 +359,145 @@ async fn the_command_line_connects_and_reports_with_the_saved_token() {
     assert_eq!(list["agents"][0]["id"], "box");
     assert_eq!(list["agents"][0]["report"]["host"]["name"], "box");
 }
+
+async fn describe(server: &Server, token: &str, agent: &str, body: Value) -> (u16, Value) {
+    let response = reqwest::Client::new()
+        .put(format!(
+            "{}/api/agents/{agent}/job-description",
+            server.url()
+        ))
+        .bearer_auth(token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    let status = response.status().as_u16();
+    (status, response.json().await.unwrap_or(Value::Null))
+}
+
+fn descriptions(list: &Value, agent: &str) -> Value {
+    list["agents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["id"] == agent)
+        .unwrap()["job_descriptions"]
+        .clone()
+}
+
+#[tokio::test]
+async fn only_the_owner_writes_what_a_job_does() {
+    let server = Server::start().await;
+    let reporter = server.token("box", "report");
+    server.token("other", "report");
+    let worker = server.token("worker", "read,write");
+    let reader = server.token("owner", "read,write");
+    put(&server, &reporter, report("2026-11-18T10:00:00Z")).await;
+    let line = json!({"job": "triage", "text": "Sorts new items."});
+
+    // Agents and an owner's token that cannot approve may not write a line.
+    assert_eq!(
+        describe(&server, &reporter, "box", line.clone()).await.0,
+        403
+    );
+    assert_eq!(describe(&server, &worker, "box", line.clone()).await.0, 403);
+    assert_eq!(describe(&server, &reader, "box", line.clone()).await.0, 403);
+    assert_eq!(
+        describe(&server, &server.owner, "owner", line.clone())
+            .await
+            .0,
+        404
+    );
+    assert_eq!(
+        describe(&server, &server.owner, "nobody", line.clone())
+            .await
+            .0,
+        404
+    );
+
+    // White space is folded to one line, and each agent keeps its own line for the same job.
+    let (status, written) = describe(
+        &server,
+        &server.owner,
+        "box",
+        json!({"job": " triage ", "text": "Sorts new\n  items."}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(
+        written,
+        json!({"agent": "box", "job": "triage", "text": "Sorts new items."})
+    );
+    describe(
+        &server,
+        &server.owner,
+        "other",
+        json!({"job": "triage", "text": "Other."}),
+    )
+    .await;
+    let (_, list) = agents(&server, &server.owner).await;
+    assert_eq!(
+        descriptions(&list, "box"),
+        json!({"triage": "Sorts new items."})
+    );
+    assert_eq!(descriptions(&list, "other"), json!({"triage": "Other."}));
+    assert_eq!(descriptions(&list, "worker"), json!({}));
+
+    // Bounds.
+    let long = json!({"job": "triage", "text": "x".repeat(201)});
+    assert_eq!(describe(&server, &server.owner, "box", long).await.0, 400);
+    let nameless = json!({"job": " ", "text": "Text."});
+    assert_eq!(
+        describe(&server, &server.owner, "box", nameless).await.0,
+        400
+    );
+    let control = json!({"job": "triage", "text": "a\u{7}b"});
+    assert_eq!(
+        describe(&server, &server.owner, "box", control).await.0,
+        400
+    );
+    let extra = json!({"job": "triage", "text": "Text.", "by": "me"});
+    assert_eq!(describe(&server, &server.owner, "box", extra).await.0, 400);
+
+    // An empty text removes the line.
+    let (status, written) = describe(
+        &server,
+        &server.owner,
+        "box",
+        json!({"job": "triage", "text": ""}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(written["text"], Value::Null);
+    let (_, list) = agents(&server, &server.owner).await;
+    assert_eq!(descriptions(&list, "box"), json!({}));
+
+    // The admin command writes the same way.
+    server.admin(&[
+        "set-job-description",
+        "--agent",
+        "box",
+        "--job",
+        "triage",
+        "--text",
+        "From the shell.",
+    ]);
+    let (_, list) = agents(&server, &server.owner).await;
+    assert_eq!(
+        descriptions(&list, "box"),
+        json!({"triage": "From the shell."})
+    );
+
+    // Revoking the agent removes its lines, and none can be written after.
+    let revoked = reqwest::Client::new()
+        .delete(format!("{}/api/agents/box", server.url()))
+        .bearer_auth(&server.owner)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(revoked.status().as_u16(), 200);
+    let (_, list) = agents(&server, &server.owner).await;
+    assert_eq!(descriptions(&list, "box"), json!({}));
+    assert_eq!(descriptions(&list, "other"), json!({"triage": "Other."}));
+    assert_eq!(describe(&server, &server.owner, "box", line).await.0, 404);
+}

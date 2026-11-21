@@ -73,6 +73,17 @@ enum Command {
         #[arg(long)]
         name: String,
     },
+    /// Write what one of an agent's scheduled jobs does, the line the Agents screen shows when the
+    /// job is opened. The job is named as the agent's report names it. Without --text the line
+    /// is removed, and the job shows its skill's first sentence again.
+    SetJobDescription {
+        #[arg(long)]
+        agent: String,
+        #[arg(long)]
+        job: String,
+        #[arg(long, default_value = "")]
+        text: String,
+    },
     /// Add an agent identity, one per connection, so the activity log shows who did what.
     /// The telegram scope is only given to the agent with the ID telegram-bridge.
     AddAgent {
@@ -155,6 +166,27 @@ async fn set_owner_name(db: &SqlitePool, name: &str) -> anyhow::Result<()> {
         "{}",
         json!({"id": auth::OWNER, "name": name, "kind": "human"})
     );
+    Ok(())
+}
+
+// The same check and write as the app's route, in a transaction of its own: the running server
+// is another process, and SQLite keeps the two writers apart.
+async fn set_job_description(
+    db: &SqlitePool,
+    agent: &str,
+    job: &str,
+    text: &str,
+) -> anyhow::Result<()> {
+    let mut tx = db.begin_with("BEGIN IMMEDIATE").await?;
+    let written = match agents::set_description(&mut tx, agent, job, text).await {
+        Ok(written) => written,
+        Err(error::ApiError(status, _)) if status == axum::http::StatusCode::NOT_FOUND => {
+            anyhow::bail!("No connected agent has the ID {agent}")
+        }
+        Err(error::ApiError(_, message)) => anyhow::bail!(message),
+    };
+    tx.commit().await?;
+    println!("{written}");
     Ok(())
 }
 
@@ -431,6 +463,9 @@ async fn main() -> anyhow::Result<()> {
     sqlx::migrate!("./migrations").run(&db).await?;
     match args.command.unwrap_or(Command::Serve) {
         Command::SetOwnerName { name } => return set_owner_name(&db, &name).await,
+        Command::SetJobDescription { agent, job, text } => {
+            return set_job_description(&db, &agent, &job, &text).await;
+        }
         Command::AddAgent { id, name } => return add_agent(&db, &id, &name).await,
         Command::RenameAgent { id, name } => return rename_agent(&db, &id, &name).await,
         Command::IssueToken {
@@ -539,6 +574,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/push-token", put(push::register).delete(push::unregister))
         .route("/agents", get(agents::list))
         .route("/agents/{id}", delete(agents::revoke))
+        .route("/agents/{id}/job-description", put(agents::put_description))
         .route("/agent-codes", post(agents::create_code))
         .route(
             "/agents/me/report",
