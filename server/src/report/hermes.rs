@@ -745,11 +745,24 @@ fn cron_words(expr: &str) -> Option<String> {
     let [minute, hour, day, month, weekday] = fields[..] else {
         return None;
     };
-    if day != "*" || month != "*" {
+    if month != "*" {
         return None;
     }
     let minutes = cron_values(minute, 59)?;
     let hours = cron_values(hour, 23)?;
+    if day != "*" {
+        // Days of the month: only a list of days, at fixed times and on any weekday.
+        if weekday != "*" || cron_step(minute).is_some() || cron_step(hour).is_some() {
+            return None;
+        }
+        let days = day
+            .split(',')
+            .map(|d| d.parse().ok().filter(|d| (1..=31).contains(d)))
+            .collect::<Option<Vec<u32>>>()?;
+        let times = times(&hours, &minutes)?;
+        let days: Vec<String> = days.iter().map(|d| ordinal(*d)).collect();
+        return Some(format!("Monthly, {} {times}", days.join(", ")));
+    }
     let days = match weekday {
         "*" => None,
         field => Some(day_names(&cron_values(field, 7)?)),
@@ -779,15 +792,8 @@ fn cron_words(expr: &str) -> Option<String> {
     } else if minutes.len() == 1 && hours.len() > 2 && contiguous(&hours) {
         format!("Hourly, {}", window(&hours, &minutes)?)
     } else {
-        let times: Vec<String> = hours
-            .iter()
-            .flat_map(|h| minutes.iter().map(move |m| format!("{h:02}:{m:02}")))
-            .collect();
-        if times.len() > 12 {
-            return None;
-        }
         let when = days.unwrap_or_else(|| "Daily".to_owned());
-        return Some(format!("{when} {}", times.join(", ")));
+        return Some(format!("{when} {}", times(&hours, &minutes)?));
     };
     Some(match days {
         Some(days) => format!("{text}, {days}"),
@@ -822,6 +828,27 @@ fn cron_values(field: &str, max: u32) -> Option<Vec<u32>> {
     values.sort_unstable();
     values.dedup();
     Some(values)
+}
+
+// Each time of the day, "09:00, 17:00", or none for more than twelve.
+fn times(hours: &[u32], minutes: &[u32]) -> Option<String> {
+    let times: Vec<String> = hours
+        .iter()
+        .flat_map(|h| minutes.iter().map(move |m| format!("{h:02}:{m:02}")))
+        .collect();
+    (times.len() <= 12).then(|| times.join(", "))
+}
+
+// "1st", "2nd", "3rd", "11th", "21st".
+fn ordinal(n: u32) -> String {
+    let suffix = match (n % 10, n % 100) {
+        (_, 11..=13) => "th",
+        (1, _) => "st",
+        (2, _) => "nd",
+        (3, _) => "rd",
+        _ => "th",
+    };
+    format!("{n}{suffix}")
 }
 
 // The step of a field that runs all day or all hour: "*/30" is 30 and "*" is 1.
@@ -884,6 +911,14 @@ mod tests {
         assert_eq!(cron("0 13 * * 0,2,4"), "Sun, Tue, Thu 13:00");
         assert_eq!(cron("0 * * * *"), "Hourly");
         assert_eq!(cron("*/5 * 1 * *"), "");
+        assert_eq!(cron("0 9 1 * *"), "Monthly, 1st 09:00");
+        assert_eq!(
+            cron("30 8,18 2,15,22 * *"),
+            "Monthly, 2nd, 15th, 22nd 08:30, 18:30"
+        );
+        assert_eq!(cron("0 9 1 * 1"), "");
+        assert_eq!(cron("0 9 1-7 * *"), "");
+        assert_eq!(cron("0,30 6-12 1 * *"), "");
         assert_eq!(
             schedule(&json!({"kind": "interval", "minutes": 5}), None),
             "Every 5 min"
