@@ -251,8 +251,12 @@ final class PendenzUITests: XCTestCase {
         XCTAssertEqual(address.value as? String, server)
         let codeField = app.textFields["pairing-code"]
         codeField.tap()
-        // Typed without the hyphen and in lower case: the field shapes it.
-        codeField.typeText(code.replacingOccurrences(of: "-", with: "").lowercased())
+        // Typed without the hyphen and in lower case: the field shapes it. One key at a time,
+        // since the field rewrites its text while it shapes it, and a key that comes during
+        // the rewrite is lost: typed all at once, the second letter went missing.
+        for key in code.replacingOccurrences(of: "-", with: "").lowercased() {
+            codeField.typeText(String(key))
+        }
         XCTAssertEqual(codeField.value as? String, code)
         let name = app.textFields["pairing-name"]
         name.tap()
