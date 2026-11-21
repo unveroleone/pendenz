@@ -164,6 +164,7 @@ curl -fsSL https://github.com/unveroleone/pendenz/releases/latest/download/insta
 - `install.sh` puts the `pendenz` command in `~/.local/bin` (macOS on Apple silicon, Linux on x86_64 or arm64) after checking it against the release's `SHA256SUMS`. `PENDENZ_INSTALL_DIR` and `PENDENZ_VERSION` change where and which release.
 - `pendenz connect` trades the code for a new agent with its own token and saves both in `~/.config/pendenz/agent.json`, readable by that user alone. The agent commands of that user take the server and token from there when `PENDENZ_API_URL` and `PENDENZ_API_TOKEN` are not set. The code works once, for ten minutes, and the app chooses what the agent may do: send its status only (`report`), or also read and change items (`report`, `read`, `write`).
 - `pendenz report install` runs `pendenz report` every two minutes, as a LaunchAgent on macOS (log in `~/Library/Logs/pendenz-report.log`) or a systemd user timer on Linux. `pendenz report uninstall` stops it.
+- The job keeps the `pendenz` command at the server's version (see [Updates](#updates)). `pendenz report install --no-update` installs a job that leaves it as it is.
 
 The same works by hand: `pendenz add-agent` and `pendenz issue-token --scopes report` on the server, and `PENDENZ_API_URL` and `PENDENZ_API_TOKEN` for `pendenz report` on the agent's machine, run by a scheduler of your own. `pendenz report install` needs the connection that `pendenz connect` saved, since the scheduled job does not see the shell's environment.
 
@@ -211,6 +212,15 @@ The script:
 If the new containers do not become healthy, it puts the previous `.env` back and starts the previous images. It never restores the database. A new version applies its migrations when it starts, and an older image refuses a database with a migration it does not know. To go back past a migration, restore the backup the script made before the update (see "A real restore").
 
 Changes to `compose.yaml` or `update.sh` reach the host only when you copy the files again. The commit history of `deploy/` says when that is needed.
+
+### The command on an agent's machine
+
+The job that `pendenz report install` sets up follows the server: when the answer to a report names a newer release in `Pendenz-Version`, the job downloads that release's build for the machine, checks it against the release's `SHA256SUMS` as `install.sh` does, runs it once to read its version, and puts it in place of the old file. Running processes such as `pendenz mcp` keep the old file until they start again.
+
+- It never takes a version newer than the server's, never a pre-release, and never goes back to an older one. A report sent by hand, `pendenz mcp` and the server never update.
+- A failed try is printed to the job's log and tried again for the same version after six hours. The report itself goes out either way.
+- It leaves a binary alone that sits in a Cargo `target/` folder or in a folder the user cannot write to. The lock and the record of the last try lie next to the binary (`.pendenz-update.lock`, `.pendenz-update.json`).
+- `pendenz report install --no-update` writes a job without it. To go back to an older release, install it with `PENDENZ_VERSION=<version>` and `install.sh`, then `pendenz report install --no-update`, until the server runs that version too.
 
 When the image of the version you name already runs, the script stops before the backup and changes nothing.
 

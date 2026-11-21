@@ -5,6 +5,7 @@ mod hermes;
 mod host;
 pub mod setup;
 mod text;
+mod update;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
@@ -472,6 +473,13 @@ pub struct Args {
     /// Send this report (a JSON file, or - for stdin) instead of collecting one.
     #[arg(long)]
     file: Option<PathBuf>,
+    /// After the report, bring this binary up to the server's version when the server runs a
+    /// newer release. `report install` gives the job this option.
+    #[arg(long)]
+    update: bool,
+    /// With `report install`: a job that leaves the binary as it is.
+    #[arg(long, global = true)]
+    no_update: bool,
     /// Leave out the machine's CPU, memory, disk and busiest programs.
     #[arg(long, global = true)]
     no_host: bool,
@@ -499,6 +507,9 @@ impl Args {
             Ok(std::path::absolute(path)?.display().to_string())
         };
         let mut options = Vec::new();
+        if !self.no_update {
+            options.push("--update".into());
+        }
         if let Some(name) = &self.profile {
             options.extend(["--profile".to_owned(), name.clone()]);
         }
@@ -691,7 +702,16 @@ pub async fn run(args: Args) -> i32 {
             }
         }
     }
-    crate::agent::cli::send_report(&report, profile).await
+    let (code, server_version) = crate::agent::cli::send_report(&report, profile).await;
+    // A report from a file is someone else's; only the collecting job updates.
+    if args.update
+        && !args.no_update
+        && args.file.is_none()
+        && let Some(version) = server_version
+    {
+        update::follow(&version).await;
+    }
+    code
 }
 
 fn read_file(path: &std::path::Path) -> anyhow::Result<Report> {
