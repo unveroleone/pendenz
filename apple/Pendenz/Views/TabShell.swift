@@ -69,7 +69,7 @@ struct TabShell: View {
                         // Always shown: it is the only way to search on this layout.
                         .searchable(
                             text: $query,
-                            placement: .navigationBarDrawer(displayMode: .always),
+                            placement: Self.searchPlacement,
                             prompt: "Search items",
                         )
                         .searchFocused($isSearchFieldFocused)
@@ -212,6 +212,14 @@ struct TabShell: View {
             if Settings.opensQuickAdd { isAdding = true }
             if Settings.openedTab == "search" { navigation.isSearchFocused = true }
         }
+    }
+
+    private static var searchPlacement: SearchFieldPlacement {
+        #if os(iOS)
+        .navigationBarDrawer(displayMode: .always)
+        #else
+        .automatic
+        #endif
     }
 
     // Tasks opens on the list it was left on. Without a move: the list is where the tab
