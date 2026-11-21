@@ -661,6 +661,9 @@ struct NoteEditorView: View {
     // trash, like a sheet of paper nobody wrote on.
     private func leave() {
         guard isLoaded, let currentID, let note = store.note(currentID), !note.trashed else { return }
+        // A locked note that the closing lock took off the screen keeps its last text: the
+        // owner did not leave it.
+        if isBlank, note.locked, !lock.isOpen { return }
         if isBlank {
             store.updateNote(currentID, NotePatch(trashed: true))
         } else {

@@ -79,8 +79,9 @@ struct RootView: View {
                     navigation.leaveLockedNotes()
                     navigation.noteID = id
                 }
-            } else if store.isCurrent {
-                // Gone from the server too.
+            } else if store.isCurrent || store.phase != .idle && store.phase != .syncing {
+                // Gone from the server too, or the sync failed: it is not waited for longer,
+                // so it cannot pull the window away later.
                 openRequest.noteID = nil
             }
             // Otherwise it waits for the first sync, which may bring the note.

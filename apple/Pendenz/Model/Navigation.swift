@@ -22,9 +22,12 @@ final class Navigation {
     // True while Notes shows the locked notes instead of the others. Set only by
     // `openLockedNotes`, after the lock has opened, and cleared when it closes.
     var isInLockedNotes = false
-    // Counts the ways into Locked Notes, so an answer that comes late does not lead there
-    // after the window has gone on to something else.
+    // Counts the ways out of Locked Notes, so an answer that comes late does not lead there
+    // after the window has left it on purpose.
     @ObservationIgnored private var lockedEntry = 0
+    // The note the last way in asked for, while the question is on screen. A second request
+    // in that time takes the same answer.
+    @ObservationIgnored private var lockedTarget: Int??
     // True while a new, empty note is open. It ends with the note's first character.
     var isWritingNote = false
     // The project sheet, for a new project or for one that is edited.
@@ -50,13 +53,17 @@ final class Navigation {
     // lock is closed, and the notes in there open without another one. A cancel or a failure
     // leaves the window as it was.
     func openLockedNotes(note id: Int? = nil) async {
-        lockedEntry += 1
+        lockedTarget = .some(id)
         let entry = lockedEntry
-        guard await NoteLock.shared.open(), entry == lockedEntry else { return }
+        guard !NoteLock.shared.isAsking else { return }
+        let isOpen = await NoteLock.shared.open()
+        let target = lockedTarget
+        lockedTarget = nil
+        guard isOpen, entry == lockedEntry, let target else { return }
         place = .notes
         isWritingNote = false
         isInLockedNotes = true
-        noteID = id
+        noteID = target
     }
 
     // Back to the other notes, by the back button.
