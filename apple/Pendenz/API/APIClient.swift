@@ -389,6 +389,16 @@ nonisolated struct APIClient: Sendable {
         try await load(URLRequest(url: baseURL.appending(path: "api/agents")))
     }
 
+    // Writes the owner's line about one of an agent's jobs. An empty text removes it.
+    @concurrent
+    func setJobDescription(agent id: String, job: String, text: String) async throws {
+        var request = URLRequest(url: baseURL.appending(path: "api/agents/\(id)/job-description"))
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["job": job, "text": text])
+        _ = try await load(request)
+    }
+
     // `access` is "status" (reports only) or "work" (reports, and reading and writing items).
     @concurrent
     func agentCode(name: String, access: String) async throws -> AgentCode {

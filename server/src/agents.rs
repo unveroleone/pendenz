@@ -165,8 +165,9 @@ pub async fn list(
         counts[field] = json!(counts[field].as_i64().unwrap_or(0) + n);
     }
 
-    // The lines the owner wrote about the agents' jobs, by agent and job name.
-    let mut descriptions: HashMap<String, serde_json::Map<String, Value>> = HashMap::new();
+    // The lines the owner wrote about the agents' jobs. A list, not an object keyed by the job:
+    // a client that turns snake case keys into its own would change a job's name.
+    let mut descriptions: HashMap<String, Vec<Value>> = HashMap::new();
     for (actor, job, text) in sqlx::query_as::<_, (String, String, String)>(
         "SELECT actor_id, job, text FROM job_descriptions ORDER BY actor_id, job",
     )
@@ -176,7 +177,7 @@ pub async fn list(
         descriptions
             .entry(actor)
             .or_default()
-            .insert(job, Value::String(text));
+            .push(json!({"job": job, "text": text}));
     }
 
     let mut agents = Vec::new();

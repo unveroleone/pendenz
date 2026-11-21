@@ -97,8 +97,16 @@ final class AgentBoard {
         askedAt = .now
         defer { isLoading = false }
         do {
-            let data = try await api.agents()
-            let list = try AgentList.decode(data)
+            var data: Data
+            var list: AgentList
+            // An answer that left the server before a line was written there would put the old
+            // line back on screen: ask again.
+            repeat {
+                let written = writes
+                data = try await api.agents()
+                list = try AgentList.decode(data)
+                if written == writes { break }
+            } while !isClosed
             guard !isClosed else { return }
             self.list = list
             fetchedAt = .now
@@ -117,6 +125,32 @@ final class AgentBoard {
             guard !isClosed else { return }
             problem = .unreachable
         }
+    }
+
+    // How many lines this board has written, so a list fetched during a write is not shown.
+    private var writes = 0
+
+    // Writes the owner's line about one of an agent's jobs, or removes it with an empty text,
+    // then reads the list again, which also keeps it on disk. Throws when the server refused
+    // it. A line the server took shows at once, also when the list cannot be read right after.
+    func setJobDescription(agent: String, job: String, text: String) async throws {
+        guard !isClosed else { return }
+        do {
+            try await api.setJobDescription(agent: agent, job: job, text: text)
+        } catch APIError.status(401, let message) {
+            if !isClosed { onUnauthorized?() }
+            throw APIError.status(401, message)
+        }
+        guard !isClosed else { return }
+        writes += 1
+        let text = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        if let index = list?.agents.firstIndex(where: { $0.id == agent }) {
+            var lines = list?.agents[index].jobDescriptions?.filter { $0.job != job } ?? []
+            if !text.isEmpty { lines.append(AgentJobDescription(job: job, text: text)) }
+            list?.agents[index].jobDescriptions = lines
+        }
+        // A refresh in flight asks again by itself, since `writes` changed.
+        if !isLoading { await refresh() }
     }
 
     // Asks again while a screen that shows the agents is open: call it from that screen's task.

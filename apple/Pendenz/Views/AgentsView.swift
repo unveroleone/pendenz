@@ -169,7 +169,7 @@ private struct AgentForm: View {
             }
             WorkingSection(items: working, runs: report.runs ?? [])
             if let jobs = report.jobs, !jobs.isEmpty {
-                JobsSection(jobs: jobs)
+                JobsSection(agentID: entry.id, jobs: jobs)
             }
             if let accounts = report.accounts, !accounts.isEmpty {
                 SpendSection(accounts: accounts)
@@ -539,6 +539,7 @@ private struct JobRow: View {
 }
 
 private struct JobsSection: View {
+    let agentID: String
     let jobs: [AgentJob]
 
     // Failing jobs first, then by the next run.
@@ -556,7 +557,7 @@ private struct JobsSection: View {
         Section("Scheduled Jobs") {
             ForEach(shown) { job in
                 NavigationLink {
-                    JobDetailView(job: job)
+                    JobDetailView(agentID: agentID, job: job)
                 } label: {
                     JobRow(job: job)
                 }
@@ -566,7 +567,7 @@ private struct JobsSection: View {
                     Form {
                         ForEach(ordered) { job in
                             NavigationLink {
-                                JobDetailView(job: job)
+                                JobDetailView(agentID: agentID, job: job)
                             } label: {
                                 JobRow(job: job)
                             }
@@ -581,10 +582,54 @@ private struct JobsSection: View {
 }
 
 private struct JobDetailView: View {
-    let job: AgentJob
+    @Environment(AgentBoard.self) private var board
+    let agentID: String
+    // The job as it was when the page opened. The board's newer copy wins while the report has it.
+    let opened: AgentJob
+    @State private var isEditing = false
+
+    init(agentID: String, job: AgentJob) {
+        self.agentID = agentID
+        opened = job
+    }
+
+    private var entry: AgentEntry? {
+        board.list?.agents.first { $0.id == agentID }
+    }
+
+    private var job: AgentJob {
+        entry?.report?.jobs?.first { $0.name == opened.name } ?? opened
+    }
+
+    private var ownLine: String? {
+        entry?.description(ofJob: opened.name)
+    }
+
+    // A server older than job descriptions sends none, and cannot take one.
+    private var canWrite: Bool {
+        entry?.jobDescriptions != nil
+    }
 
     var body: some View {
+        let job = job
         Form {
+            Section {
+                if let ownLine {
+                    Text(ownLine)
+                } else if let summary = job.skillSummary {
+                    Text(summary)
+                } else {
+                    Text("No description yet.")
+                        .foregroundStyle(.secondary)
+                }
+                if canWrite {
+                    Button(ownLine == nil ? "Write Description" : "Edit Description") { isEditing = true }
+                }
+            } footer: {
+                if ownLine == nil, job.skillSummary != nil {
+                    Text("From the job's skill.")
+                }
+            }
             Section {
                 LabeledContent("Schedule", value: job.enabled ? job.schedule : "Paused")
                 if let next = job.nextRunAt, job.enabled {
@@ -619,6 +664,109 @@ private struct JobDetailView: View {
         }
         .formStyle(.grouped)
         .navigationTitle(job.name)
+        .sheet(isPresented: $isEditing) {
+            JobDescriptionEditor(
+                agentID: agentID, job: job.name, text: ownLine ?? "", skillSummary: job.skillSummary,
+            )
+            .environment(board)
+        }
+    }
+}
+
+// The owner's line about a job. Saved straight on the server, like a setting: it is not item
+// data, so it does not wait in the outbox.
+private struct JobDescriptionEditor: View {
+    @Environment(AgentBoard.self) private var board
+    @Environment(\.dismiss) private var dismiss
+    let agentID: String
+    let job: String
+    let original: String
+    let skillSummary: String?
+
+    @State private var text: String
+    @State private var isSaving = false
+    @State private var failure: String?
+    @FocusState private var isFocused: Bool
+
+    // As long as the server takes, counted as it counts.
+    static let limit = 200
+
+    init(agentID: String, job: String, text: String, skillSummary: String?) {
+        self.agentID = agentID
+        self.job = job
+        original = text
+        self.skillSummary = skillSummary
+        _text = State(initialValue: text)
+    }
+
+    // One line, as the server keeps it.
+    private var line: String {
+        text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("What this job does", text: $text, axis: .vertical)
+                        .lineLimit(2 ... 6)
+                        .focused($isFocused)
+                } footer: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let failure {
+                            Text(failure).foregroundStyle(.red)
+                        }
+                        if line.serverLength > Self.limit {
+                            Text("\(line.serverLength - Self.limit) characters too long.")
+                                .foregroundStyle(.red)
+                        } else if skillSummary != nil {
+                            Text("Leave it empty to show the skill's line instead.")
+                        }
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle(job)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if isSaving {
+                        ProgressView()
+                    } else {
+                        Button("Save") { Task { await save() } }
+                            .disabled(line == original || line.serverLength > Self.limit)
+                    }
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 420, minHeight: 220)
+        #endif
+        .interactiveDismissDisabled(isSaving)
+        .onAppear { isFocused = true }
+    }
+
+    private func save() async {
+        isSaving = true
+        failure = nil
+        defer { isSaving = false }
+        do {
+            try await board.setJobDescription(agent: agentID, job: job, text: line)
+            dismiss()
+        } catch APIError.status(404, nil), APIError.status(405, nil) {
+            failure = "The server is older than job descriptions. Update it to write one."
+        } catch APIError.status(404, _) {
+            failure = "This agent is no longer connected."
+        } catch APIError.status(401, _) {
+            dismiss()
+        } catch {
+            failure = error.localizedDescription
+        }
     }
 }
 

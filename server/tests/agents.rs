@@ -439,10 +439,13 @@ async fn only_the_owner_writes_what_a_job_does() {
     let (_, list) = agents(&server, &server.owner).await;
     assert_eq!(
         descriptions(&list, "box"),
-        json!({"triage": "Sorts new items."})
+        json!([{"job": "triage", "text": "Sorts new items."}])
     );
-    assert_eq!(descriptions(&list, "other"), json!({"triage": "Other."}));
-    assert_eq!(descriptions(&list, "worker"), json!({}));
+    assert_eq!(
+        descriptions(&list, "other"),
+        json!([{"job": "triage", "text": "Other."}])
+    );
+    assert_eq!(descriptions(&list, "worker"), json!([]));
 
     // Bounds.
     let long = json!({"job": "triage", "text": "x".repeat(201)});
@@ -499,7 +502,7 @@ async fn only_the_owner_writes_what_a_job_does() {
     assert_eq!(status, 200);
     assert_eq!(written["text"], Value::Null);
     let (_, list) = agents(&server, &server.owner).await;
-    assert_eq!(descriptions(&list, "box"), json!({}));
+    assert_eq!(descriptions(&list, "box"), json!([]));
 
     // The admin command writes the same way.
     server.admin(&[
@@ -514,7 +517,7 @@ async fn only_the_owner_writes_what_a_job_does() {
     let (_, list) = agents(&server, &server.owner).await;
     assert_eq!(
         descriptions(&list, "box"),
-        json!({"triage": "From the shell."})
+        json!([{"job": "triage", "text": "From the shell."}])
     );
 
     // Revoking the agent removes its lines, and none can be written after.
@@ -526,7 +529,10 @@ async fn only_the_owner_writes_what_a_job_does() {
         .unwrap();
     assert_eq!(revoked.status().as_u16(), 200);
     let (_, list) = agents(&server, &server.owner).await;
-    assert_eq!(descriptions(&list, "box"), json!({}));
-    assert_eq!(descriptions(&list, "other"), json!({"triage": "Other."}));
+    assert_eq!(descriptions(&list, "box"), json!([]));
+    assert_eq!(
+        descriptions(&list, "other"),
+        json!([{"job": "triage", "text": "Other."}])
+    );
     assert_eq!(describe(&server, &server.owner, "box", line).await.0, 404);
 }
