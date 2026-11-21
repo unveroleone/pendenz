@@ -185,6 +185,15 @@ fn systemd_quoted(word: &str) -> String {
     format!("\"{escaped}\"")
 }
 
+// An assignment for systemd's Environment=, which expands "%" but not "$".
+fn systemd_env(assignment: &str) -> String {
+    let escaped = assignment
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('%', "%%");
+    format!("\"{escaped}\"")
+}
+
 fn run(program: &str, args: &[&str]) -> anyhow::Result<()> {
     let status = std::process::Command::new(program).args(args).status()?;
     anyhow::ensure!(status.success(), "{program} {} failed", args.join(" "));
@@ -303,7 +312,7 @@ pub fn install(profile: Option<&str>, options: &[String]) -> anyhow::Result<Valu
                     .as_deref()
                     .map(|d| format!(
                         "Environment={}\n",
-                        systemd_quoted(&format!("XDG_CONFIG_HOME={d}"))
+                        systemd_env(&format!("XDG_CONFIG_HOME={d}"))
                     ))
                     .unwrap_or_default(),
             ),

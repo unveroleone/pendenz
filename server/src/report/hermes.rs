@@ -512,8 +512,12 @@ fn gateway(home: &Path) -> Agent {
         let root = home.parent()?.parent()?;
         read(root.join("gateway_state.json")).filter(|state| served_by(state, name))
     });
+    let own = read(home.join("gateway_state.json"));
+    // The profile's own file wins when the root's gateway is down and the profile's runs.
+    let running = |state: &Value| state["gateway_state"].as_str() == Some("running");
+    let shared = shared.filter(|s| running(s) || !own.as_ref().is_some_and(running));
     let profile = name.filter(|_| shared.is_some());
-    let state = shared.or_else(|| read(home.join("gateway_state.json")));
+    let state = shared.or(own);
     let Some(state) = state else {
         agent.health_detail = Some(match name {
             Some(_) => "No gateway serves this profile".into(),
@@ -781,7 +785,10 @@ pub fn schedule(schedule: &Value, display: Option<&str>) -> String {
     let Some(expr) = schedule["expr"].as_str() else {
         return fallback;
     };
-    cron_words(expr).unwrap_or(fallback)
+    // Words longer than the report keeps would lose their times; the expression is shorter.
+    cron_words(expr)
+        .filter(|words| words.chars().count() <= super::NAME)
+        .unwrap_or(fallback)
 }
 
 fn cron_words(expr: &str) -> Option<String> {
@@ -963,6 +970,14 @@ mod tests {
         assert_eq!(cron("0 9 1 * 1"), "");
         assert_eq!(cron("0 9 1-7 * *"), "");
         assert_eq!(cron("0,30 6-12 1 * *"), "");
+        assert_eq!(cron("0 9 1-15 * *"), "");
+        assert_eq!(
+            schedule(
+                &json!({"kind": "cron", "expr": "0 9 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 * *"}),
+                Some("0 9 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 * *")
+            ),
+            "0 9 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 * *"
+        );
         assert_eq!(
             schedule(&json!({"kind": "interval", "minutes": 5}), None),
             "Every 5 min"

@@ -295,7 +295,7 @@ pub struct Sample {
 
 // Bounds on what a report may hold. The server cuts to them, so a report it stores is small and
 // the apps can draw every list without paging.
-const NAME: usize = 80;
+pub const NAME: usize = 80;
 const DETAIL: usize = 160;
 const MAX_ACCOUNTS: usize = 12;
 const MAX_WINDOWS: usize = 6;
