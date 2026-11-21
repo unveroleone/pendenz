@@ -109,16 +109,31 @@ struct Raw {
 }
 
 impl Client {
-    pub fn from_env() -> Self {
-        let env = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
-        let http = reqwest::Client::builder()
+    fn http() -> reqwest::Client {
+        reqwest::Client::builder()
             // A redirect could carry the token to another host.
             .redirect(reqwest::redirect::Policy::none())
             .build()
-            .expect("the HTTP client starts");
+            .expect("the HTTP client starts")
+    }
+
+    // The server and token that `pendenz connect` saved, without looking at the environment.
+    pub fn saved(saved: crate::report::setup::Saved) -> Self {
+        let env = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
+        Client(Transport::Http {
+            http: Self::http(),
+            base: saved.server,
+            token: Some(saved.token),
+            source: env("PENDENZ_SOURCE"),
+        })
+    }
+
+    pub fn from_env() -> Self {
+        let env = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
+        let http = Self::http();
         // The environment wins. Without it, the server and token that `pendenz connect` saved.
         let saved = if env("PENDENZ_API_URL").is_none() && env("PENDENZ_API_TOKEN").is_none() {
-            crate::report::setup::saved()
+            crate::report::setup::saved(None)
         } else {
             None
         };

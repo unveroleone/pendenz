@@ -175,6 +175,19 @@ The same works by hand: `pendenz add-agent` and `pendenz issue-token --scopes re
 - **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** in `~/.hermes`: whether its gateway runs, its models, the cron jobs, the tokens and estimated cost per day and model from its session store, and the plan limits that `hermes usage` reports.
 - **Claude Code** in `~/.claude`: tokens per day and model from its session logs, and the sessions open right now.
 
+#### A second agent on one machine
+
+Each report belongs to one agent. A machine with two, such as two [Hermes profiles](https://github.com/NousResearch/hermes-agent) served by one gateway, connects the second under a profile name with a code of its own from the app:
+
+```sh
+~/.local/bin/pendenz connect --profile work https://<hostname> <code>
+~/.local/bin/pendenz report install --profile work --hermes-home ~/.hermes/profiles/work --no-host --no-claude
+```
+
+- A profile has its own connection (`~/.config/pendenz/agent-<profile>.json`), job (`pendenz.report.<profile>`, `pendenz-report-<profile>` on Linux), log and samples. Its reports go out with its own token only; without its connection it sends nothing.
+- `report install` writes the options it is given into the job. `--no-host` and `--no-claude` leave out what the machine's first agent already reports, so nothing is counted twice.
+- For a Hermes profile the report reads the jobs, models and usage of that profile, and the gateway's state from the Hermes folder above it: the profile counts as running when that gateway runs and serves it, and its channels are the gateway's platforms named `<profile>:<platform>`. The first agent leaves those platforms out.
+
 `pendenz report --dry-run` prints the report instead of sending it. `pendenz report --file report.json` sends a report written by anything else, in the same format; the server refuses fields it does not know. A report holds names of jobs, programs and sessions and the first line of a job's error, with the home folder shortened and anything that looks like a key removed. Only the owner's devices can read it.
 
 ## Updates

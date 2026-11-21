@@ -28,7 +28,10 @@ pub async fn collect(home: PathBuf, state_dir: Option<PathBuf>) -> anyhow::Resul
         let path = home.join("config.yaml");
         tokio::task::spawn_blocking(move || Config::read(&path)).await?
     };
-    let hermes = binary();
+    let hermes = Hermes {
+        binary: binary(),
+        home: home.clone(),
+    };
     let providers = config.providers();
     let store = home.join("state.db");
     let (version, windows, usage) =
@@ -84,9 +87,16 @@ fn binary() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("hermes"))
 }
 
-async fn output(command: &Path, args: &[&str]) -> Option<String> {
-    let run = tokio::process::Command::new(command)
+// The `hermes` command, run for the folder that is read: a profile's plan and version are its own.
+struct Hermes {
+    binary: PathBuf,
+    home: PathBuf,
+}
+
+async fn output(hermes: &Hermes, args: &[&str]) -> Option<String> {
+    let run = tokio::process::Command::new(&hermes.binary)
         .args(args)
+        .env("HERMES_HOME", &hermes.home)
         .stdin(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .kill_on_drop(true)
@@ -98,7 +108,7 @@ async fn output(command: &Path, args: &[&str]) -> Option<String> {
     String::from_utf8(output.stdout).ok()
 }
 
-async fn version(hermes: &Path) -> Option<String> {
+async fn version(hermes: &Hermes) -> Option<String> {
     // "Hermes Agent v0.23.2 (2026.9.24) · stable · ..."
     let text = output(hermes, &["--version"]).await?;
     let word = text
@@ -126,7 +136,7 @@ struct UsageWindow {
 // The limit windows of each provider's plan, as `hermes usage` fetches them. A provider used
 // with a pay-per-token key answers with no windows and is left out.
 async fn plan_windows(
-    hermes: &Path,
+    hermes: &Hermes,
     providers: &BTreeSet<String>,
 ) -> Vec<(String, Option<String>, Vec<Window>)> {
     let asks = providers.iter().map(|provider| async move {
@@ -478,13 +488,41 @@ fn gateway(home: &Path) -> Agent {
         since: None,
         channels: Vec::new(),
     };
-    let state: Option<Value> = std::fs::read(home.join("gateway_state.json"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+    let read = |path: PathBuf| -> Option<Value> {
+        std::fs::read(path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+    };
+    // One gateway can serve several profiles. A profile (`<root>/profiles/<name>`) has no state
+    // file of its own: the gateway in the root writes it, lists the profiles it serves, and
+    // names a profile's platforms "<name>:<platform>".
+    let profile = home
+        .parent()
+        .filter(|parent| parent.file_name().is_some_and(|n| n == "profiles"))
+        .and_then(|_| home.file_name())
+        .and_then(|name| name.to_str())
+        .filter(|_| !home.join("gateway_state.json").is_file());
+    let state = match profile {
+        Some(_) => home
+            .parent()
+            .and_then(Path::parent)
+            .and_then(|root| read(root.join("gateway_state.json"))),
+        None => read(home.join("gateway_state.json")),
+    };
     let Some(state) = state else {
         agent.health_detail = Some("The gateway has not run yet".into());
         return agent;
     };
+    let served: Vec<&str> = state["served_profiles"]
+        .as_array()
+        .map(|list| list.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    if let Some(name) = profile
+        && !served.contains(&name)
+    {
+        agent.health_detail = Some("The gateway does not serve this profile".into());
+        return agent;
+    }
     let pid = state["pid"]
         .as_u64()
         .map(|p| sysinfo::Pid::from_u32(p as u32));
@@ -496,9 +534,18 @@ fn gateway(home: &Path) -> Agent {
     if let Some(platforms) = state["platforms"].as_object() {
         agent.channels = platforms
             .iter()
-            .map(|(name, platform)| Channel {
-                name: capitalized(name),
-                connected: platform["state"].as_str() == Some("connected"),
+            .filter_map(|(key, platform)| {
+                let name = match (profile, key.split_once(':')) {
+                    (Some(profile), Some((owner, name))) if owner == profile => name,
+                    (Some(_), _) => return None,
+                    // Another profile's platform belongs to that profile's agent.
+                    (None, Some((owner, _))) if served.contains(&owner) => return None,
+                    (None, _) => key.as_str(),
+                };
+                Some(Channel {
+                    name: capitalized(name),
+                    connected: platform["state"].as_str() == Some("connected"),
+                })
             })
             .collect();
     }
