@@ -73,7 +73,9 @@ struct NotesView: View {
                             ContentUnavailableView(
                                 "No note selected",
                                 systemImage: Place.notes.systemImage,
-                                description: Text("Choose a note, or write a new one."),
+                                // A new note is written in Notes.
+                                description: Text(showsLocked ? "Choose a note." :
+                                    "Choose a note, or write a new one."),
                             )
                             .frame(maxWidth: .infinity)
                         }
