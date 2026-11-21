@@ -636,7 +636,9 @@ impl Config {
                 }
                 "skills" => {
                     // `external_dirs:` with a list below it, `[a, b]`, or one folder.
-                    if indent == 2 {
+                    // The list may sit at the key's own indent, as YAML allows.
+                    let item = trimmed.strip_prefix("- ");
+                    if indent == 2 && item.is_none() {
                         in_dirs = trimmed.starts_with("external_dirs:");
                         if in_dirs && let Some(v) = value(trimmed) {
                             let v = v.trim_start_matches('[').trim_end_matches(']');
@@ -646,7 +648,7 @@ impl Config {
                                     .filter(|d| !d.is_empty()),
                             );
                         }
-                    } else if in_dirs && let Some(item) = trimmed.strip_prefix("- ") {
+                    } else if in_dirs && let Some(item) = item {
                         let item = item.split(" #").next().unwrap_or("").trim();
                         let item = item.trim_matches(['"', '\'']);
                         if !item.is_empty() {

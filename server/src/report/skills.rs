@@ -4,22 +4,28 @@
 // `name:` in a skill's frontmatter. Only the frontmatter's `description` is read, never the rest
 // of the skill and never the job's prompt.
 use std::{
-    collections::HashMap,
+    cell::OnceCell,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 
-// How deep below a skills folder a skill may lie, and how many folders one lookup looks at, so a
-// large or looping tree cannot hold up the report.
+// How deep below a skills folder a skill may lie, how many folder entries one index looks at and
+// how long it may take, so a large, looping or slow tree cannot hold up the report.
 const DEPTH: usize = 4;
-const FOLDERS: usize = 5000;
+const ENTRIES: usize = 20_000;
+const TIME: Duration = Duration::from_secs(3);
 // More than any frontmatter needs; a skill's body is not read.
 const HEAD: usize = 16 * 1024;
+const FRONTMATTER_LINES: usize = 80;
 
 pub struct Skills {
     // Each skill folder by its name, the first found winning, as Hermes does.
     by_folder: HashMap<String, PathBuf>,
     // Every skill folder in the order found, for the lookup by frontmatter name.
     all: Vec<PathBuf>,
+    // The frontmatter names, read once and only when a name is not a folder's.
+    by_name: OnceCell<HashMap<String, Option<PathBuf>>>,
 }
 
 impl Skills {
@@ -30,14 +36,23 @@ impl Skills {
         let mut skills = Skills {
             by_folder: HashMap::new(),
             all: Vec::new(),
+            by_name: OnceCell::new(),
         };
-        let mut seen = 0;
+        let started = Instant::now();
+        let mut entries = 0;
+        // A folder reached twice, through a link or a second root, is read once.
+        let mut visited = HashSet::new();
         for root in roots {
             let mut stack = vec![(root, 0)];
             while let Some((dir, depth)) = stack.pop() {
-                seen += 1;
-                if seen > FOLDERS {
+                if started.elapsed() > TIME {
                     return skills;
+                }
+                let Ok(real) = std::fs::canonicalize(&dir) else {
+                    continue;
+                };
+                if !visited.insert(real) {
+                    continue;
                 }
                 if dir.join("SKILL.md").is_file() {
                     if let Some(name) = dir.file_name().and_then(|n| n.to_str()) {
@@ -52,19 +67,24 @@ impl Skills {
                 if depth >= DEPTH {
                     continue;
                 }
-                let Ok(entries) = std::fs::read_dir(&dir) else {
+                let Ok(list) = std::fs::read_dir(&dir) else {
                     continue;
                 };
-                let mut children: Vec<PathBuf> = entries
-                    .filter_map(Result::ok)
-                    .map(|e| e.path())
-                    .filter(|p| {
-                        p.file_name()
-                            .and_then(|n| n.to_str())
-                            .is_some_and(|n| !n.starts_with('.') && n != "node_modules")
-                            && p.is_dir()
-                    })
-                    .collect();
+                let mut children = Vec::new();
+                for entry in list.filter_map(Result::ok) {
+                    entries += 1;
+                    if entries > ENTRIES {
+                        return skills;
+                    }
+                    let path = entry.path();
+                    let shown = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| !n.starts_with('.') && n != "node_modules");
+                    if shown && path.is_dir() {
+                        children.push(path);
+                    }
+                }
                 // Read in name order, so "the first found" is the same on every run.
                 children.sort();
                 stack.extend(children.into_iter().rev().map(|p| (p, depth + 1)));
@@ -77,39 +97,55 @@ impl Skills {
     // description reads cleanly.
     pub fn summary(&self, name: &str) -> Option<String> {
         let dir = match self.by_folder.get(name) {
-            Some(dir) => dir.clone(),
-            None => {
-                let mut named = self.all.iter().filter(|dir| {
-                    frontmatter(dir).is_some_and(|f| value(&f, "name") == Some(name.to_owned()))
-                });
-                let dir = named.next()?;
-                // A name two skills claim is not guessed at, as in Hermes.
-                if named.next().is_some() {
-                    return None;
-                }
-                dir.clone()
-            }
+            Some(dir) => dir,
+            // A name two skills claim is not guessed at, as in Hermes.
+            None => self.by_name().get(name)?.as_ref()?,
         };
-        first_sentence(&value(&frontmatter(&dir)?, "description")?)
+        first_sentence(&value(&frontmatter(dir)?, "description")?)
+    }
+
+    fn by_name(&self) -> &HashMap<String, Option<PathBuf>> {
+        self.by_name.get_or_init(|| {
+            let mut names: HashMap<String, Option<PathBuf>> = HashMap::new();
+            for dir in &self.all {
+                if let Some(name) = frontmatter(dir).and_then(|f| value(&f, "name")) {
+                    names
+                        .entry(name)
+                        .and_modify(|found| *found = None)
+                        .or_insert_with(|| Some(dir.clone()));
+                }
+            }
+            names
+        })
     }
 }
 
-// A folder from `external_dirs`: `~` and `${VAR}` expanded, relative to the Hermes home.
+// A folder from `external_dirs`: `~` and `${VAR}` expanded, relative to the Hermes home. One
+// that names a variable that is not set is left out.
 fn expand(dir: &str, home: &Path) -> Option<PathBuf> {
-    let mut text = dir.trim().to_owned();
+    let text = dir.trim();
     if text.is_empty() {
         return None;
     }
-    if text == "~" || text.starts_with("~/") {
-        let user = std::env::var("HOME").ok()?;
-        text = format!("{user}{}", &text[1..]);
+    let text = if text == "~" || text.starts_with("~/") {
+        format!("{}{}", std::env::var("HOME").ok()?, &text[1..])
+    } else {
+        text.to_owned()
+    };
+    // Left to right, without reading a variable's value again.
+    let mut out = String::new();
+    let mut rest = text.as_str();
+    while let Some(start) = rest.find("${") {
+        let end = start + rest[start..].find('}')?;
+        out.push_str(&rest[..start]);
+        let value = std::env::var(&rest[start + 2..end])
+            .ok()
+            .filter(|v| !v.is_empty())?;
+        out.push_str(&value);
+        rest = &rest[end + 1..];
     }
-    while let Some(start) = text.find("${") {
-        let end = start + text[start..].find('}')?;
-        let value = std::env::var(&text[start + 2..end]).unwrap_or_default();
-        text.replace_range(start..=end, &value);
-    }
-    let path = PathBuf::from(text);
+    out.push_str(rest);
+    let path = PathBuf::from(out);
     Some(if path.is_absolute() {
         path
     } else {
@@ -117,7 +153,9 @@ fn expand(dir: &str, home: &Path) -> Option<PathBuf> {
     })
 }
 
-// The frontmatter of a skill, between the first two `---` lines.
+// The frontmatter of a skill, between the first two `---` lines, when it looks like YAML: every
+// line that is not indented is a key or a comment. Anything else, such as a missing closing line
+// that would take in the skill's text, gives none.
 fn frontmatter(dir: &Path) -> Option<String> {
     use std::io::Read;
     let mut head = Vec::new();
@@ -132,9 +170,13 @@ fn frontmatter(dir: &Path) -> Option<String> {
         return None;
     }
     let mut out = String::new();
-    for line in lines {
+    for line in lines.take(FRONTMATTER_LINES) {
         if line.trim_end() == "---" {
             return Some(out);
+        }
+        let top = !line.starts_with([' ', '\t']) && !line.trim().is_empty();
+        if top && !line.starts_with('#') && !is_key(line) {
+            return None;
         }
         out.push_str(line);
         out.push('\n');
@@ -142,8 +184,19 @@ fn frontmatter(dir: &Path) -> Option<String> {
     None
 }
 
+fn is_key(line: &str) -> bool {
+    let Some((key, _)) = line.split_once(':') else {
+        return false;
+    };
+    !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
 // A top-level value of the frontmatter as one line: plain, quoted, or a `>` or `|` block, with
-// its continuation lines folded in. Anything it cannot read gives none.
+// its continuation lines folded in and a trailing comment left out. Anything it cannot read
+// gives none.
 fn value(frontmatter: &str, key: &str) -> Option<String> {
     let mut lines = frontmatter.lines();
     let first = lines.by_ref().find_map(|line| {
@@ -151,9 +204,11 @@ fn value(frontmatter: &str, key: &str) -> Option<String> {
             .and_then(|rest| rest.strip_prefix(':'))
     })?;
     let mut text = first.trim().to_owned();
-    let block = matches!(text.chars().next(), Some('>' | '|'));
+    let block = text.starts_with(['>', '|']);
     if block {
         text.clear();
+    } else {
+        text = uncommented(&text).to_owned();
     }
     // Continuation lines are indented; the next key is not.
     for line in lines {
@@ -161,6 +216,7 @@ fn value(frontmatter: &str, key: &str) -> Option<String> {
             break;
         }
         let line = line.trim();
+        let line = if block { line } else { uncommented(line) };
         if !line.is_empty() {
             if !text.is_empty() {
                 text.push(' ');
@@ -170,10 +226,12 @@ fn value(frontmatter: &str, key: &str) -> Option<String> {
     }
     if !block {
         if let Some(inner) = text.strip_prefix('"') {
-            text = inner.strip_suffix('"')?.replace("\\\"", "\"");
+            let end = closing(inner, '"')?;
+            text = inner[..end].replace("\\\"", "\"");
         } else if let Some(inner) = text.strip_prefix('\'') {
-            text = inner.strip_suffix('\'')?.replace("''", "'");
-        } else if text.starts_with(['[', '{', '&', '*', '!']) {
+            let end = closing(inner, '\'')?;
+            text = inner[..end].replace("''", "'");
+        } else if text.starts_with(['[', '{', '&', '*', '!', '#']) {
             return None;
         }
     }
@@ -181,48 +239,72 @@ fn value(frontmatter: &str, key: &str) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
+// A plain value without the comment after it: YAML starts one with " #".
+fn uncommented(text: &str) -> &str {
+    if text.starts_with(['"', '\'']) {
+        return text;
+    }
+    text.split(" #").next().unwrap_or("").trim_end()
+}
+
+// Where a quoted value ends: its closing quote, with nothing but a comment after it.
+fn closing(inner: &str, quote: char) -> Option<usize> {
+    let mut chars = inner.char_indices().peekable();
+    while let Some((at, c)) = chars.next() {
+        if quote == '"' && c == '\\' {
+            chars.next();
+            continue;
+        }
+        if c == quote {
+            if quote == '\'' && chars.peek().is_some_and(|&(_, n)| n == '\'') {
+                chars.next();
+                continue;
+            }
+            let after = inner[at + 1..].trim();
+            return (after.is_empty() || after.starts_with('#')).then_some(at);
+        }
+    }
+    None
+}
+
 // Words a period follows without ending the sentence.
 const ABBREVIATIONS: [&str; 6] = ["e.g", "i.e", "etc", "vs", "approx", "incl"];
 
-// The first sentence: up to the first ".", "!" or "?" that a space and a capital or the end
-// follow. A description written for the model ("Use when ...") says when, not what, so it
-// gives none.
+// The first sentence: up to the first ".", "!" or "?" (and a closing quote or bracket) that a
+// space or the end follows, unless the period ends an abbreviation such as "e.g." or "U.S.". A
+// description written for the model ("Use when ...") says when, not what, so it gives none.
 fn first_sentence(text: &str) -> Option<String> {
     let lower = text.to_lowercase();
-    if lower.starts_with("use when")
-        || lower.starts_with("use for")
-        || lower.starts_with("use this")
-        || lower.starts_with("use whenever")
+    if ["use when", "use for", "use this", "use whenever"]
+        .iter()
+        .any(|p| lower.starts_with(p))
     {
         return None;
     }
-    let chars: Vec<(usize, char)> = text.char_indices().collect();
-    for (i, &(at, c)) in chars.iter().enumerate() {
+    for (at, c) in text.char_indices() {
         if !matches!(c, '.' | '!' | '?') {
             continue;
         }
-        let end = at + c.len_utf8();
+        let mut end = at + c.len_utf8();
+        end += text[end..]
+            .chars()
+            .take_while(|ch| matches!(ch, '"' | '\'' | ')' | '\u{201d}' | '\u{2019}'))
+            .map(char::len_utf8)
+            .sum::<usize>();
         let after = &text[end..];
-        let ends = after.is_empty()
-            || (after.starts_with(' ')
-                && after[1..]
-                    .chars()
-                    .next()
-                    .is_some_and(|n| n.is_uppercase() || n.is_ascii_digit() || n == '"'));
-        if !ends {
+        if !(after.is_empty() || after.starts_with(' ')) {
             continue;
         }
-        let word = text[..at]
-            .rsplit(|ch: char| ch.is_whitespace() || ch == '(')
-            .next()
-            .unwrap_or("");
-        let word_lower = word.to_lowercase();
-        if c == '.'
-            && (ABBREVIATIONS.contains(&word_lower.as_str())
-                || (word.chars().count() == 1 && word.chars().all(char::is_alphabetic)))
-            && i + 1 < chars.len()
-        {
-            continue;
+        if c == '.' && !after.is_empty() {
+            let word = text[..at]
+                .rsplit(|ch: char| ch.is_whitespace() || ch == '(')
+                .next()
+                .unwrap_or("");
+            let single = word.chars().count() == 1 && word.chars().all(char::is_alphabetic);
+            if single || word.contains('.') || ABBREVIATIONS.contains(&word.to_lowercase().as_str())
+            {
+                continue;
+            }
         }
         return Some(text[..end].trim().to_owned());
     }
