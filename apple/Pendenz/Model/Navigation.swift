@@ -16,8 +16,15 @@ final class Navigation {
     // The item shown in the detail: the inspector on Mac and iPad, a sheet on the iPhone.
     var itemID: Int? = Settings.openedItem
     var isSearchFocused = false
-    // The note open in Notes. Below zero while the server has not given it an ID yet.
-    var noteID: Int? = Settings.openedNote
+    // The note open in Notes. Below zero while the server has not given it an ID yet. The
+    // launch argument `-note` comes through `OpenRequest`, so a locked note asks first.
+    var noteID: Int?
+    // True while Notes shows the locked notes instead of the others. Set only by
+    // `openLockedNotes`, after the lock has opened, and cleared when it closes.
+    var isInLockedNotes = false
+    // Counts the ways into Locked Notes, so an answer that comes late does not lead there
+    // after the window has gone on to something else.
+    @ObservationIgnored private var lockedEntry = 0
     // True while a new, empty note is open. It ends with the note's first character.
     var isWritingNote = false
     // The project sheet, for a new project or for one that is edited.
@@ -32,8 +39,38 @@ final class Navigation {
 
     // Opens Notes with a new note, whatever was open there.
     func writeNote() {
+        lockedEntry += 1
         place = .notes
+        isInLockedNotes = false
         noteID = nil
         isWritingNote = true
+    }
+
+    // Opens Locked Notes, with the note when one is named. The question comes only while the
+    // lock is closed, and the notes in there open without another one. A cancel or a failure
+    // leaves the window as it was.
+    func openLockedNotes(note id: Int? = nil) async {
+        lockedEntry += 1
+        let entry = lockedEntry
+        guard await NoteLock.shared.open(), entry == lockedEntry else { return }
+        place = .notes
+        isWritingNote = false
+        isInLockedNotes = true
+        noteID = id
+    }
+
+    // Back to the other notes, by the back button.
+    func leaveLockedNotes() {
+        lockedEntry += 1
+        isInLockedNotes = false
+        noteID = nil
+    }
+
+    // The lock closed: nothing locked stays on screen. The editor saves its text on the same
+    // change, before it lets go of the note.
+    func lockClosed(in store: Store) {
+        lockedEntry += 1
+        isInLockedNotes = false
+        if let id = noteID, store.note(id)?.locked == true { noteID = nil }
     }
 }

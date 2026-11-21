@@ -1,24 +1,52 @@
 import SwiftUI
 
 // The notes: pinned ones first, then by the last edit. On the iPhone a note opens over the
-// list, on Mac and iPad next to it.
+// list, on Mac and iPad next to it. The locked notes are not among them: they are in Locked
+// Notes, the same view once more, which opens over this one after one question.
 struct NotesView: View {
     @Environment(Store.self) private var store
     @Environment(Navigation.self) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
     // What the search field holds. Empty shows every note.
     var query = ""
+    // True for Locked Notes.
+    var showsLocked = false
+    // The search field of Locked Notes on the iPhone, where the tab's field stays with Notes.
+    @State private var lockedQuery = ""
     private var lock: NoteLock { .shared }
 
+    // The editor of the iPhone opens over the list it was opened from. Both lists watch the
+    // same note, so each one only while the window is on it.
     private var isEditing: Binding<Bool> {
         Binding {
-            navigation.noteID != nil || navigation.isWritingNote
+            (navigation.noteID != nil || navigation.isWritingNote) && navigation.isInLockedNotes == showsLocked
         } set: { isShown in
-            if !isShown {
+            if !isShown, navigation.isInLockedNotes == showsLocked {
                 navigation.noteID = nil
                 navigation.isWritingNote = false
             }
         }
+    }
+
+    private var isInLockedNotes: Binding<Bool> {
+        Binding {
+            navigation.isInLockedNotes
+        } set: { isShown in
+            if !isShown, navigation.isInLockedNotes { navigation.leaveLockedNotes() }
+        }
+    }
+
+    private var isPhone: Bool {
+        sizeClass == .compact
+    }
+
+    private var searchText: String {
+        showsLocked && isPhone ? lockedQuery : query
+    }
+
+    // The row that leads to Locked Notes, while there is a locked note and no search.
+    private var showsLockedRow: Bool {
+        !showsLocked && query.trimmingCharacters(in: .whitespaces).isEmpty && store.notes.contains(where: \.locked)
     }
 
     var body: some View {
@@ -53,22 +81,34 @@ struct NotesView: View {
                 }
             }
         }
-        .navigationTitle("Notes")
+        .navigationTitle(showsLocked ? "Locked Notes" : "Notes")
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("New Note", systemImage: "square.and.pencil", action: write)
+            // A new note is not locked, so it is written in Notes.
+            if !showsLocked {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("New Note", systemImage: "square.and.pencil", action: write)
+                }
             }
             SyncStatus()
         }
+        .modifier(LockedSearch(isOn: showsLocked && isPhone, text: $lockedQuery))
+        .modifier(LockedNotesDestination(isOn: !showsLocked, isPresented: isInLockedNotes, query: query))
+    }
+
+    // Locked Notes shows nothing while the lock is closed, whatever the navigation does in
+    // the same moment. Notes never lists a locked note, also while the lock is open.
+    private var notes: [Note] {
+        if showsLocked, !lock.isOpen { return [] }
+        return store.searchNotes(searchText, readsLocked: showsLocked).filter { $0.locked == showsLocked }
     }
 
     private var list: some View {
-        let notes = store.searchNotes(query, readsLocked: lock.isOpen)
+        let notes = notes
         return rows(notes)
             .listStyle(.plain)
             .animation(.default, value: notes.map(\.id))
             .overlay {
-                if notes.isEmpty { emptyState }
+                if notes.isEmpty, !showsLockedRow { emptyState }
             }
             .refreshable { await store.sync() }
     }
@@ -78,22 +118,28 @@ struct NotesView: View {
         @Bindable var navigation = navigation
         if sizeClass == .compact {
             // A row is a button here, so none stays highlighted after its note was closed.
-            List(notes) { note in
-                Button {
-                    navigation.noteID = note.id
-                } label: {
-                    NoteRow(note: note)
-                        .contentShape(Rectangle())
+            List {
+                if showsLockedRow { lockedRow }
+                ForEach(notes) { note in
+                    Button {
+                        navigation.noteID = note.id
+                    } label: {
+                        NoteRow(note: note, showsLockedPreview: showsLocked)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens the note")
+                    .modifier(NoteActions(note: note))
                 }
-                .buttonStyle(.plain)
-                .accessibilityHint("Opens the note")
-                .modifier(NoteActions(note: note))
             }
         } else {
-            List(notes, selection: $navigation.noteID) { note in
-                NoteRow(note: note)
-                    .tag(note.id)
-                    .modifier(NoteActions(note: note))
+            List(selection: $navigation.noteID) {
+                if showsLockedRow { lockedRow }
+                ForEach(notes) { note in
+                    NoteRow(note: note, showsLockedPreview: showsLocked)
+                        .tag(note.id)
+                        .modifier(NoteActions(note: note))
+                }
             }
             #if os(macOS)
             // The Delete key, only while the list itself has the focus.
@@ -104,10 +150,45 @@ struct NotesView: View {
         }
     }
 
+    // First in the list, above the pinned notes.
+    private var lockedRow: some View {
+        Section {
+            Button {
+                Task { await navigation.openLockedNotes() }
+            } label: {
+                HStack {
+                    Label("Locked Notes", systemImage: "lock")
+                    Spacer()
+                    #if os(iOS)
+                    Image(systemName: "chevron.forward")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                    #endif
+                }
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(lock.isAsking)
+            .accessibilityHint("Asks for \(NoteLock.method), then shows the locked notes")
+            if let failure = lock.failure {
+                Text(failure)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
     @ViewBuilder
     private var emptyState: some View {
-        if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+        if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
             ContentUnavailableView.search
+        } else if showsLocked {
+            ContentUnavailableView {
+                Label("No locked notes", systemImage: "lock")
+            } description: {
+                Text("A note locked from its menu is kept here.")
+            }
         } else if store.hasLoaded {
             ContentUnavailableView {
                 Label("No notes yet", systemImage: Place.notes.systemImage)
@@ -172,6 +253,9 @@ private struct NoteActions: ViewModifier {
 struct NoteRow: View {
     @Environment(Store.self) private var store
     let note: Note
+    // True in Locked Notes, which is behind the question already. Everywhere else a locked
+    // note shows its title alone.
+    var showsLockedPreview = false
     private var lock: NoteLock { .shared }
 
     var body: some View {
@@ -187,9 +271,9 @@ struct NoteRow: View {
                     .fontWeight(.medium)
                     .lineLimit(1)
             }
-            // A locked note shows its title and nothing of what follows, also while the lock
-            // is open: the list is on screen far longer than any one note.
-            if !note.locked, !note.preview.isEmpty {
+            // Outside Locked Notes a locked note shows its title and nothing of what follows,
+            // also while the lock is open.
+            if !note.locked || showsLockedPreview && lock.isOpen, !note.preview.isEmpty {
                 Text(note.preview)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -199,7 +283,8 @@ struct NoteRow: View {
                 if let edited = note.edited {
                     Text(Self.label(for: edited))
                 }
-                if note.locked {
+                // In Locked Notes every row is locked, so none says it.
+                if note.locked, !showsLockedPreview {
                     Image(systemName: lock.isOpen ? "lock.open.fill" : "lock.fill")
                         .accessibilityLabel("Locked")
                 }
@@ -612,6 +697,37 @@ struct NoteEditorView: View {
         save()
         store.updateNote(currentID, NotePatch(trashed: true))
         navigation.itemID = id
+    }
+}
+
+// The search field of Locked Notes on the iPhone.
+private struct LockedSearch: ViewModifier {
+    let isOn: Bool
+    @Binding var text: String
+
+    func body(content: Content) -> some View {
+        if isOn {
+            content.searchable(text: $text, prompt: "Search locked notes")
+        } else {
+            content
+        }
+    }
+}
+
+// Locked Notes, over Notes. On the iPhone the editor of a locked note opens over it in turn.
+private struct LockedNotesDestination: ViewModifier {
+    let isOn: Bool
+    @Binding var isPresented: Bool
+    let query: String
+
+    func body(content: Content) -> some View {
+        if isOn {
+            content.navigationDestination(isPresented: $isPresented) {
+                NotesView(query: query, showsLocked: true)
+            }
+        } else {
+            content
+        }
     }
 }
 

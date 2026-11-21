@@ -68,11 +68,22 @@ struct RootView: View {
             if store.item(id) != nil { navigation.itemID = id }
         }
         if let id = openRequest.noteID {
-            openRequest.noteID = nil
-            if store.note(id) != nil {
-                open(.notes)
-                navigation.noteID = store.noteID(id)
+            if let note = store.note(id) {
+                openRequest.noteID = nil
+                let id = store.noteID(id)
+                if note.locked {
+                    // Into Locked Notes, after the one question.
+                    Task { await navigation.openLockedNotes(note: id) }
+                } else {
+                    open(.notes)
+                    navigation.leaveLockedNotes()
+                    navigation.noteID = id
+                }
+            } else if store.isCurrent {
+                // Gone from the server too.
+                openRequest.noteID = nil
             }
+            // Otherwise it waits for the first sync, which may bring the note.
         }
     }
 
@@ -144,6 +155,11 @@ struct RootView: View {
         .onChange(of: openRequest.place, initial: true) { takeRequests() }
         .onChange(of: openRequest.itemID, initial: true) { takeRequests() }
         .onChange(of: openRequest.noteID, initial: true) { takeRequests() }
+        // A note asked for before the store had it.
+        .onChange(of: store.phase) { takeRequests() }
+        .onChange(of: NoteLock.shared.isOpen) { _, isOpen in
+            if !isOpen { navigation.lockClosed(in: store) }
+        }
         #if os(macOS)
         // A request that came while no window was in front waits for the next one.
         .onChange(of: appearsActive) { takeRequests() }

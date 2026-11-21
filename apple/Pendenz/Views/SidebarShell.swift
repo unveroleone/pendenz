@@ -22,6 +22,14 @@ struct SidebarShell: View {
         }
     }
 
+    private var searchPrompt: String {
+        if navigation.place == .notes {
+            navigation.isInLockedNotes ? "Search locked notes" : "Search notes"
+        } else {
+            "Search items"
+        }
+    }
+
     private var isSearching: Bool {
         !query.trimmingCharacters(in: .whitespaces).isEmpty
     }
@@ -73,15 +81,15 @@ struct SidebarShell: View {
         } detail: {
             NavigationStack {
                 Group {
-                    if isSearching, place == .notes {
-                        // In Notes the search field filters the notes.
+                    if place == .notes {
+                        // In Notes the search field filters the notes. One view with and
+                        // without a search, so Locked Notes stays open over it.
                         NotesView(query: query)
                     } else if isSearching {
                         SearchResultsView(query: query)
                             .navigationTitle("Search")
                     } else {
                         switch place {
-                        case .notes: NotesView()
                         case .completed: CompletedView()
                         case .trash: TrashView()
                         case .agents: AgentsView()
@@ -116,7 +124,7 @@ struct SidebarShell: View {
                 }
             }
         }
-        .searchable(text: $query, prompt: place == .notes ? "Search notes" : "Search items")
+        .searchable(text: $query, prompt: searchPrompt)
         .searchFocused($isSearchFocused)
         .onChange(of: agentsVisibility.isShown(agents), initial: true) { _, isShown in
             // The entry was taken away while it was open.
@@ -128,9 +136,15 @@ struct SidebarShell: View {
             // Notes has a list and an editor of its own, and no room for the detail of an item
             // that was open in another list. An item made from a note still opens there.
             if place == .notes { navigation.itemID = nil }
+            // Locked Notes closes with Notes, so another list never leads back into it.
+            if place != .notes, navigation.isInLockedNotes { navigation.leaveLockedNotes() }
             // A project that opens from somewhere else, such as a new one, is not left hidden
             // in the folded group.
             if case .project = place { isProjectsExpanded = true }
+        }
+        .onChange(of: navigation.isInLockedNotes) {
+            // A search does not carry over between Notes and Locked Notes.
+            query = ""
         }
         .onChange(of: navigation.isSearchFocused, initial: true) { _, wanted in
             // The Search command asks for the field through the window's navigation. Also when

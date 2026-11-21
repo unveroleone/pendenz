@@ -123,5 +123,6 @@ final class OpenRequest {
 
     var place: Place?
     var itemID: Int?
-    var noteID: Int?
+    // The launch argument `-note 3` is the first request.
+    var noteID: Int? = Settings.openedNote
 }
