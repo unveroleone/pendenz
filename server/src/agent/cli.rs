@@ -316,7 +316,9 @@ async fn execute(command: Command) -> Result<Value, String> {
 }
 
 // Sends a status report for the agent this token belongs to (`pendenz report`).
-pub async fn send_report(report: &crate::report::Report) -> i32 {
+// A profile sends with its own saved connection and nothing else, so its report can never go
+// out under the token of the machine's other agent.
+pub async fn send_report(report: &crate::report::Report, profile: Option<&str>) -> i32 {
     let body = match serde_json::to_value(report) {
         Ok(body) => body,
         Err(error) => {
@@ -324,7 +326,18 @@ pub async fn send_report(report: &crate::report::Report) -> i32 {
             return 1;
         }
     };
-    let client = Client::from_env();
+    let client = match profile {
+        Some(name) => match crate::report::setup::saved(Some(name)) {
+            Some(saved) => Client::saved(saved),
+            None => {
+                eprintln!(
+                    "The profile {name} is not connected: pendenz connect --profile {name} <server> <code>"
+                );
+                return 1;
+            }
+        },
+        None => Client::from_env(),
+    };
     match client
         .request("/agents/me/report", Call::write(Method::PUT, body, None))
         .await

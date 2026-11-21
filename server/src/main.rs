@@ -122,6 +122,10 @@ enum Command {
     Connect {
         server: String,
         code: String,
+        /// Connect a second agent on this machine under this name, such as a second Hermes
+        /// profile. `pendenz report --profile <name>` then sends its reports.
+        #[arg(long)]
+        profile: Option<String>,
     },
     #[command(flatten)]
     Agent(agent::cli::Command),
@@ -392,9 +396,11 @@ async fn main() -> anyhow::Result<()> {
     match args.command {
         Some(Command::Mcp) => return agent::stdio::run().await,
         Some(Command::Report(args)) => std::process::exit(report::run(args).await),
-        Some(Command::Connect { server, code }) => {
-            std::process::exit(report::connect(&server, &code).await)
-        }
+        Some(Command::Connect {
+            server,
+            code,
+            profile,
+        }) => std::process::exit(report::connect(&server, &code, profile.as_deref()).await),
         Some(Command::Agent(command)) => std::process::exit(agent::cli::run(command).await),
         Some(Command::Unknown(_)) => {
             eprintln!("Unknown command. Run with --help.");

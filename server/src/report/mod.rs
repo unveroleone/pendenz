@@ -295,7 +295,7 @@ pub struct Sample {
 
 // Bounds on what a report may hold. The server cuts to them, so a report it stores is small and
 // the apps can draw every list without paging.
-const NAME: usize = 80;
+pub const NAME: usize = 80;
 const DETAIL: usize = 160;
 const MAX_ACCOUNTS: usize = 12;
 const MAX_WINDOWS: usize = 6;
@@ -451,7 +451,7 @@ impl Report {
 #[derive(clap::Subcommand)]
 enum Action {
     /// Send a report every two minutes from now on: a LaunchAgent on macOS, a systemd user
-    /// timer on Linux.
+    /// timer on Linux. The options given here go into the job.
     Install,
     /// Stop sending reports.
     Uninstall,
@@ -461,6 +461,11 @@ enum Action {
 pub struct Args {
     #[command(subcommand)]
     action: Option<Action>,
+    /// A second agent on this machine, such as a second Hermes profile: its own connection from
+    /// `pendenz connect --profile`, its own job and its own samples. Only ever given on the
+    /// command line, so an inherited variable cannot move a job to another agent's token.
+    #[arg(long, global = true)]
+    profile: Option<String>,
     /// Print the report instead of sending it.
     #[arg(long)]
     dry_run: bool,
@@ -468,17 +473,52 @@ pub struct Args {
     #[arg(long)]
     file: Option<PathBuf>,
     /// Leave out the machine's CPU, memory, disk and busiest programs.
-    #[arg(long)]
+    #[arg(long, global = true)]
     no_host: bool,
-    /// Hermes Agent's folder. Read when it exists.
-    #[arg(long, env = "HERMES_HOME")]
+    /// Leave out Claude Code, for a second agent whose machine already reports it.
+    #[arg(long, global = true)]
+    no_claude: bool,
+    /// Hermes Agent's folder, or one of its profiles (~/.hermes/profiles/<name>). Read when it
+    /// exists.
+    #[arg(long, global = true, env = "HERMES_HOME")]
     hermes_home: Option<PathBuf>,
     /// Claude Code's folder. Read when it exists.
-    #[arg(long, env = "CLAUDE_CONFIG_DIR")]
+    #[arg(long, global = true, env = "CLAUDE_CONFIG_DIR")]
     claude_home: Option<PathBuf>,
-    /// Where the report command keeps the machine's samples of the last 24 hours.
-    #[arg(long, env = "PENDENZ_STATE_DIR")]
+    /// Where the report command keeps the machine's samples of the last 24 hours. A profile
+    /// keeps its own in a folder of its name inside.
+    #[arg(long, global = true, env = "PENDENZ_STATE_DIR")]
     state_dir: Option<PathBuf>,
+}
+
+impl Args {
+    // The options a scheduled job repeats, with paths made absolute, since the job starts
+    // elsewhere and without this shell's environment.
+    fn job_options(&self) -> anyhow::Result<Vec<String>> {
+        let absolute = |path: &PathBuf| -> anyhow::Result<String> {
+            Ok(std::path::absolute(path)?.display().to_string())
+        };
+        let mut options = Vec::new();
+        if let Some(name) = &self.profile {
+            options.extend(["--profile".to_owned(), name.clone()]);
+        }
+        if self.no_host {
+            options.push("--no-host".into());
+        }
+        if self.no_claude {
+            options.push("--no-claude".into());
+        }
+        for (flag, path) in [
+            ("--hermes-home", &self.hermes_home),
+            ("--claude-home", &self.claude_home),
+            ("--state-dir", &self.state_dir),
+        ] {
+            if let Some(path) = path {
+                options.extend([flag.to_owned(), absolute(path)?]);
+            }
+        }
+        Ok(options)
+    }
 }
 
 fn home() -> Option<PathBuf> {
@@ -517,13 +557,21 @@ pub async fn collect(args: &Args) -> Report {
         .claude_home
         .clone()
         .or_else(|| home.as_ref().map(|h| h.join(".claude")));
-    let state_dir = args.state_dir.clone().or_else(|| {
-        std::env::var_os("XDG_STATE_HOME")
-            .filter(|v| !v.is_empty())
-            .map(PathBuf::from)
-            .or_else(|| home.as_ref().map(|h| h.join(".local/state")))
-            .map(|d| d.join("pendenz"))
-    });
+    let state_dir = args
+        .state_dir
+        .clone()
+        .or_else(|| {
+            std::env::var_os("XDG_STATE_HOME")
+                .filter(|v| !v.is_empty())
+                .map(PathBuf::from)
+                .or_else(|| home.as_ref().map(|h| h.join(".local/state")))
+                .map(|d| d.join("pendenz"))
+        })
+        // A profile keeps its own samples and usage totals beside the machine's.
+        .map(|dir| match &args.profile {
+            Some(name) => dir.join(name),
+            None => dir,
+        });
 
     let host = async {
         if args.no_host {
@@ -546,6 +594,7 @@ pub async fn collect(args: &Args) -> Report {
     let claude = async {
         match claude_home
             .as_ref()
+            .filter(|_| !args.no_claude)
             .filter(|p| p.join("projects").is_dir() || p.join("sessions").is_dir())
         {
             Some(path) => bounded_source("claude-code", claude::collect(path.clone())).await,
@@ -601,14 +650,23 @@ fn print(result: anyhow::Result<serde_json::Value>) -> i32 {
     }
 }
 
-pub async fn connect(server: &str, code: &str) -> i32 {
-    print(setup::connect(server, code).await)
+pub async fn connect(server: &str, code: &str, profile: Option<&str>) -> i32 {
+    print(setup::connect(server, code, profile).await)
 }
 
 pub async fn run(args: Args) -> i32 {
+    if let Some(name) = &args.profile
+        && let Err(error) = setup::check_profile(name)
+    {
+        eprintln!("{error}");
+        return 1;
+    }
+    let profile = args.profile.as_deref();
     match args.action {
-        Some(Action::Install) => return print(setup::install()),
-        Some(Action::Uninstall) => return print(setup::uninstall()),
+        Some(Action::Install) => {
+            return print(args.job_options().and_then(|o| setup::install(profile, &o)));
+        }
+        Some(Action::Uninstall) => return print(setup::uninstall(profile)),
         None => {}
     }
     let report = match &args.file {
@@ -633,7 +691,7 @@ pub async fn run(args: Args) -> i32 {
             }
         }
     }
-    crate::agent::cli::send_report(&report).await
+    crate::agent::cli::send_report(&report, profile).await
 }
 
 fn read_file(path: &std::path::Path) -> anyhow::Result<Report> {

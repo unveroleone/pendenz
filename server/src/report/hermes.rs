@@ -28,7 +28,10 @@ pub async fn collect(home: PathBuf, state_dir: Option<PathBuf>) -> anyhow::Resul
         let path = home.join("config.yaml");
         tokio::task::spawn_blocking(move || Config::read(&path)).await?
     };
-    let hermes = binary();
+    let hermes = Hermes {
+        binary: binary(),
+        home: home.clone(),
+    };
     let providers = config.providers();
     let store = home.join("state.db");
     let (version, windows, usage) =
@@ -84,9 +87,16 @@ fn binary() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("hermes"))
 }
 
-async fn output(command: &Path, args: &[&str]) -> Option<String> {
-    let run = tokio::process::Command::new(command)
+// The `hermes` command, run for the folder that is read: a profile's plan and version are its own.
+struct Hermes {
+    binary: PathBuf,
+    home: PathBuf,
+}
+
+async fn output(hermes: &Hermes, args: &[&str]) -> Option<String> {
+    let run = tokio::process::Command::new(&hermes.binary)
         .args(args)
+        .env("HERMES_HOME", &hermes.home)
         .stdin(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .kill_on_drop(true)
@@ -98,7 +108,7 @@ async fn output(command: &Path, args: &[&str]) -> Option<String> {
     String::from_utf8(output.stdout).ok()
 }
 
-async fn version(hermes: &Path) -> Option<String> {
+async fn version(hermes: &Hermes) -> Option<String> {
     // "Hermes Agent v0.23.2 (2026.9.24) · stable · ..."
     let text = output(hermes, &["--version"]).await?;
     let word = text
@@ -126,7 +136,7 @@ struct UsageWindow {
 // The limit windows of each provider's plan, as `hermes usage` fetches them. A provider used
 // with a pay-per-token key answers with no windows and is left out.
 async fn plan_windows(
-    hermes: &Path,
+    hermes: &Hermes,
     providers: &BTreeSet<String>,
 ) -> Vec<(String, Option<String>, Vec<Window>)> {
     let asks = providers.iter().map(|provider| async move {
@@ -478,11 +488,41 @@ fn gateway(home: &Path) -> Agent {
         since: None,
         channels: Vec::new(),
     };
-    let state: Option<Value> = std::fs::read(home.join("gateway_state.json"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+    let read = |path: PathBuf| -> Option<Value> {
+        std::fs::read(path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+    };
+    // One gateway can serve several profiles. A profile (`<root>/profiles/<name>`) has no state
+    // file of its own: the gateway in the root writes it, lists the profiles it serves, and
+    // names a profile's platforms "<name>:<platform>".
+    // A profile that once ran a gateway of its own may keep that file; the root's gateway wins
+    // while it serves the profile.
+    let served_by = |state: &Value, name: &str| {
+        state["served_profiles"]
+            .as_array()
+            .is_some_and(|list| list.iter().any(|p| p.as_str() == Some(name)))
+    };
+    let name = home
+        .parent()
+        .filter(|parent| parent.file_name().is_some_and(|n| n == "profiles"))
+        .and_then(|_| home.file_name())
+        .and_then(|name| name.to_str());
+    let shared = name.and_then(|name| {
+        let root = home.parent()?.parent()?;
+        read(root.join("gateway_state.json")).filter(|state| served_by(state, name))
+    });
+    let own = read(home.join("gateway_state.json"));
+    // The profile's own file wins when the root's gateway is down and the profile's runs.
+    let running = |state: &Value| state["gateway_state"].as_str() == Some("running");
+    let shared = shared.filter(|s| running(s) || !own.as_ref().is_some_and(running));
+    let profile = name.filter(|_| shared.is_some());
+    let state = shared.or(own);
     let Some(state) = state else {
-        agent.health_detail = Some("The gateway has not run yet".into());
+        agent.health_detail = Some(match name {
+            Some(_) => "No gateway serves this profile".into(),
+            None => "The gateway has not run yet".into(),
+        });
         return agent;
     };
     let pid = state["pid"]
@@ -496,9 +536,17 @@ fn gateway(home: &Path) -> Agent {
     if let Some(platforms) = state["platforms"].as_object() {
         agent.channels = platforms
             .iter()
-            .map(|(name, platform)| Channel {
-                name: capitalized(name),
-                connected: platform["state"].as_str() == Some("connected"),
+            .filter_map(|(key, platform)| {
+                // A platform named "<profile>:<platform>" belongs to that profile's agent.
+                let name = match (profile, key.split_once(':')) {
+                    (Some(profile), Some((owner, name))) if owner == profile => name,
+                    (Some(_), _) | (None, Some(_)) => return None,
+                    (None, None) => key.as_str(),
+                };
+                Some(Channel {
+                    name: capitalized(name),
+                    connected: platform["state"].as_str() == Some("connected"),
+                })
             })
             .collect();
     }
@@ -737,7 +785,10 @@ pub fn schedule(schedule: &Value, display: Option<&str>) -> String {
     let Some(expr) = schedule["expr"].as_str() else {
         return fallback;
     };
-    cron_words(expr).unwrap_or(fallback)
+    // Words longer than the report keeps would lose their times; the expression is shorter.
+    cron_words(expr)
+        .filter(|words| words.chars().count() <= super::NAME)
+        .unwrap_or(fallback)
 }
 
 fn cron_words(expr: &str) -> Option<String> {
@@ -745,11 +796,24 @@ fn cron_words(expr: &str) -> Option<String> {
     let [minute, hour, day, month, weekday] = fields[..] else {
         return None;
     };
-    if day != "*" || month != "*" {
+    if month != "*" {
         return None;
     }
     let minutes = cron_values(minute, 59)?;
     let hours = cron_values(hour, 23)?;
+    if day != "*" {
+        // Days of the month: only a list of days, at fixed times and on any weekday.
+        if weekday != "*" || cron_step(minute).is_some() || cron_step(hour).is_some() {
+            return None;
+        }
+        let days = day
+            .split(',')
+            .map(|d| d.parse().ok().filter(|d| (1..=31).contains(d)))
+            .collect::<Option<Vec<u32>>>()?;
+        let times = times(&hours, &minutes)?;
+        let days: Vec<String> = days.iter().map(|d| ordinal(*d)).collect();
+        return Some(format!("Monthly, {} {times}", days.join(", ")));
+    }
     let days = match weekday {
         "*" => None,
         field => Some(day_names(&cron_values(field, 7)?)),
@@ -779,15 +843,8 @@ fn cron_words(expr: &str) -> Option<String> {
     } else if minutes.len() == 1 && hours.len() > 2 && contiguous(&hours) {
         format!("Hourly, {}", window(&hours, &minutes)?)
     } else {
-        let times: Vec<String> = hours
-            .iter()
-            .flat_map(|h| minutes.iter().map(move |m| format!("{h:02}:{m:02}")))
-            .collect();
-        if times.len() > 12 {
-            return None;
-        }
         let when = days.unwrap_or_else(|| "Daily".to_owned());
-        return Some(format!("{when} {}", times.join(", ")));
+        return Some(format!("{when} {}", times(&hours, &minutes)?));
     };
     Some(match days {
         Some(days) => format!("{text}, {days}"),
@@ -822,6 +879,27 @@ fn cron_values(field: &str, max: u32) -> Option<Vec<u32>> {
     values.sort_unstable();
     values.dedup();
     Some(values)
+}
+
+// Each time of the day, "09:00, 17:00", or none for more than twelve.
+fn times(hours: &[u32], minutes: &[u32]) -> Option<String> {
+    let times: Vec<String> = hours
+        .iter()
+        .flat_map(|h| minutes.iter().map(move |m| format!("{h:02}:{m:02}")))
+        .collect();
+    (times.len() <= 12).then(|| times.join(", "))
+}
+
+// "1st", "2nd", "3rd", "11th", "21st".
+fn ordinal(n: u32) -> String {
+    let suffix = match (n % 10, n % 100) {
+        (_, 11..=13) => "th",
+        (1, _) => "st",
+        (2, _) => "nd",
+        (3, _) => "rd",
+        _ => "th",
+    };
+    format!("{n}{suffix}")
 }
 
 // The step of a field that runs all day or all hour: "*/30" is 30 and "*" is 1.
@@ -884,6 +962,22 @@ mod tests {
         assert_eq!(cron("0 13 * * 0,2,4"), "Sun, Tue, Thu 13:00");
         assert_eq!(cron("0 * * * *"), "Hourly");
         assert_eq!(cron("*/5 * 1 * *"), "");
+        assert_eq!(cron("0 9 1 * *"), "Monthly, 1st 09:00");
+        assert_eq!(
+            cron("30 8,18 2,15,22 * *"),
+            "Monthly, 2nd, 15th, 22nd 08:30, 18:30"
+        );
+        assert_eq!(cron("0 9 1 * 1"), "");
+        assert_eq!(cron("0 9 1-7 * *"), "");
+        assert_eq!(cron("0,30 6-12 1 * *"), "");
+        assert_eq!(cron("0 9 1-15 * *"), "");
+        assert_eq!(
+            schedule(
+                &json!({"kind": "cron", "expr": "0 9 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 * *"}),
+                Some("0 9 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 * *")
+            ),
+            "0 9 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 * *"
+        );
         assert_eq!(
             schedule(&json!({"kind": "interval", "minutes": 5}), None),
             "Every 5 min"
