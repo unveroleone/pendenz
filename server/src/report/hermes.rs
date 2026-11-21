@@ -496,33 +496,31 @@ fn gateway(home: &Path) -> Agent {
     // One gateway can serve several profiles. A profile (`<root>/profiles/<name>`) has no state
     // file of its own: the gateway in the root writes it, lists the profiles it serves, and
     // names a profile's platforms "<name>:<platform>".
-    let profile = home
+    // A profile that once ran a gateway of its own may keep that file; the root's gateway wins
+    // while it serves the profile.
+    let served_by = |state: &Value, name: &str| {
+        state["served_profiles"]
+            .as_array()
+            .is_some_and(|list| list.iter().any(|p| p.as_str() == Some(name)))
+    };
+    let name = home
         .parent()
         .filter(|parent| parent.file_name().is_some_and(|n| n == "profiles"))
         .and_then(|_| home.file_name())
-        .and_then(|name| name.to_str())
-        .filter(|_| !home.join("gateway_state.json").is_file());
-    let state = match profile {
-        Some(_) => home
-            .parent()
-            .and_then(Path::parent)
-            .and_then(|root| read(root.join("gateway_state.json"))),
-        None => read(home.join("gateway_state.json")),
-    };
+        .and_then(|name| name.to_str());
+    let shared = name.and_then(|name| {
+        let root = home.parent()?.parent()?;
+        read(root.join("gateway_state.json")).filter(|state| served_by(state, name))
+    });
+    let profile = name.filter(|_| shared.is_some());
+    let state = shared.or_else(|| read(home.join("gateway_state.json")));
     let Some(state) = state else {
-        agent.health_detail = Some("The gateway has not run yet".into());
+        agent.health_detail = Some(match name {
+            Some(_) => "No gateway serves this profile".into(),
+            None => "The gateway has not run yet".into(),
+        });
         return agent;
     };
-    let served: Vec<&str> = state["served_profiles"]
-        .as_array()
-        .map(|list| list.iter().filter_map(Value::as_str).collect())
-        .unwrap_or_default();
-    if let Some(name) = profile
-        && !served.contains(&name)
-    {
-        agent.health_detail = Some("The gateway does not serve this profile".into());
-        return agent;
-    }
     let pid = state["pid"]
         .as_u64()
         .map(|p| sysinfo::Pid::from_u32(p as u32));
@@ -535,12 +533,11 @@ fn gateway(home: &Path) -> Agent {
         agent.channels = platforms
             .iter()
             .filter_map(|(key, platform)| {
+                // A platform named "<profile>:<platform>" belongs to that profile's agent.
                 let name = match (profile, key.split_once(':')) {
                     (Some(profile), Some((owner, name))) if owner == profile => name,
-                    (Some(_), _) => return None,
-                    // Another profile's platform belongs to that profile's agent.
-                    (None, Some((owner, _))) if served.contains(&owner) => return None,
-                    (None, _) => key.as_str(),
+                    (Some(_), _) | (None, Some(_)) => return None,
+                    (None, None) => key.as_str(),
                 };
                 Some(Channel {
                     name: capitalized(name),

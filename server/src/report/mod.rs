@@ -462,8 +462,9 @@ pub struct Args {
     #[command(subcommand)]
     action: Option<Action>,
     /// A second agent on this machine, such as a second Hermes profile: its own connection from
-    /// `pendenz connect --profile`, its own job and its own samples.
-    #[arg(long, global = true, env = "PENDENZ_PROFILE")]
+    /// `pendenz connect --profile`, its own job and its own samples. Only ever given on the
+    /// command line, so an inherited variable cannot move a job to another agent's token.
+    #[arg(long, global = true)]
     profile: Option<String>,
     /// Print the report instead of sending it.
     #[arg(long)]
@@ -484,7 +485,8 @@ pub struct Args {
     /// Claude Code's folder. Read when it exists.
     #[arg(long, global = true, env = "CLAUDE_CONFIG_DIR")]
     claude_home: Option<PathBuf>,
-    /// Where the report command keeps the machine's samples of the last 24 hours.
+    /// Where the report command keeps the machine's samples of the last 24 hours. A profile
+    /// keeps its own in a folder of its name inside.
     #[arg(long, global = true, env = "PENDENZ_STATE_DIR")]
     state_dir: Option<PathBuf>,
 }
@@ -555,18 +557,21 @@ pub async fn collect(args: &Args) -> Report {
         .claude_home
         .clone()
         .or_else(|| home.as_ref().map(|h| h.join(".claude")));
-    let state_dir = args.state_dir.clone().or_else(|| {
-        let dir = std::env::var_os("XDG_STATE_HOME")
-            .filter(|v| !v.is_empty())
-            .map(PathBuf::from)
-            .or_else(|| home.as_ref().map(|h| h.join(".local/state")))
-            .map(|d| d.join("pendenz"))?;
+    let state_dir = args
+        .state_dir
+        .clone()
+        .or_else(|| {
+            std::env::var_os("XDG_STATE_HOME")
+                .filter(|v| !v.is_empty())
+                .map(PathBuf::from)
+                .or_else(|| home.as_ref().map(|h| h.join(".local/state")))
+                .map(|d| d.join("pendenz"))
+        })
         // A profile keeps its own samples and usage totals beside the machine's.
-        Some(match &args.profile {
+        .map(|dir| match &args.profile {
             Some(name) => dir.join(name),
             None => dir,
-        })
-    });
+        });
 
     let host = async {
         if args.no_host {

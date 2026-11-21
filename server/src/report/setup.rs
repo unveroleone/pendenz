@@ -220,7 +220,18 @@ pub fn install(profile: Option<&str>, options: &[String]) -> anyhow::Result<Valu
     );
     let exe = std::env::current_exe()?;
     let exe = exe.display().to_string();
+    // A control character would break the job file's lines.
+    anyhow::ensure!(
+        std::iter::once(&exe)
+            .chain(options)
+            .all(|o| !o.chars().any(char::is_control)),
+        "A path for the job contains a control character."
+    );
     let home = super::home().ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
+    // The job finds the connection where this command found it.
+    let config_home = std::env::var("XDG_CONFIG_HOME")
+        .ok()
+        .filter(|v| !v.is_empty() && !v.chars().any(char::is_control));
     let label = label(profile);
     let unit = unit(profile);
     if cfg!(target_os = "macos") {
@@ -238,7 +249,7 @@ pub fn install(profile: Option<&str>, options: &[String]) -> anyhow::Result<Valu
 <dict>
     <key>Label</key><string>{}</string>
     <key>ProgramArguments</key><array>{}</array>
-    <key>EnvironmentVariables</key><dict><key>PATH</key><string>{}</string></dict>
+    <key>EnvironmentVariables</key><dict><key>PATH</key><string>{}</string>{}</dict>
     <key>StartInterval</key><integer>120</integer>
     <key>RunAtLoad</key><true/>
     <key>ProcessType</key><string>Background</string>
@@ -251,6 +262,10 @@ pub fn install(profile: Option<&str>, options: &[String]) -> anyhow::Result<Valu
             xml(&label),
             arguments,
             xml(&job_path(&home)),
+            config_home
+                .as_deref()
+                .map(|d| format!("<key>XDG_CONFIG_HOME</key><string>{}</string>", xml(d)))
+                .unwrap_or_default(),
             xml(&log.display().to_string()),
             xml(&log.display().to_string()),
         );
@@ -282,8 +297,15 @@ pub fn install(profile: Option<&str>, options: &[String]) -> anyhow::Result<Valu
         std::fs::write(
             dir.join(format!("{unit}.service")),
             format!(
-                "[Unit]\nDescription=Send a Pendenz status report\n\n[Service]\nType=oneshot\nEnvironment=PATH={}\nExecStart={arguments}\n",
+                "[Unit]\nDescription=Send a Pendenz status report\n\n[Service]\nType=oneshot\nEnvironment=PATH={}\n{}ExecStart={arguments}\n",
                 job_path(&home),
+                config_home
+                    .as_deref()
+                    .map(|d| format!(
+                        "Environment={}\n",
+                        systemd_quoted(&format!("XDG_CONFIG_HOME={d}"))
+                    ))
+                    .unwrap_or_default(),
             ),
         )?;
         std::fs::write(

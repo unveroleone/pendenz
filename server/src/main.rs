@@ -124,7 +124,7 @@ enum Command {
         code: String,
         /// Connect a second agent on this machine under this name, such as a second Hermes
         /// profile. `pendenz report --profile <name>` then sends its reports.
-        #[arg(long, env = "PENDENZ_PROFILE")]
+        #[arg(long)]
         profile: Option<String>,
     },
     #[command(flatten)]
