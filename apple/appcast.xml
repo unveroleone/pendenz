@@ -3,6 +3,19 @@
     <channel>
         <title>Pendenz</title>
         <item>
+            <title>0.5.6</title>
+            <pubDate>Sun, 22 Nov 2026 14:31:50 +0100</pubDate>
+            <sparkle:version>74</sparkle:version>
+            <sparkle:shortVersionString>0.5.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>27.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[Download `Pendenz-0.5.6.dmg` below, open it and drag Pendenz into Applications. It needs macOS 27. A copy you already have updates itself.
+
+- A cleaner window: rows float without lines between them, the selected row is a rounded shape, section titles are quiet, and the toolbar, the sidebar foot and the details share one ground. Settings got the same look.
+- The Agents screen shows a Mac's energy this month, what it cost and how warm its CPU ran, once that Mac runs the energy sampler. Set the price per kWh in Settings, Agents. The price needs a server on 0.5.6.
+]]></description>
+            <enclosure url="https://github.com/unveroleone/pendenz/releases/download/v0.5.6/Pendenz-0.5.6.dmg" length="4178719" type="application/octet-stream" sparkle:edSignature="8mmutYfK03lyGBMg9Op2zFXQBq4i8o3wJsTHih9mR9+ioR9gwrmfIlHly9KQPPcyKGjoWQz9uBZr53gw2WHhDw=="/>
+        </item>
+        <item>
             <title>0.5.5</title>
             <pubDate>Sun, 22 Nov 2026 11:07:57 +0100</pubDate>
             <sparkle:version>69</sparkle:version>
