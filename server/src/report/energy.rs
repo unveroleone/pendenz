@@ -306,7 +306,7 @@ fn month_of(state: &State, year: i32, month: u32) -> Option<EnergyMonth> {
     let seconds: f64 = days.iter().map(|d| d.power_s).sum();
     Some(EnergyMonth {
         month: format!("{year:04}-{month:02}"),
-        kwh: wh.round() / 1000.0,
+        kwh: (seconds > 0.0).then(|| wh.round() / 1000.0),
         hours: (seconds / 3600.0 * 10.0).round() / 10.0,
         temp_max: days
             .iter()
@@ -330,6 +330,7 @@ pub fn collect(dir: &Path) -> Option<Energy> {
     .flatten()
     .collect();
     Some(Energy {
+        this_month: Some(format!("{:04}-{:02}", today.year(), today.month())),
         power_at: state.power_at,
         watts: state.watts,
         temp_at: state.temp_at,

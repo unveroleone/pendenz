@@ -219,14 +219,17 @@ nonisolated struct AgentEnergy: Decodable, Sendable {
     var watts: Double?
     var tempAt: Date?
     var tempC: Double?
-    // This month, then the last.
+    // The machine's current month, such as "2026-11". Missing from collectors before it.
+    var thisMonth: String?
+    // This month, then the last. A month without readings is missing.
     var months: [AgentEnergyMonth]
 }
 
 nonisolated struct AgentEnergyMonth: Decodable, Sendable, Identifiable {
     // "2026-11".
     var month: String
-    var kwh: Double
+    // Missing when the month has temperatures but no power readings.
+    var kwh: Double?
     // The hours that were measured.
     var hours: Double
     var tempMax: Double?

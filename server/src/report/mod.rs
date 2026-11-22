@@ -295,7 +295,11 @@ pub struct Energy {
     pub temp_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temp_c: Option<f64>,
-    // This month, then the last, in the machine's time zone.
+    // The machine's current month, such as "2026-11", so the apps tell this month from the last
+    // in the machine's calendar, not their own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub this_month: Option<String>,
+    // This month, then the last, in the machine's time zone. A month without readings is missing.
     #[serde(default)]
     pub months: Vec<EnergyMonth>,
 }
@@ -305,7 +309,9 @@ pub struct Energy {
 pub struct EnergyMonth {
     // "2026-11".
     pub month: String,
-    pub kwh: f64,
+    // Missing when the month has no power readings, only temperatures.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kwh: Option<f64>,
     // The hours that were measured; time asleep or without a sampler is missing.
     pub hours: f64,
     // The highest and the median CPU temperature, each the mean of the CPU's sensors.
@@ -503,10 +509,11 @@ impl Report {
             if let Some(energy) = &mut host.energy {
                 energy.watts = energy.watts.and_then(|w| within(w, 0.0, 2000.0));
                 energy.temp_c = energy.temp_c.and_then(|c| within(c, CELSIUS.0, CELSIUS.1));
+                energy.this_month = energy.this_month.take().filter(|m| is_month(m));
                 energy.months.retain(|m| is_month(&m.month));
                 energy.months.truncate(MAX_MONTHS);
                 for month in &mut energy.months {
-                    month.kwh = finite(month.kwh).clamp(0.0, 10_000.0);
+                    month.kwh = month.kwh.map(|k| finite(k).clamp(0.0, 10_000.0));
                     // 31 days and the hour a change from summer time adds.
                     month.hours = finite(month.hours).clamp(0.0, 745.0);
                     month.temp_max = month.temp_max.and_then(|c| within(c, CELSIUS.0, CELSIUS.1));
@@ -670,11 +677,9 @@ pub async fn collect(args: &Args) -> Report {
         if args.no_host {
             None
         } else {
-            bounded_source(
-                "host",
-                host::collect(state_dir.clone(), machine_dir.clone()),
-            )
-            .await
+            // The machine's energy goes with the machine's own report only, so it shows once.
+            let energy_dir = machine_dir.clone().filter(|_| args.profile.is_none());
+            bounded_source("host", host::collect(state_dir.clone(), energy_dir)).await
         }
     };
     let hermes = async {

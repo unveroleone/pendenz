@@ -1084,26 +1084,38 @@ private struct EnergySection: View {
 
     private static let freshFor: TimeInterval = 10 * 60
 
-    // The month of a date as the report names months, such as "2026-11".
-    private static func monthName(of date: Date) -> String {
-        let parts = Calendar.current.dateComponents([.year, .month], from: date)
+    // The month before one the report names, such as "2026-10" for "2026-11".
+    private static func month(before name: String) -> String? {
+        let parts = name.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2 else { return nil }
+        let (year, month) = parts[1] == 1 ? (parts[0] - 1, 12) : (parts[0], parts[1] - 1)
+        return String(format: "%04d-%02d", year, month)
+    }
+
+    // The machine's current month, in its own calendar. A collector that does not name it is
+    // read in the Gregorian calendar at the time the report was sent.
+    private var currentMonth: String {
+        if let name = energy.thisMonth { return name }
+        let parts = Calendar(identifier: .gregorian).dateComponents([.year, .month], from: sentAt)
         return String(format: "%04d-%02d", parts.year ?? 0, parts.month ?? 0)
     }
 
     // The months by their names, not their place: a month without readings is left out, so at
     // the start of a month the only entry can be the last one.
     private var thisMonth: AgentEnergyMonth? {
-        energy.months.first { $0.month == Self.monthName(of: sentAt) }
+        energy.months.first { $0.month == currentMonth }
     }
 
     private var lastMonth: AgentEnergyMonth? {
-        let previous = Calendar.current.date(byAdding: .month, value: -1, to: sentAt) ?? sentAt
-        return energy.months.first { $0.month == Self.monthName(of: previous) }
+        let previous = Self.month(before: currentMonth)
+        return energy.months.first { $0.month == previous }
     }
 
+    // Fresh by the report's clock and by this device's, so a reading in a report that stopped
+    // coming is not shown as now. The screen draws again with every refresh of the board.
     private func isFresh(_ date: Date?) -> Bool {
         guard let date else { return false }
-        return sentAt.timeIntervalSince(date) <= Self.freshFor
+        return sentAt.timeIntervalSince(date) <= Self.freshFor && Date.now.timeIntervalSince(date) <= Self.freshFor
     }
 
     private var now: String? {
@@ -1117,13 +1129,15 @@ private struct EnergySection: View {
         return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
-    private func use(_ month: AgentEnergyMonth) -> String {
+    // The energy and its cost, or nil for a month measured without power readings.
+    private func use(_ month: AgentEnergyMonth) -> String? {
+        guard let used = month.kwh else { return nil }
         // Watt hours below one kWh, where two decimals of a kWh would round to nothing.
-        let kwh = month.kwh < 1
-            ? "\(Int((month.kwh * 1000).rounded())) Wh"
-            : "\(month.kwh.formatted(.number.precision(.fractionLength(month.kwh < 10 ? 2 : 1)))) kWh"
+        let kwh = used < 1
+            ? "\(Int((used * 1000).rounded())) Wh"
+            : "\(used.formatted(.number.precision(.fractionLength(used < 10 ? 2 : 1)))) kWh"
         guard let price else { return kwh }
-        return "\(kwh), \(francs(month.kwh * price))"
+        return "\(kwh), \(francs(used * price))"
     }
 
     private func francs(_ amount: Double) -> String {
@@ -1140,11 +1154,11 @@ private struct EnergySection: View {
 
     var body: some View {
         Section {
-            if let thisMonth {
-                LabeledContent("This Month", value: use(thisMonth))
+            if let thisMonth, let use = use(thisMonth) {
+                LabeledContent("This Month", value: use)
             }
-            if let lastMonth {
-                LabeledContent("Last Month", value: use(lastMonth))
+            if let lastMonth, let use = use(lastMonth) {
+                LabeledContent("Last Month", value: use)
             }
             if let now {
                 LabeledContent("Now", value: now)
@@ -1159,15 +1173,18 @@ private struct EnergySection: View {
             Text("Energy")
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
-                if let thisMonth {
+                if let thisMonth, thisMonth.kwh != nil {
                     Text("Measured by the Mac for \(hours(thisMonth.hours)) hours this month.")
                 }
-                if let price {
-                    Text(
-                        "Cost estimated at \(price.formatted(.currency(code: "CHF").precision(.fractionLength(2 ... 4)))) per kWh.",
-                    )
-                } else {
-                    Text("Set a price per kWh in Settings, Agents, to see the cost.")
+                // Only where there is energy to put a price on, not for temperatures alone.
+                if energy.months.contains(where: { $0.kwh != nil }) {
+                    if let price {
+                        Text(
+                            "Cost estimated at \(price.formatted(.currency(code: "CHF").precision(.fractionLength(2 ... 4)))) per kWh.",
+                        )
+                    } else {
+                        Text("Set a price per kWh in Settings, Agents, to see the cost.")
+                    }
                 }
             }
         }
