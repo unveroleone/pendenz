@@ -249,13 +249,20 @@ private struct SidebarFooter: View {
                 Button {
                     navigation.projectEditor = .new
                 } label: {
-                    Label("New Project", systemImage: "plus")
-                        .lineLimit(1)
-                        .fixedSize()
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: Self.target)
-                        .contentShape(Capsule())
+                    // In a narrow sidebar the plus alone.
+                    ViewThatFits(in: .horizontal) {
+                        Label("New Project", systemImage: "plus")
+                            .lineLimit(1)
+                            .fixedSize()
+                            .padding(.horizontal, 12)
+                        Label("New Project", systemImage: "plus")
+                            .labelStyle(.iconOnly)
+                            .frame(minWidth: Self.target)
+                    }
+                    .frame(minHeight: Self.target)
+                    .contentShape(Capsule())
                 }
+                .help("New Project")
                 .glassEffect(.regular.interactive(), in: .capsule)
                 Spacer(minLength: 0)
                 HStack(spacing: 0) {
