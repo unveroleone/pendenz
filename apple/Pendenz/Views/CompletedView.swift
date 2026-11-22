@@ -9,14 +9,10 @@ struct CompletedView: View {
         let sections = store.sections(for: .completed)
         ItemsList {
             ForEach(sections) { section in
-                Section {
+                ListSection(section.title) {
                     ForEach(section.items) { item in
                         ItemRow(item: item, style: ItemRow.Style(showsDay: true, showsProject: true))
                             .tag(item.id)
-                    }
-                } header: {
-                    if let title = section.title {
-                        Text(title)
                     }
                 }
             }

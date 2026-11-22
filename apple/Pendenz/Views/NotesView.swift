@@ -107,7 +107,7 @@ struct NotesView: View {
     private var list: some View {
         let notes = notes
         return rows(notes)
-            .listStyle(.plain)
+            .macListLook()
             .animation(.default, value: notes.map(\.id))
             .overlay {
                 if notes.isEmpty, !showsLockedRow { emptyState }
@@ -136,12 +136,15 @@ struct NotesView: View {
             }
         } else {
             List(selection: $navigation.noteID) {
-                if showsLockedRow { lockedRow }
-                ForEach(notes) { note in
-                    NoteRow(note: note, showsLockedPreview: showsLocked)
-                        .tag(note.id)
-                        .modifier(NoteActions(note: note))
+                Group {
+                    if showsLockedRow { lockedRow }
+                    ForEach(notes) { note in
+                        NoteRow(note: note, showsLockedPreview: showsLocked)
+                            .tag(note.id)
+                            .modifier(NoteActions(note: note))
+                    }
                 }
+                .macListRows()
             }
             #if os(macOS)
             // The Delete key, only while the list itself has the focus.
