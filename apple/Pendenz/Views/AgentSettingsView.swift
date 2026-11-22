@@ -318,8 +318,19 @@ private struct ConnectAgentView: View {
 // or submitted, and an empty field clears it.
 private struct EnergyPriceSection: View {
     @Environment(Session.self) private var session
+    // One price the owner wants, nil to clear it.
+    private struct Wish: Equatable {
+        let price: Double?
+    }
+
     @State private var text = ""
+    // The text when the field took focus: a save only follows an edit.
+    @State private var textAtFocus = ""
     @State private var failure: String?
+    // The latest price waiting to be sent while a request is on its way. Requests go one at a
+    // time, so the last wish is the one the server keeps.
+    @State private var pending: Wish?
+    @State private var isSaving = false
     @FocusState private var isFocused: Bool
 
     private var confirmed: Double? {
@@ -377,32 +388,46 @@ private struct EnergyPriceSection: View {
         // Leaving the screen while typing also sends the price.
         .onDisappear { if isFocused { save() } }
         .onChange(of: confirmed) { if !isFocused { text = Self.shown(confirmed) } }
-        .onChange(of: isFocused) { if !isFocused { save() } }
+        .onChange(of: isFocused) {
+            if isFocused { textAtFocus = text } else { save() }
+        }
     }
 
     private func save() {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
-        let wanted: Double?
+        guard trimmed != textAtFocus.trimmingCharacters(in: .whitespaces) else {
+            if !isFocused, !isSaving { text = Self.shown(confirmed) }
+            return
+        }
+        textAtFocus = text
+        let wish: Wish
         if trimmed.isEmpty {
-            wanted = nil
+            wish = Wish(price: nil)
         } else if let price = Self.parsed(trimmed), (0 ... 100).contains(price) {
-            wanted = price
+            wish = Wish(price: price)
         } else {
             failure = "Enter a price from 0 to 100 CHF."
             return
         }
         failure = nil
-        guard wanted != confirmed else {
-            text = Self.shown(confirmed)
-            return
-        }
+        pending = wish
+        guard !isSaving else { return }
+        isSaving = true
         Task {
-            do {
-                let settings = try await session.setEnergyPrice(wanted)
-                if !isFocused { text = Self.shown(settings.energyPriceChf) }
-            } catch {
-                failure = error.localizedDescription
+            defer {
+                isSaving = false
                 if !isFocused { text = Self.shown(confirmed) }
+            }
+            while let wish = pending {
+                pending = nil
+                guard wish.price != confirmed else { continue }
+                do {
+                    _ = try await session.setEnergyPrice(wish.price)
+                } catch {
+                    failure = error.localizedDescription
+                    pending = nil
+                    return
+                }
             }
         }
     }

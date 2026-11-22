@@ -176,7 +176,7 @@ private struct AgentForm: View {
             }
             if let host = report.host {
                 MachineSection(host: host)
-                if let energy = host.energy, !energy.months.isEmpty || energy.watts != nil {
+                if let energy = host.energy, !energy.months.isEmpty || energy.watts != nil || energy.tempC != nil {
                     EnergySection(energy: energy, sentAt: report.sentAt, price: store.settings?.energyPriceChf)
                 }
             }
@@ -1084,12 +1084,21 @@ private struct EnergySection: View {
 
     private static let freshFor: TimeInterval = 10 * 60
 
+    // The month of a date as the report names months, such as "2026-11".
+    private static func monthName(of date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month], from: date)
+        return String(format: "%04d-%02d", parts.year ?? 0, parts.month ?? 0)
+    }
+
+    // The months by their names, not their place: a month without readings is left out, so at
+    // the start of a month the only entry can be the last one.
     private var thisMonth: AgentEnergyMonth? {
-        energy.months.first
+        energy.months.first { $0.month == Self.monthName(of: sentAt) }
     }
 
     private var lastMonth: AgentEnergyMonth? {
-        energy.months.dropFirst().first
+        let previous = Calendar.current.date(byAdding: .month, value: -1, to: sentAt) ?? sentAt
+        return energy.months.first { $0.month == Self.monthName(of: previous) }
     }
 
     private func isFresh(_ date: Date?) -> Bool {
