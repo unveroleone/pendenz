@@ -3,6 +3,18 @@
     <channel>
         <title>Pendenz</title>
         <item>
+            <title>0.5.5</title>
+            <pubDate>Sun, 22 Nov 2026 11:07:57 +0100</pubDate>
+            <sparkle:version>69</sparkle:version>
+            <sparkle:shortVersionString>0.5.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>27.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[Download `Pendenz-0.5.5.dmg` below, open it and drag Pendenz into Applications. It needs macOS 27. A copy you already have updates itself.
+
+- A job's page on the Agents screen starts with what the job does: the line you wrote, or until then the first sentence of the job's skill. "Write Description" sets or changes your line. Writing needs a server on 0.5.5.
+]]></description>
+            <enclosure url="https://github.com/unveroleone/pendenz/releases/download/v0.5.5/Pendenz-0.5.5.dmg" length="4120585" type="application/octet-stream" sparkle:edSignature="U8hqMQtEKAh6wwys6LMllDW9aLD93W+X9e2M+LcLg3PZhaX6wT+P6+dAkWIv0YeHCWcfo7L92kH1iJVBBj9tCQ=="/>
+        </item>
+        <item>
             <title>0.5.4</title>
             <pubDate>Sun, 22 Nov 2026 00:04:08 +0100</pubDate>
             <sparkle:version>66</sparkle:version>
