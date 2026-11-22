@@ -165,6 +165,21 @@ pub async fn list(
         counts[field] = json!(counts[field].as_i64().unwrap_or(0) + n);
     }
 
+    // The lines the owner wrote about the agents' jobs. A list, not an object keyed by the job:
+    // a client that turns snake case keys into its own would change a job's name.
+    let mut descriptions: HashMap<String, Vec<Value>> = HashMap::new();
+    for (actor, job, text) in sqlx::query_as::<_, (String, String, String)>(
+        "SELECT actor_id, job, text FROM job_descriptions ORDER BY actor_id, job",
+    )
+    .fetch_all(&mut *conn)
+    .await?
+    {
+        descriptions
+            .entry(actor)
+            .or_default()
+            .push(json!({"job": job, "text": text}));
+    }
+
     let mut agents = Vec::new();
     for row in rows {
         let id: String = row.try_get("id")?;
@@ -186,6 +201,7 @@ pub async fn list(
             "last_used_at": row.try_get::<Option<String>, _>("last_used_at")?,
             "received_at": row.try_get::<Option<String>, _>("received_at")?,
             "today": today.remove(&id).unwrap_or_else(no_activity),
+            "job_descriptions": descriptions.remove(&id).unwrap_or_default(),
             "report": report,
         }));
     }
@@ -389,8 +405,97 @@ pub async fn connect(
     })))
 }
 
-// The owner takes an agent off: its tokens stop working and its report goes. The agent stays
-// as an actor, so the activity log and the items it wrote still name it.
+// MARK: Job descriptions
+
+// The longest line the owner may write about a job.
+pub const DESCRIPTION: usize = 200;
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DescriptionRequest {
+    job: String,
+    text: String,
+}
+
+// Sets or, with an empty text, removes the owner's line about one of an agent's jobs, inside the
+// caller's transaction. The agent has to exist and hold a token that still works, so a line
+// cannot come back after the agent was taken off. The job is named exactly as the stored report
+// names it: trimmed and at most as long as a report keeps a name, whatever else it holds.
+pub async fn set_description(
+    conn: &mut sqlx::SqliteConnection,
+    agent: &str,
+    job: &str,
+    text: &str,
+) -> Result<Value> {
+    let job = job.trim();
+    if job.is_empty() || job.chars().count() > crate::report::NAME {
+        return Err(ApiError::bad(format!(
+            "Name the job as the agent's report does, in 1 to {} characters.",
+            crate::report::NAME
+        )));
+    }
+    // One line: line breaks and runs of white space become one space.
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if text.chars().count() > DESCRIPTION || text.chars().any(char::is_control) {
+        return Err(ApiError::bad(format!(
+            "Write the description as one line of at most {DESCRIPTION} characters."
+        )));
+    }
+    let connected: bool = sqlx::query_scalar(concat!(
+        "SELECT EXISTS(SELECT 1 FROM actors a WHERE a.id = ? AND a.kind = 'agent' \
+         AND EXISTS(SELECT 1 FROM tokens t WHERE t.actor_id = a.id AND t.revoked = 0 \
+         AND (t.expires_at IS NULL OR t.expires_at > ",
+        now!(),
+        ")))"
+    ))
+    .bind(agent)
+    .fetch_one(&mut *conn)
+    .await?;
+    if !connected {
+        return Err(ApiError::missing());
+    }
+    if text.is_empty() {
+        sqlx::query("DELETE FROM job_descriptions WHERE actor_id = ? AND job = ?")
+            .bind(agent)
+            .bind(job)
+            .execute(&mut *conn)
+            .await?;
+        return Ok(json!({"agent": agent, "job": job, "text": null}));
+    }
+    sqlx::query(concat!(
+        "INSERT INTO job_descriptions(actor_id, job, text) VALUES (?, ?, ?) \
+         ON CONFLICT(actor_id, job) DO UPDATE SET text = excluded.text, updated_at = ",
+        now!()
+    ))
+    .bind(agent)
+    .bind(job)
+    .bind(&text)
+    .execute(&mut *conn)
+    .await?;
+    Ok(json!({"agent": agent, "job": job, "text": text}))
+}
+
+// The owner's devices write what a job does, like a setting: the route takes the writer lock
+// itself and needs no idempotency key, since a repeat writes the same line. Not item data, so it
+// is not in the activity log, the changes feed or a push.
+pub async fn put_description(
+    State(state): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    payload: std::result::Result<Json<DescriptionRequest>, JsonRejection>,
+) -> Result<Json<Value>> {
+    crate::devices::require_owner(&identity)?;
+    let Json(request) =
+        payload.map_err(|_| ApiError::bad("Send {\"job\": \"...\", \"text\": \"...\"}."))?;
+    let _guard = state.writer.lock().await;
+    let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
+    let written = set_description(&mut tx, &id, &request.job, &request.text).await?;
+    tx.commit().await?;
+    Ok(Json(written))
+}
+
+// The owner takes an agent off: its tokens stop working, and its report and the lines about its
+// jobs go. The agent stays as an actor, so the activity log and the items it wrote still name it.
 pub async fn revoke(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
@@ -413,6 +518,10 @@ pub async fn revoke(
         .await?
         .rows_affected();
     sqlx::query("DELETE FROM agent_reports WHERE actor_id = ?")
+        .bind(&id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM job_descriptions WHERE actor_id = ?")
         .bind(&id)
         .execute(&mut *tx)
         .await?;

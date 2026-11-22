@@ -248,13 +248,13 @@ A new device is paired with a one-time code:
 - `POST /api/pair` takes `{"code", "name"}`, uses the code up and answers once with the device's token: the owner's identity with the scopes `read`, `write`, `propose` and `approve`, without an expiry. It is the only API route without a token, added to the router after the auth layer on purpose.
 - `GET /api/devices` lists the devices with their last use, and `DELETE /api/devices/<id>` revokes one. Revoking removes its push token and the unused codes it created.
 
-The device routes and `PATCH /api/settings` need a human token with `approve` (`require_owner`). Nothing else in the API needs `approve` today.
+The device routes, `PATCH /api/settings` and `PUT /api/agents/<id>/job-description` need a human token with `approve` (`require_owner`). Nothing else in the API needs `approve` today.
 
 ### Connecting an agent
 
 An agent can be connected from the app, the way a device is paired. `POST /api/agent-codes` (owner with `approve`) makes a one-time code with a name and the scopes: `report` alone, or `report`, `read` and `write`. `POST /api/agent-codes/redeem` takes the code without a token, uses it up and creates the agent and its token in the same transaction, like `/api/pair`. The code is stored as a hash, works once and for ten minutes. The scopes come from the code, never from the agent, and are filtered to those an agent may hold. A lost answer leaves an agent without a working token: the owner revokes it and makes a new code.
 
-`DELETE /api/agents/<id>` (owner with `approve`) revokes every token of an agent and removes its report. The actor stays, so the activity log and the rows it wrote still name it.
+`DELETE /api/agents/<id>` (owner with `approve`) revokes every token of an agent and removes its report and the lines about its jobs. The actor stays, so the activity log and the rows it wrote still name it.
 
 ### What agents can never do
 
@@ -397,6 +397,7 @@ An agent's machine sends a status report every two minutes with `pendenz report`
 - **Generic.** The report format knows agents, accounts, jobs, running sessions and a machine, not a particular agent. The sources for Hermes Agent and Claude Code live in the report command, and anything else can send a report file.
 - **Money and limits apart.** An account is either paid per token, shown with its estimated cost, or a plan, shown with its limit windows and tokens and never with money. Hermes keeps running totals per session, so the report command remembers the totals it saw last and counts what grew since on the day it grew.
 - **The collector follows the server.** The scheduled report job updates its own binary to the release the server names in `Pendenz-Version`, after the report and never past that version, so a collector cannot send fields its server refuses. The download is trusted as `install.sh` trusts it: the release on GitHub over TLS and the release's `SHA256SUMS`. A bad release spreads to agent machines once the servers run it; `--no-update` on the job stops that.
+- **What a job does.** Opening a job on the Agents screen shows one line about it. The owner writes it in the app (`PUT /api/agents/<id>/job-description`, owner with `approve`, kept in `job_descriptions` by agent and job name, given with each agent in `GET /api/agents` as `job_descriptions`, a list of `{job, text}`), or with `pendenz set-job-description` on the server. Until then the app shows the first sentence of the description of the skill the job runs, which the collector sends as the job's `skill_summary`. Never the job's prompt: a report carries no prompt text. A line is kept by the job's name, so a job made again under the same name keeps it; the route refuses an agent without a working token, so a line cannot come back after a revoke. Like a report, a line is not item data.
 - **Freshness.** The app shows a report as stale after ten minutes on the server's clock, so a machine that stopped sending is told apart from an agent whose gateway is down, which the report itself says.
 
 ### CLI

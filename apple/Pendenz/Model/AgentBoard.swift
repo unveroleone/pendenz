@@ -97,8 +97,16 @@ final class AgentBoard {
         askedAt = .now
         defer { isLoading = false }
         do {
-            let data = try await api.agents()
-            let list = try AgentList.decode(data)
+            var data: Data
+            var list: AgentList
+            // An answer that left the server before a line was written there would put the old
+            // line back on screen: ask again.
+            repeat {
+                let written = writes
+                data = try await api.agents()
+                list = try AgentList.decode(data)
+                if written == writes { break }
+            } while !isClosed
             guard !isClosed else { return }
             self.list = list
             fetchedAt = .now
@@ -116,6 +124,61 @@ final class AgentBoard {
         } catch {
             guard !isClosed else { return }
             problem = .unreachable
+        }
+    }
+
+    // How many lines this board has written, so a list fetched during a write is not shown, and
+    // how many saves it started per job, so a save that ends after a later one of the same job
+    // does not show its line.
+    private var writes = 0
+    private var saves: [String: Int] = [:]
+
+    // Writes the owner's line about one of an agent's jobs, or removes it with an empty text,
+    // then reads the list again, which also keeps it on disk. Throws when the server refused
+    // it. A line the server took shows at once and stays in the copy on disk, also when the
+    // list cannot be read right after.
+    func setJobDescription(agent: String, job: String, text: String) async throws {
+        guard !isClosed else { return }
+        let key = "\(agent)\n\(job)"
+        let save = saves[key, default: 0] + 1
+        saves[key] = save
+        do {
+            try await api.setJobDescription(agent: agent, job: job, text: text)
+        } catch APIError.status(401, let message) {
+            if !isClosed { onUnauthorized?() }
+            throw APIError.status(401, message)
+        }
+        guard !isClosed else { return }
+        writes += 1
+        if save == saves[key] {
+            show(agent: agent, job: job, text: text.split(whereSeparator: \.isWhitespace).joined(separator: " "))
+        }
+        // A refresh in flight asks again by itself, since `writes` changed.
+        if !isLoading { await refresh() }
+    }
+
+    // A line the server took, on screen and in the copy on disk.
+    private func show(agent: String, job: String, text: String) {
+        func lines(_ old: [AgentJobDescription]) -> [AgentJobDescription] {
+            old.filter { $0.job != job } + (text.isEmpty ? [] : [AgentJobDescription(job: job, text: text)])
+        }
+        if let index = list?.agents.firstIndex(where: { $0.id == agent }) {
+            list?.agents[index].jobDescriptions = lines(list?.agents[index].jobDescriptions ?? [])
+        }
+        guard let data = try? Data(contentsOf: file),
+              var root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              var agents = root["agents"] as? [[String: Any]],
+              let index = agents.firstIndex(where: { $0["id"] as? String == agent })
+        else { return }
+        let old = (agents[index]["job_descriptions"] as? [[String: Any]] ?? []).compactMap { row in
+            (row["job"] as? String).flatMap { job in
+                (row["text"] as? String).map { AgentJobDescription(job: job, text: $0) }
+            }
+        }
+        agents[index]["job_descriptions"] = lines(old).map { ["job": $0.job, "text": $0.text] }
+        root["agents"] = agents
+        if let data = try? JSONSerialization.data(withJSONObject: root) {
+            try? data.write(to: file, options: .atomic)
         }
     }
 

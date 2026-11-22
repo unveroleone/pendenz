@@ -17,12 +17,15 @@ nonisolated struct AgentEntry: Decodable, Sendable, Identifiable {
     var receivedAt: Date?
     var today: AgentToday
     var report: AgentReport?
+    // The lines the owner wrote about the agent's jobs. Missing from a server older than them,
+    // which is how the app knows not to offer writing one.
+    var jobDescriptions: [AgentJobDescription]?
     // True when the agent sent a report this app cannot read, such as one from a newer agent.
     // The other agents still show.
     var isReportUnreadable = false
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, scopes, lastUsedAt, receivedAt, today, report
+        case id, name, scopes, lastUsedAt, receivedAt, today, report, jobDescriptions
     }
 
     init(from decoder: Decoder) throws {
@@ -34,6 +37,7 @@ nonisolated struct AgentEntry: Decodable, Sendable, Identifiable {
         receivedAt = try container.decodeIfPresent(Date.self, forKey: .receivedAt)
         today = (try? container.decode(AgentToday.self, forKey: .today))
             ?? AgentToday(created: 0, updated: 0, completed: 0, commented: 0)
+        jobDescriptions = try? container.decodeIfPresent([AgentJobDescription].self, forKey: .jobDescriptions)
         do {
             report = try container.decodeIfPresent(AgentReport.self, forKey: .report)
         } catch {
@@ -41,6 +45,18 @@ nonisolated struct AgentEntry: Decodable, Sendable, Identifiable {
             isReportUnreadable = true
         }
     }
+}
+
+nonisolated extension AgentEntry {
+    // The owner's line about a job, by the job's name as the report gives it.
+    func description(ofJob name: String) -> String? {
+        jobDescriptions?.first { $0.job == name }?.text
+    }
+}
+
+nonisolated struct AgentJobDescription: Decodable, Sendable, Hashable {
+    var job: String
+    var text: String
 }
 
 // What an agent did today in the server's time zone, from the activity log.
@@ -160,6 +176,8 @@ nonisolated struct AgentJob: Decodable, Sendable, Identifiable {
     var runsWeek: Int
     var tokensWeek: Int
     var lastDurationS: Double?
+    // The first sentence of the description of the skill the job runs, from the agent's machine.
+    var skillSummary: String?
 
     var id: String { name }
     var isFailing: Bool { lastStatus == "error" || failureStreak > 0 }

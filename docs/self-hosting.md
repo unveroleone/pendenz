@@ -189,6 +189,14 @@ Each report belongs to one agent. A machine with two, such as two [Hermes profil
 - `report install` writes the options it is given into the job. `--no-host` and `--no-claude` leave out what the machine's first agent already reports, so nothing is counted twice.
 - For a Hermes profile the report reads the jobs, models and usage of that profile, and the gateway's state from the Hermes folder above it: the profile counts as running when that gateway runs and serves it, and its channels are the gateway's platforms named `<profile>:<platform>`. The first agent leaves those platforms out.
 
+Open a job on the Agents screen to see what it does. Write the line in the app (Edit Description), or on the server:
+
+```sh
+docker compose exec api pendenz set-job-description --agent "<agent id>" --job "<job name>" --text "Sorts new items and asks about unclear ones."
+```
+
+Without `--text` the line is removed. Until a line is written, the screen shows the first sentence of the description of the skill the job runs, which the report finds in `<hermes home>/skills` and the folders of `skills.external_dirs` in the profile's `config.yaml`.
+
 `pendenz report --dry-run` prints the report instead of sending it. `pendenz report --file report.json` sends a report written by anything else, in the same format; the server refuses fields it does not know. A report holds names of jobs, programs and sessions and the first line of a job's error, with the home folder shortened and anything that looks like a key removed. Only the owner's devices can read it.
 
 ## Updates

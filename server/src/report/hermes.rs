@@ -66,8 +66,34 @@ pub async fn collect(home: PathBuf, state_dir: Option<PathBuf>) -> anyhow::Resul
             }),
         }
     }
-    let (mut agent, jobs) =
-        tokio::task::spawn_blocking(move || (gateway(&home), jobs(&home.join("cron")))).await?;
+    let skill_dirs = config.skill_dirs.clone();
+    let (mut agent, (mut jobs, skill_of), home) =
+        tokio::task::spawn_blocking(move || (gateway(&home), jobs(&home.join("cron")), home))
+            .await?;
+    // The skills' sentences have a time of their own: a slow skills folder costs the sentences,
+    // never the jobs or the gateway's state.
+    let summaries = tokio::time::timeout(
+        SKILL_TIME,
+        tokio::task::spawn_blocking(move || {
+            let skills = super::skills::Skills::index(&home, &skill_dirs);
+            skill_of
+                .into_iter()
+                .filter_map(|(job, skill)| Some((job, skills.summary(&skill)?)))
+                .collect::<HashMap<String, String>>()
+        }),
+    )
+    .await;
+    match summaries {
+        Ok(Ok(summaries)) => {
+            for job in &mut jobs {
+                job.skill_summary = summaries.get(&job.name).cloned();
+            }
+        }
+        _ => eprintln!(
+            "hermes: the skills took longer than {} s",
+            SKILL_TIME.as_secs()
+        ),
+    }
     agent.version = version;
     agent.model = config.model.clone();
     agent.fallbacks = config.fallbacks.iter().map(|(_, m)| m.clone()).collect();
@@ -595,6 +621,8 @@ struct Config {
     model: Option<String>,
     provider: Option<String>,
     fallbacks: Vec<(String, String)>,
+    // `skills.external_dirs`: where Hermes looks for skills after its own folder.
+    skill_dirs: Vec<String>,
 }
 impl Config {
     fn read(path: &Path) -> Self {
@@ -604,6 +632,7 @@ impl Config {
         };
         let mut section = "";
         let mut fallback: Option<(Option<String>, Option<String>)> = None;
+        let mut in_dirs = false;
         let value = |line: &str| -> Option<String> {
             let (_, v) = line.split_once(':')?;
             let v = v.split(" #").next()?.trim().trim_matches(['"', '\'']);
@@ -625,6 +654,28 @@ impl Config {
                         config.model = value(trimmed);
                     } else if trimmed.starts_with("provider:") {
                         config.provider = value(trimmed);
+                    }
+                }
+                "skills" => {
+                    // `external_dirs:` with a list below it, `[a, b]`, or one folder.
+                    // The list may sit at the key's own indent, as YAML allows.
+                    let item = trimmed.strip_prefix("- ");
+                    if indent == 2 && item.is_none() {
+                        in_dirs = trimmed.starts_with("external_dirs:");
+                        if in_dirs && let Some(v) = value(trimmed) {
+                            let v = v.trim_start_matches('[').trim_end_matches(']');
+                            config.skill_dirs.extend(
+                                v.split(',')
+                                    .map(|d| d.trim().trim_matches(['"', '\'']).to_owned())
+                                    .filter(|d| !d.is_empty()),
+                            );
+                        }
+                    } else if in_dirs && let Some(item) = item {
+                        let item = item.split(" #").next().unwrap_or("").trim();
+                        let item = item.trim_matches(['"', '\'']);
+                        if !item.is_empty() {
+                            config.skill_dirs.push(item.to_owned());
+                        }
                     }
                 }
                 "fallback_providers" => {
@@ -677,6 +728,36 @@ struct CronJob {
     failure_streak: u32,
     last_error: Option<String>,
     last_delivery_error: Option<String>,
+    // Read as loose JSON, so a shape this command does not expect loses only the job's sentence.
+    #[serde(default)]
+    skills: Value,
+    #[serde(default)]
+    skill: Value,
+}
+
+impl CronJob {
+    // The skill that says what the job does: of the skills the job names, the one named like
+    // the job, else the first. A job that names none has none.
+    fn skill(&self, name: &str) -> Option<String> {
+        let mut names: Vec<&str> = match &self.skills {
+            Value::Array(list) => list.iter().filter_map(Value::as_str).collect(),
+            Value::String(one) => vec![one.as_str()],
+            _ => Vec::new(),
+        };
+        if let Value::String(one) = &self.skill {
+            names.push(one);
+        }
+        let names: Vec<&str> = names
+            .into_iter()
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .collect();
+        names
+            .iter()
+            .find(|n| **n == name)
+            .or(names.first())
+            .map(|n| (*n).to_owned())
+    }
 }
 fn yes() -> bool {
     true
@@ -697,7 +778,11 @@ fn time(value: Option<&str>) -> Option<DateTime<Utc>> {
         .map(|t| t.with_timezone(&Utc))
 }
 
-fn jobs(cron: &Path) -> Vec<Job> {
+// How long finding the skills' sentences may take, within the source's own limit.
+const SKILL_TIME: std::time::Duration = std::time::Duration::from_secs(6);
+
+// The jobs, and the skill each job runs by the job's name.
+fn jobs(cron: &Path) -> (Vec<Job>, HashMap<String, String>) {
     let list: Vec<CronJob> = std::fs::read(cron.join("jobs.json"))
         .ok()
         .and_then(|bytes| {
@@ -725,6 +810,7 @@ fn jobs(cron: &Path) -> Vec<Job> {
             entry.2 = audit.duration_ms.map(|ms| (ms / 100.0).round() / 10.0);
         }
     }
+    let mut skill_of = HashMap::new();
     let mut jobs: Vec<Job> = list
         .into_iter()
         .map(|job| {
@@ -738,8 +824,12 @@ fn jobs(cron: &Path) -> Vec<Job> {
                 }
             });
             let failing = status.as_deref() == Some("error") || job.failure_streak > 0;
+            let name = job.name.clone().unwrap_or_else(|| job.id.clone());
+            if let Some(skill) = job.skill(&name) {
+                skill_of.entry(name.clone()).or_insert(skill);
+            }
             Job {
-                name: job.name.unwrap_or(job.id),
+                name,
                 schedule: schedule(&job.schedule, job.schedule_display.as_deref()),
                 enabled: job.enabled,
                 last_run_at: time(job.last_run_at.as_deref()),
@@ -756,11 +846,12 @@ fn jobs(cron: &Path) -> Vec<Job> {
                 runs_week,
                 tokens_week,
                 last_duration_s,
+                skill_summary: None,
             }
         })
         .collect();
     jobs.sort_by(|a, b| a.next_run_at.cmp(&b.next_run_at).then(a.name.cmp(&b.name)));
-    jobs
+    (jobs, skill_of)
 }
 
 const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
