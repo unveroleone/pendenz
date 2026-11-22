@@ -345,15 +345,18 @@ pub async fn send_report(
     let mut answer = client
         .request("/agents/me/report", Call::write(Method::PUT, body, None))
         .await;
-    // A server older than the skills' sentences refuses a report that has them, and names the
-    // field. Sent once more without them, so a collector run ahead of its server still reports.
+    // A server older than the skills' sentences or the machine's energy refuses a report that
+    // has them, and names the field. Sent once more without them, so a collector run ahead of its
+    // server still reports.
     let summaries = report
         .jobs
         .iter()
         .flatten()
         .any(|job| job.skill_summary.is_some());
-    let refused_field = matches!(&answer, Err(message) if message.contains("skill_summary"));
-    if summaries
+    let energy = report.host.as_ref().is_some_and(|h| h.energy.is_some());
+    let refused_field = matches!(&answer, Err(message)
+        if message.contains("skill_summary") || message.contains("energy"));
+    if (summaries || energy)
         && client.last_status() == Some(400)
         && (refused_field
             || answer.is_err()
@@ -364,6 +367,9 @@ pub async fn send_report(
         let mut plain = report.clone();
         for job in plain.jobs.iter_mut().flatten() {
             job.skill_summary = None;
+        }
+        if let Some(host) = &mut plain.host {
+            host.energy = None;
         }
         if let Ok(body) = serde_json::to_value(&plain) {
             answer = client

@@ -10,8 +10,14 @@ const TOP: usize = 8;
 // One sample is kept per this many minutes.
 const SAMPLE_MINUTES: i64 = 10;
 
-pub async fn collect(state_dir: Option<PathBuf>) -> anyhow::Result<Host> {
+// `state_dir` keeps this agent's samples; `machine_dir` is where the energy sampler writes, the
+// same for every profile on the machine.
+pub async fn collect(
+    state_dir: Option<PathBuf>,
+    machine_dir: Option<PathBuf>,
+) -> anyhow::Result<Host> {
     let mut host = tokio::task::spawn_blocking(measure).await??;
+    host.energy = machine_dir.as_deref().and_then(super::energy::collect);
     host.memory_free_percent = memory_free_percent().await;
     host.chip = chip().await;
     if let Some(dir) = state_dir {
@@ -106,6 +112,7 @@ fn measure() -> anyhow::Result<Host> {
         disk_total,
         top,
         series: Vec::new(),
+        energy: None,
     })
 }
 
