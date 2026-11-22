@@ -160,6 +160,11 @@ struct ItemDetailView: View {
             }
         }
         .formStyle(.grouped)
+        #if os(macOS)
+        // On the window's own ground, as the list next to it, instead of a gray of its own.
+        .scrollContentBackground(.hidden)
+        .background(.background)
+        #endif
         .modifier(ItemAttachmentDrop(itemID: itemID))
         .onAppear { load(item) }
         .onDisappear(perform: saveText)
