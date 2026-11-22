@@ -92,6 +92,7 @@ struct NotesView: View {
                 }
             }
             SyncStatus()
+            DetailsEdge()
         }
         .modifier(LockedSearch(isOn: showsLocked && isPhone, text: $lockedQuery))
         .modifier(LockedNotesDestination(isOn: !showsLocked, isPresented: isInLockedNotes, query: query))
