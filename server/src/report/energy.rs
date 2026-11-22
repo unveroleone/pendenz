@@ -230,6 +230,10 @@ pub async fn sample(dir: PathBuf) -> anyhow::Result<()> {
             }
         }
     }
+    if minute.1 > 0.0 {
+        state.watts = Some((minute.0 / minute.1 * 100.0).round() / 100.0);
+        state.power_at = Some(Utc::now());
+    }
     state.trim(Local::now().date_naive());
     write(&dir, &state)
 }
