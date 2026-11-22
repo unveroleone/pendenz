@@ -273,13 +273,17 @@ fn unload(domain: &str, label: &str, path: &Path) -> anyhow::Result<()> {
         .args(["bootout", &target])
         .stderr(std::process::Stdio::null())
         .status();
-    let loaded = std::process::Command::new("launchctl")
+    // launchctl answers 113 for a service it does not know.
+    let check = std::process::Command::new("launchctl")
         .args(["print", &target])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success());
-    anyhow::ensure!(!loaded, "launchctl could not stop {label}");
+        .status()?;
+    match check.code() {
+        Some(113) => {}
+        Some(0) => anyhow::bail!("launchctl could not stop {label}"),
+        _ => anyhow::bail!("launchctl could not tell whether {label} stopped"),
+    }
     match std::fs::remove_file(path) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.into()),
         _ => Ok(()),

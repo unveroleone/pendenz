@@ -19,6 +19,8 @@ const EVERY: Duration = Duration::from_secs(5);
 const WRITE_EVERY: Duration = Duration::from_secs(60);
 // A longer pause between two readings (sleep, a stopped process, a failed read) is not counted.
 const LONGEST_GAP: Duration = Duration::from_secs(30);
+// The most the monotonic and the wall clock may differ over one interval before it is dropped.
+const CLOCKS_AGREE: Duration = Duration::from_secs(2);
 // Days kept in the file: enough for this month and the last.
 const KEEP_DAYS: i64 = 62;
 
@@ -76,11 +78,14 @@ impl State {
         &mut self.days[index]
     }
 
-    // The parts of an interval of `seconds` that ends at `end`, per local day: each day's seconds
-    // and the share of the interval before it, so power can be interpolated where a day begins.
-    fn parts(end: DateTime<Local>, seconds: f64) -> Vec<(NaiveDate, f64, f64)> {
-        let start = end - Span::milliseconds((seconds * 1000.0) as i64);
-        if start.date_naive() == end.date_naive() || seconds <= 0.0 {
+    // The parts of an interval from `start` to `end` per local day: each day's seconds and the
+    // share of the interval before it, so power can be interpolated where a day begins.
+    fn parts(start: DateTime<Local>, end: DateTime<Local>) -> Vec<(NaiveDate, f64, f64)> {
+        let seconds = (end - start).num_milliseconds() as f64 / 1000.0;
+        if seconds <= 0.0 {
+            return Vec::new();
+        }
+        if start.date_naive() == end.date_naive() {
             return vec![(end.date_naive(), seconds, 0.0)];
         }
         let after = ((end - day_start(end.date_naive()).unwrap_or(end)).num_milliseconds() as f64
@@ -93,9 +98,11 @@ impl State {
     }
 
     // Adds power between two readings, the line between them integrated over each day's part.
-    fn add_power(&mut self, end: DateTime<Local>, seconds: f64, from: f64, to: f64) {
+    fn add_power(&mut self, start: DateTime<Local>, end: DateTime<Local>, from: f64, to: f64) {
         let at = |share: f64| from + (to - from) * share;
-        for (date, part, before) in Self::parts(end, seconds) {
+        let parts = Self::parts(start, end);
+        let seconds: f64 = parts.iter().map(|p| p.1).sum();
+        for (date, part, before) in parts {
             if part <= 0.0 {
                 continue;
             }
@@ -106,8 +113,8 @@ impl State {
         }
     }
 
-    fn add_temperature(&mut self, end: DateTime<Local>, seconds: f64, celsius: f64) {
-        for (date, part, _) in Self::parts(end, seconds) {
+    fn add_temperature(&mut self, start: DateTime<Local>, end: DateTime<Local>, celsius: f64) {
+        for (date, part, _) in Self::parts(start, end) {
             if part <= 0.0 {
                 continue;
             }
@@ -190,12 +197,14 @@ pub async fn sample(dir: PathBuf) -> anyhow::Result<()> {
     // The previous readings, each with the moment it was taken on the monotonic clock and on
     // the wall clock. The monotonic clock stops while the Mac sleeps, the wall clock does not:
     // an interval counts only when both say it was short, so sleep is never counted.
-    let mut last_power: Option<(Instant, DateTime<Utc>, f64)> = None;
-    let mut last_temp: Option<(Instant, DateTime<Utc>)> = None;
-    let short = |then: Instant, then_wall: DateTime<Utc>, now: Instant, wall: DateTime<Utc>| {
+    let mut last_power: Option<(Instant, DateTime<Local>, f64)> = None;
+    let mut last_temp: Option<(Instant, DateTime<Local>)> = None;
+    let short = |then: Instant, then_wall: DateTime<Local>, now: Instant, wall: DateTime<Local>| {
         let gap = now - then;
-        let wall_gap = (wall - then_wall).to_std().unwrap_or(Duration::MAX);
-        (gap <= LONGEST_GAP && wall_gap <= LONGEST_GAP).then_some(gap.as_secs_f64())
+        let Ok(wall_gap) = (wall - then_wall).to_std() else {
+            return false;
+        };
+        gap <= LONGEST_GAP && wall_gap <= LONGEST_GAP && gap.abs_diff(wall_gap) <= CLOCKS_AGREE
     };
     // This minute's energy, its seconds, and the end of its last interval, for the average power.
     let mut minute = (0.0, 0.0);
@@ -212,25 +221,26 @@ pub async fn sample(dir: PathBuf) -> anyhow::Result<()> {
         match smc.power() {
             Some(watts) => {
                 if let Some((then, then_wall, before)) = last_power
-                    && let Some(seconds) = short(then, then_wall, now, wall)
+                    && short(then, then_wall, now, local)
                 {
-                    state.add_power(local, seconds, before, watts);
+                    state.add_power(then_wall, local, before, watts);
+                    let seconds = (local - then_wall).num_milliseconds() as f64 / 1000.0;
                     minute.0 += (before + watts) / 2.0 * seconds;
                     minute.1 += seconds;
                     minute_end = Some(wall);
                 }
-                last_power = Some((now, wall, watts));
+                last_power = Some((now, local, watts));
             }
             None => last_power = None,
         }
         match smc.cpu_temperature() {
             Some(celsius) => {
                 if let Some((then, then_wall)) = last_temp
-                    && let Some(seconds) = short(then, then_wall, now, wall)
+                    && short(then, then_wall, now, local)
                 {
-                    state.add_temperature(local, seconds, celsius);
+                    state.add_temperature(then_wall, local, celsius);
                 }
-                last_temp = Some((now, wall));
+                last_temp = Some((now, local));
                 state.temp_at = Some(wall);
                 state.temp_c = Some((celsius * 10.0).round() / 10.0);
             }

@@ -845,19 +845,18 @@ fn install(args: &Args, energy: bool) -> anyhow::Result<serde_json::Value> {
         .as_ref()
         .map(std::path::absolute)
         .transpose()?;
-    // The sampler first, so a sampler that cannot start leaves the report job as it was.
-    let mut sampler = None;
-    if profile.is_none() && cfg!(target_os = "macos") {
-        if energy || (setup::energy_installed() && !args.no_host) {
-            sampler = Some(setup::install_energy(state_dir.as_deref())?);
-        } else if setup::energy_installed() {
-            setup::uninstall_energy()?;
-            sampler = Some(serde_json::json!({"uninstalled": true}));
-        }
-    }
     let mut result = setup::install(profile, &options)?;
-    if let Some(sampler) = sampler {
-        result["energy"] = sampler;
+    if profile.is_none() && cfg!(target_os = "macos") {
+        let sampler = if energy || (setup::energy_installed() && !args.no_host) {
+            setup::install_energy(state_dir.as_deref())
+        } else if setup::energy_installed() {
+            setup::uninstall_energy().map(|()| serde_json::json!({"uninstalled": true}))
+        } else {
+            return Ok(result);
+        };
+        result["energy"] = sampler.map_err(|error| {
+            error.context("The report job is installed, the energy sampler is not")
+        })?;
     }
     Ok(result)
 }
