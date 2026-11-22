@@ -37,13 +37,10 @@ struct PendenzApp: App {
         }
         #if os(macOS)
         SwiftUI.Settings {
-            // A stack, so a group of settings can have a page of its own behind a row.
-            NavigationStack {
-                SettingsView()
-            }
-            .environment(session)
-            .frame(width: 460, height: 420)
+            MacSettingsView()
+                .environment(session)
         }
+        .windowResizability(.contentMinSize)
         #endif
     }
 }

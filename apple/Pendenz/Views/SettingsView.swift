@@ -1,31 +1,15 @@
 import SwiftUI
 
 // The pairing of this device: the server, the other devices, a code for one more, and the way
-// out. A window of its own on the Mac, a sheet on iPhone and iPad.
+// out. A sheet on iPhone and iPad. The Mac shows the same parts as panes of its settings window
+// (`MacSettingsView`).
 struct SettingsView: View {
     @Environment(Session.self) private var session
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var devices: [Device] = []
-    @State private var current: String?
-    @State private var code: PairingCode?
-    @State private var failure: String?
-    @State private var isLoading = false
-    // The device the question is about. It stays after the answer, so the title keeps its
-    // name while the alert fades.
-    @State private var revokeCandidate: Device?
-    @State private var isConfirmingRevoke = false
-    @State private var isConfirmingUnpair = false
 
     var body: some View {
         Form {
-            if let connection = session.connection {
-                Section("Server") {
-                    addressRow(connection.server.absoluteString)
-                    if let name = connection.deviceName {
-                        LabeledContent("This device", value: name)
-                    }
-                }
+            if session.connection != nil {
+                ServerSection()
                 Section {
                     NavigationLink(value: SettingsPage.notifications) {
                         LabeledContent("Notifications", value: Reminders.shared.access.label)
@@ -43,32 +27,11 @@ struct SettingsView: View {
                         LabeledContent("Agents", value: "\(session.agents?.connected.count ?? 0) connected")
                     }
                 }
-                if session.isDevelopment {
-                    Section {
-                        Text(
-                            "This is the development server from the launch argument. It asks for no token, so there is nothing to pair.",
-                        )
-                        .foregroundStyle(.secondary)
-                    }
-                } else {
-                    devicesSection
-                    pairSection
-                    Section {
-                        Button("Unpair This Device", role: .destructive) { isConfirmingUnpair = true }
-                            .formAction(.red)
-                    } footer: {
-                        Text(
-                            "Removes this device from the server and deletes the items and notes stored on it. They stay on the server.",
-                        )
-                    }
-                }
+                DeviceSections()
             } else {
-                Section {
-                    Text("This device is not paired.")
-                        .foregroundStyle(.secondary)
-                }
+                NotPairedSection()
             }
-            versionSection
+            VersionSection()
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
@@ -77,6 +40,137 @@ struct SettingsView: View {
             case .notifications: NotificationSettingsView()
             case .files: FileSettingsView()
             case .agents: AgentSettingsView()
+            }
+        }
+        .task { await Reminders.shared.refreshAccess() }
+    }
+}
+
+struct NotPairedSection: View {
+    var body: some View {
+        Section {
+            Text("This device is not paired.")
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// The server this device is paired with, and its name there.
+struct ServerSection: View {
+    @Environment(Session.self) private var session
+
+    var body: some View {
+        if let connection = session.connection {
+            Section("Server") {
+                addressRow(connection.server.absoluteString)
+                if let name = connection.deviceName {
+                    LabeledContent("This device", value: name)
+                }
+            }
+        }
+    }
+
+    // The address with a button that copies it: the new device asks for it next to the code.
+    // Where the row is too narrow for both, as on an iPhone with a long address, the address
+    // stands alone under the section's title.
+    private func addressRow(_ address: String) -> some View {
+        let value = Text(address)
+            .lineLimit(1)
+            #if os(macOS)
+            .textSelection(.enabled)
+            #endif
+            .accessibilityLabel("Address, \(address)")
+            .accessibilityIdentifier("settings-address")
+        // The button keeps its target and gives up the height it would add to the row.
+        let copy = CopyButton(text: address, title: "Copy Address")
+            .padding(.vertical, (24 - CopyButton.side) / 2)
+            .accessibilityIdentifier("settings-copy-address")
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                Text("Address")
+                    .accessibilityHidden(true)
+                Spacer(minLength: 12)
+                value
+                    .foregroundStyle(.secondary)
+                copy
+            }
+            HStack(spacing: 12) {
+                value
+                    .truncationMode(.middle)
+                    .minimumScaleFactor(0.85)
+                Spacer(minLength: 0)
+                copy
+            }
+        }
+    }
+}
+
+// The app's version and build, and the version the server named in its last answer.
+struct VersionSection: View {
+    @Environment(Session.self) private var session
+
+    var body: some View {
+        Section {
+            LabeledContent("App", value: Self.appVersion)
+            if session.connection != nil {
+                LabeledContent("Server", value: session.store?.serverVersion?.description ?? "Not known yet")
+            }
+        } header: {
+            Text("Version")
+        } footer: {
+            if let notice = session.store?.outdatedServerNotice {
+                Label(notice, systemImage: "exclamationmark.triangle")
+            }
+        }
+    }
+
+    private static var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        guard let build = info?["CFBundleVersion"] as? String else { return version }
+        return "\(version) (\(build))"
+    }
+}
+
+// The other devices, a code for one more, and the way out. In local mode there is nothing to
+// pair, and the sections say so.
+struct DeviceSections: View {
+    @Environment(Session.self) private var session
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var devices: [Device] = []
+    @State private var current: String?
+    @State private var code: PairingCode?
+    @State private var failure: String?
+    @State private var isLoading = false
+    // The device the question is about. It stays after the answer, so the title keeps its
+    // name while the alert fades.
+    @State private var revokeCandidate: Device?
+    @State private var isConfirmingRevoke = false
+    @State private var isConfirmingUnpair = false
+
+    var body: some View {
+        Group {
+            if session.connection == nil {
+                NotPairedSection()
+            } else if session.isDevelopment {
+                Section {
+                    Text(
+                        "This is the development server from the launch argument. It asks for no token, so there is nothing to pair.",
+                    )
+                    .foregroundStyle(.secondary)
+                }
+            } else {
+                devicesSection
+                pairSection
+                Section {
+                    Button("Unpair This Device", role: .destructive) { isConfirmingUnpair = true }
+                        .formAction(.red)
+                } footer: {
+                    Text(
+                        "Removes this device from the server and deletes the items and notes stored on it. They stay on the server.",
+                    )
+                }
             }
         }
         // Neither can be taken back, so both ask, in an alert: see "Questions before an
@@ -102,36 +196,12 @@ struct SettingsView: View {
             Text("It can no longer read or change anything until it is paired again.")
         }
         .task(id: session.connection) { await load() }
-        .task { await Reminders.shared.refreshAccess() }
     }
 
     private var unpairWarning: String {
         let waiting = session.store?.pendingCount ?? 0
         let lost = waiting == 0 ? "" : " \(waiting) changes that were not sent yet are lost."
         return "You need a new pairing code to use Pendenz on this device again." + lost
-    }
-
-    // The app's version and build, and the version the server named in its last answer.
-    private var versionSection: some View {
-        Section {
-            LabeledContent("App", value: Self.appVersion)
-            if session.connection != nil {
-                LabeledContent("Server", value: session.store?.serverVersion?.description ?? "Not known yet")
-            }
-        } header: {
-            Text("Version")
-        } footer: {
-            if let notice = session.store?.outdatedServerNotice {
-                Label(notice, systemImage: "exclamationmark.triangle")
-            }
-        }
-    }
-
-    private static var appVersion: String {
-        let info = Bundle.main.infoDictionary
-        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
-        guard let build = info?["CFBundleVersion"] as? String else { return version }
-        return "\(version) (\(build))"
     }
 
     private var devicesSection: some View {
@@ -205,40 +275,6 @@ struct SettingsView: View {
             Text("Pair another device")
         } footer: {
             Text("A code works once. A device paired with it can do everything this one can.")
-        }
-    }
-
-    // The address with a button that copies it: the new device asks for it next to the code.
-    // Where the row is too narrow for both, as on an iPhone with a long address, the address
-    // stands alone under the section's title.
-    private func addressRow(_ address: String) -> some View {
-        let value = Text(address)
-            .lineLimit(1)
-            #if os(macOS)
-            .textSelection(.enabled)
-            #endif
-            .accessibilityLabel("Address, \(address)")
-            .accessibilityIdentifier("settings-address")
-        // The button keeps its target and gives up the height it would add to the row.
-        let copy = CopyButton(text: address, title: "Copy Address")
-            .padding(.vertical, (24 - CopyButton.side) / 2)
-            .accessibilityIdentifier("settings-copy-address")
-        return ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) {
-                Text("Address")
-                    .accessibilityHidden(true)
-                Spacer(minLength: 12)
-                value
-                    .foregroundStyle(.secondary)
-                copy
-            }
-            HStack(spacing: 12) {
-                value
-                    .truncationMode(.middle)
-                    .minimumScaleFactor(0.85)
-                Spacer(minLength: 0)
-                copy
-            }
         }
     }
 
@@ -333,7 +369,8 @@ private struct CopyButton: View {
 
 // A page behind a row of the settings. The Mac's settings window centers its toolbar on a row
 // of its own, which would leave the back button alone in the middle, so there the page draws its
-// own at the leading edge, under the window's buttons.
+// own at the leading edge, under the window's buttons. Not for a pane of the Mac's settings
+// window, which has nothing to go back to.
 extension View {
     func settingsPage() -> some View {
         modifier(SettingsPageBack())

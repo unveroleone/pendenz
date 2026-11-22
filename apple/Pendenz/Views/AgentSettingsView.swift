@@ -73,7 +73,6 @@ struct AgentSettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Agents")
-        .settingsPage()
         // Asked again while open, so the Order row shows once a second agent reports.
         .task {
             await session.agents?.refresh()
