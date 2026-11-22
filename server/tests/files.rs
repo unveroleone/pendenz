@@ -276,7 +276,7 @@ async fn only_the_owner_changes_the_limit() {
     assert_eq!(status, 200);
     assert_eq!(
         body,
-        json!({"file_limit_mb": 25, "file_limit_ceiling_mb": 100})
+        json!({"file_limit_mb": 25, "file_limit_ceiling_mb": 100, "energy_price_chf": null})
     );
     assert_eq!(set_limit(&server, &bot, json!(50)).await.0, 403);
     for wrong in [json!(0), json!(101), json!(2.5), json!("10")] {
