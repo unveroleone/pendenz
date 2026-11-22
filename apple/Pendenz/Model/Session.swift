@@ -377,6 +377,13 @@ final class Session {
         return settings
     }
 
+    func setEnergyPrice(_ francs: Double?) async throws -> ServerSettings {
+        let store = store
+        let settings = try await call { try await $0.update(energyPriceChf: francs) }
+        store?.keep(settings)
+        return settings
+    }
+
     private func call<Value: Sendable>(_ request: (APIClient) async throws -> Value) async throws -> Value {
         guard let api, let asked = connection else { throw APIError.status(401, nil) }
         do {

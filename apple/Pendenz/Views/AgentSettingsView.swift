@@ -63,6 +63,9 @@ struct AgentSettingsView: View {
                         .foregroundStyle(.red)
                 }
             }
+            if session.store?.settings?.hasEnergyPrice == true {
+                EnergyPriceSection()
+            }
             Section {
                 Button("Connect an Agent") { isConnecting = true }
             } footer: {
@@ -76,6 +79,8 @@ struct AgentSettingsView: View {
         .settingsPage()
         // Asked again while open, so the Order row shows once a second agent reports.
         .task {
+            // Whether the server has the price, and its value, as it holds them now.
+            _ = try? await session.serverSettings()
             await session.agents?.refresh()
             await session.agents?.watch()
         }
@@ -305,5 +310,100 @@ private struct ConnectAgentView: View {
         #else
         UIPasteboard.general.string = text
         #endif
+    }
+}
+
+// The price of a kWh, which turns the energy a Mac reports into a cost on the Agents screen. It
+// belongs to the server like the file limit, so it is sent there directly when the field is left
+// or submitted, and an empty field clears it.
+private struct EnergyPriceSection: View {
+    @Environment(Session.self) private var session
+    @State private var text = ""
+    @State private var failure: String?
+    @FocusState private var isFocused: Bool
+
+    private var confirmed: Double? {
+        session.store?.settings?.energyPriceChf
+    }
+
+    private static func shown(_ price: Double?) -> String {
+        price?.formatted(.number.precision(.fractionLength(2 ... 4)).grouping(.never)) ?? ""
+    }
+
+    // Either decimal mark, whatever the region uses.
+    private static func parsed(_ text: String) -> Double? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        return (try? Double(trimmed, format: .number)) ?? Double(trimmed.replacingOccurrences(of: ",", with: "."))
+    }
+
+    var body: some View {
+        Section {
+            LabeledContent("Price per kWh") {
+                HStack(spacing: 6) {
+                    TextField("Price per kWh", text: $text, prompt: Text("0.30"))
+                        .labelsHidden()
+                        .multilineTextAlignment(.trailing)
+                        #if os(iOS)
+                        .keyboardType(.decimalPad)
+                        #endif
+                        .focused($isFocused)
+                        .onSubmit(save)
+                        #if os(iOS)
+                        // The decimal pad has no return key. On the field itself: on a
+                        // section, the button shows once for each of its parts.
+                        .toolbar {
+                            ToolbarItemGroup(placement: .keyboard) {
+                                Spacer()
+                                Button("Done") { isFocused = false }
+                            }
+                        }
+                        #endif
+                    Text("CHF")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Energy")
+        } footer: {
+            VStack(alignment: .leading, spacing: 8) {
+                if let failure {
+                    Label(failure, systemImage: "exclamationmark.circle")
+                        .foregroundStyle(.red)
+                }
+                Text("Turns the energy a Mac reports into a cost on the Agents screen. Leave it empty for no cost.")
+            }
+        }
+        .onAppear { text = Self.shown(confirmed) }
+        // Leaving the screen while typing also sends the price.
+        .onDisappear { if isFocused { save() } }
+        .onChange(of: confirmed) { if !isFocused { text = Self.shown(confirmed) } }
+        .onChange(of: isFocused) { if !isFocused { save() } }
+    }
+
+    private func save() {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        let wanted: Double?
+        if trimmed.isEmpty {
+            wanted = nil
+        } else if let price = Self.parsed(trimmed), (0 ... 100).contains(price) {
+            wanted = price
+        } else {
+            failure = "Enter a price from 0 to 100 CHF."
+            return
+        }
+        failure = nil
+        guard wanted != confirmed else {
+            text = Self.shown(confirmed)
+            return
+        }
+        Task {
+            do {
+                let settings = try await session.setEnergyPrice(wanted)
+                if !isFocused { text = Self.shown(settings.energyPriceChf) }
+            } catch {
+                failure = error.localizedDescription
+                if !isFocused { text = Self.shown(confirmed) }
+            }
+        }
     }
 }

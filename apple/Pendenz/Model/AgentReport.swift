@@ -209,6 +209,30 @@ nonisolated struct AgentHost: Decodable, Sendable {
     var diskTotal: Int64
     var top: [AgentProcess]
     var series: [AgentSample]
+    // Missing from a machine without an energy sampler and from older collectors.
+    var energy: AgentEnergy?
+}
+
+nonisolated struct AgentEnergy: Decodable, Sendable {
+    // The last minute's average power and the last CPU temperature, each with its time.
+    var powerAt: Date?
+    var watts: Double?
+    var tempAt: Date?
+    var tempC: Double?
+    // This month, then the last.
+    var months: [AgentEnergyMonth]
+}
+
+nonisolated struct AgentEnergyMonth: Decodable, Sendable, Identifiable {
+    // "2026-11".
+    var month: String
+    var kwh: Double
+    // The hours that were measured.
+    var hours: Double
+    var tempMax: Double?
+    var tempMedian: Double?
+
+    var id: String { month }
 }
 
 nonisolated struct AgentProcess: Decodable, Sendable, Identifiable {
