@@ -62,8 +62,13 @@ struct SidebarShell: View {
             .safeAreaBar(edge: .bottom) {
                 SidebarFooter()
             }
+            #if os(macOS)
+            // The controls of the foot are glass of their own, so rows may pass under them.
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
+            #else
             // A hard edge: with the soft one the rows of a long list showed through the foot.
             .scrollEdgeEffectStyle(.hard, for: .bottom)
+            #endif
             // The system draws the selected row in white on the tint. The app tint is the label
             // color, which is white in dark mode, so the sidebar gets a gray that carries white.
             // macOS ignores a tint here and takes the same gray as its accent color, set in the
@@ -114,6 +119,11 @@ struct SidebarShell: View {
                     }
                 }
             }
+            #if os(macOS)
+            // No bar behind the toolbar and no line under it: the list runs up under the
+            // controls and softens there.
+            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            #endif
             // On the stack, not inside it: inside, the iPad drops the list's title.
             .inspector(isPresented: isShowingItem) {
                 if let id = navigation.itemID {
@@ -186,6 +196,9 @@ private struct SidebarFooter: View {
     @Environment(Navigation.self) private var navigation
 
     var body: some View {
+        #if os(macOS)
+        macBody
+        #else
         HStack(spacing: 0) {
             Button {
                 navigation.projectEditor = .new
@@ -224,7 +237,51 @@ private struct SidebarFooter: View {
         .padding(.leading, Self.leading)
         .padding(.trailing, Self.trailing)
         .padding(.vertical, 4)
+        #endif
     }
+
+    #if os(macOS)
+    // Two floating capsules of glass, as the controls in a toolbar: a new project on the left,
+    // the order and the settings on the right.
+    private var macBody: some View {
+        GlassEffectContainer {
+            HStack(spacing: 8) {
+                Button {
+                    navigation.projectEditor = .new
+                } label: {
+                    Label("New Project", systemImage: "plus")
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: Self.target)
+                        .contentShape(Capsule())
+                }
+                .glassEffect(.regular.interactive(), in: .capsule)
+                Spacer(minLength: 0)
+                HStack(spacing: 0) {
+                    ProjectOrderMenu(isQuiet: true)
+                        .labelStyle(.iconOnly)
+                        .frame(minWidth: Self.target, minHeight: Self.target)
+                        .help("Sort Projects")
+                    SettingsLink {
+                        Label("Settings", systemImage: "gearshape")
+                            .labelStyle(.iconOnly)
+                            .frame(minWidth: Self.target, minHeight: Self.target)
+                            .contentShape(Capsule())
+                    }
+                    .help("Settings")
+                }
+                .padding(.horizontal, 4)
+                .glassEffect(.regular.interactive(), in: .capsule)
+            }
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .tint(Color.accentColor)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+    }
+    #endif
 
     // The measures of a sidebar row on each system, so the foot lines up with the list.
     #if os(macOS)
