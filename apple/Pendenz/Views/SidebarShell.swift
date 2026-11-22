@@ -119,6 +119,8 @@ struct SidebarShell: View {
                     }
                 }
             }
+            // The lists of this layout without lines (`Look.swift`). The iPhone layout keeps them.
+            .environment(\.usesSidebarLook, true)
             #if os(macOS)
             // No bar behind the toolbar and no line under it: the list runs up under the
             // controls and softens there.

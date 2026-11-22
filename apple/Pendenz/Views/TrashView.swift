@@ -25,9 +25,9 @@ struct TrashView: View {
                     }
                 }
             }
-            .macListRows()
+            .sidebarListRows()
         }
-        .macListLook()
+        .sidebarListLook()
         .animation(.default, value: items.map(\.id))
         .animation(.default, value: notes.map(\.id))
         .overlay {
