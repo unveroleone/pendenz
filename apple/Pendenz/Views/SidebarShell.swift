@@ -62,13 +62,8 @@ struct SidebarShell: View {
             .safeAreaBar(edge: .bottom) {
                 SidebarFooter()
             }
-            #if os(macOS)
             // The controls of the foot are glass of their own, so rows may pass under them.
             .scrollEdgeEffectStyle(.soft, for: .bottom)
-            #else
-            // A hard edge: with the soft one the rows of a long list showed through the foot.
-            .scrollEdgeEffectStyle(.hard, for: .bottom)
-            #endif
             // The system draws the selected row in white on the tint. The app tint is the label
             // color, which is white in dark mode, so the sidebar gets a gray that carries white.
             // macOS ignores a tint here and takes the same gray as its accent color, set in the
@@ -119,6 +114,8 @@ struct SidebarShell: View {
                     }
                 }
             }
+            // The lists of this layout without lines (`Look.swift`). The iPhone layout keeps them.
+            .environment(\.usesSidebarLook, true)
             #if os(macOS)
             // No bar behind the toolbar and no line under it: the list runs up under the
             // controls and softens there.
@@ -191,59 +188,13 @@ struct SidebarShell: View {
 }
 
 // The foot of the sidebar, for what is not a list: a new project, the order of the projects
-// and, on the Mac, the settings.
+// and, on the Mac, the settings. Two floating capsules of glass, as the controls in a toolbar: a
+// new project on the left, the rest on the right. The iPad has its gear in the toolbar, in the
+// same corner as the iPhone.
 private struct SidebarFooter: View {
     @Environment(Navigation.self) private var navigation
 
     var body: some View {
-        #if os(macOS)
-        macBody
-        #else
-        HStack(spacing: 0) {
-            Button {
-                navigation.projectEditor = .new
-            } label: {
-                // The plus under the icons of the rows and the words under their titles.
-                HStack(spacing: Self.titleGap) {
-                    Image(systemName: "plus")
-                        .frame(width: Self.iconWidth)
-                    Text("New Project")
-                        .lineLimit(1)
-                }
-                .frame(minHeight: Self.target)
-                .contentShape(Rectangle())
-            }
-            Spacer(minLength: 8)
-            ProjectOrderMenu(isQuiet: true)
-                .labelStyle(.iconOnly)
-                .frame(minWidth: Self.target, minHeight: Self.target)
-                .help("Sort Projects")
-            #if os(macOS)
-            // The iPad has its gear in the toolbar, in the same corner as the iPhone.
-            SettingsLink {
-                Label("Settings", systemImage: "gearshape")
-                    .labelStyle(.iconOnly)
-                    .frame(minWidth: Self.target, minHeight: Self.target)
-                    .contentShape(Rectangle())
-            }
-            .help("Settings")
-            #endif
-        }
-        .buttonStyle(.borderless)
-        .foregroundStyle(.secondary)
-        // The gray of the list is for its selected row. The menu of the order takes the tint
-        // into its choices, which have to read in black or white.
-        .tint(Color.accentColor)
-        .padding(.leading, Self.leading)
-        .padding(.trailing, Self.trailing)
-        .padding(.vertical, 4)
-        #endif
-    }
-
-    #if os(macOS)
-    // Two floating capsules of glass, as the controls in a toolbar: a new project on the left,
-    // the order and the settings on the right.
-    private var macBody: some View {
         GlassEffectContainer {
             HStack(spacing: 8) {
                 Button {
@@ -254,7 +205,7 @@ private struct SidebarFooter: View {
                         Label("New Project", systemImage: "plus")
                             .lineLimit(1)
                             .fixedSize()
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, Self.inset)
                         Label("New Project", systemImage: "plus")
                             .labelStyle(.iconOnly)
                             .frame(minWidth: Self.target)
@@ -266,10 +217,10 @@ private struct SidebarFooter: View {
                 .glassEffect(.regular.interactive(), in: .capsule)
                 Spacer(minLength: 0)
                 HStack(spacing: 0) {
-                    ProjectOrderMenu(isQuiet: true)
+                    ProjectOrderMenu(isQuiet: true, target: Self.target)
                         .labelStyle(.iconOnly)
-                        .frame(minWidth: Self.target, minHeight: Self.target)
                         .help("Sort Projects")
+                    #if os(macOS)
                     SettingsLink {
                         Label("Settings", systemImage: "gearshape")
                             .labelStyle(.iconOnly)
@@ -277,32 +228,32 @@ private struct SidebarFooter: View {
                             .contentShape(Capsule())
                     }
                     .help("Settings")
+                    #endif
                 }
+                #if os(macOS)
                 .padding(.horizontal, 4)
+                #endif
                 .glassEffect(.regular.interactive(), in: .capsule)
             }
         }
         .buttonStyle(.borderless)
         .foregroundStyle(.secondary)
+        // The gray of the list is for its selected row. The menu of the order takes the tint
+        // into its choices, which have to read in black or white.
         .tint(Color.accentColor)
-        .padding(.horizontal, 10)
+        .padding(.horizontal, Self.edge)
         .padding(.vertical, 8)
     }
-    #endif
 
-    // The measures of a sidebar row on each system, so the foot lines up with the list.
+    // The smallest target for a control on each system, and the room around the capsules.
     #if os(macOS)
-    private static let leading: CGFloat = 18
-    private static let trailing: CGFloat = 10
-    private static let iconWidth: CGFloat = 22
-    private static let titleGap: CGFloat = 6
     private static let target: CGFloat = 28
+    private static let inset: CGFloat = 12
+    private static let edge: CGFloat = 10
     #else
-    private static let leading: CGFloat = 28
-    private static let trailing: CGFloat = 12
-    private static let iconWidth: CGFloat = 32
-    private static let titleGap: CGFloat = 7
     private static let target: CGFloat = 44
+    private static let inset: CGFloat = 16
+    private static let edge: CGFloat = 16
     #endif
 }
 
@@ -311,6 +262,9 @@ struct ProjectOrderMenu: View {
     // Gray, as the controls next to it in the foot of the sidebar. A menu takes no color from
     // the views around it, so its label carries it.
     var isQuiet = false
+    // The smallest size that takes a tap. Inside the label, since the menu itself is fixed to
+    // its label's size and a frame around it does not take taps.
+    var target: CGFloat = 0
     @Environment(Store.self) private var store
 
     var body: some View {
@@ -323,12 +277,16 @@ struct ProjectOrderMenu: View {
             }
             .pickerStyle(.inline)
         } label: {
-            if isQuiet {
-                Label("Sort Projects", systemImage: "arrow.up.arrow.down")
-                    .foregroundStyle(.secondary)
-            } else {
-                Label("Sort Projects", systemImage: "arrow.up.arrow.down")
+            Group {
+                if isQuiet {
+                    Label("Sort Projects", systemImage: "arrow.up.arrow.down")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Label("Sort Projects", systemImage: "arrow.up.arrow.down")
+                }
             }
+            .frame(minWidth: target, minHeight: target)
+            .contentShape(Capsule())
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)

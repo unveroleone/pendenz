@@ -227,7 +227,7 @@ struct ItemsList<Content: View>: View {
             if sizeClass == .compact {
                 List { content }
             } else {
-                List(selection: $navigation.itemID) { content.macListRows() }
+                List(selection: $navigation.itemID) { content.sidebarListRows() }
                     #if os(macOS)
                     // The Delete key, only while the list itself has the focus.
                     .onDeleteCommand {
@@ -236,7 +236,7 @@ struct ItemsList<Content: View>: View {
                     #endif
             }
         }
-        .macListLook()
+        .sidebarListLook()
     }
 }
 
