@@ -15,14 +15,47 @@ nonisolated struct ServerSettings: Equatable, Sendable, Codable {
     var fileLimitMb: Int
     // The most the limit can be set to.
     var fileLimitCeilingMb: Int
+    // The price of a kWh in Swiss francs, for the cost of a machine's energy. Nil until set.
+    var energyPriceChf: Double?
+    // Whether the server has the price at all: it always names the key, even when unset, and a
+    // server older than the setting does not.
+    var hasEnergyPrice: Bool
 
     var fileLimitBytes: Int {
         fileLimitMb * AttachmentFiles.megabyte
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case fileLimitMb, fileLimitCeilingMb, energyPriceChf, hasEnergyPrice
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        fileLimitMb = try container.decode(Int.self, forKey: .fileLimitMb)
+        fileLimitCeilingMb = try container.decode(Int.self, forKey: .fileLimitCeilingMb)
+        energyPriceChf = try container.decodeIfPresent(Double.self, forKey: .energyPriceChf)
+        // Kept on this device as a field of its own; from the server, the key's presence.
+        hasEnergyPrice = try container.decodeIfPresent(Bool.self, forKey: .hasEnergyPrice)
+            ?? container.contains(.energyPriceChf)
+    }
 }
 
-private nonisolated struct SettingsPatch: Encodable {
+private nonisolated struct FileLimitPatch: Encodable {
     let fileLimitMb: Int
+}
+
+// A price of nil is sent as null, which clears it.
+private nonisolated struct EnergyPricePatch: Encodable {
+    let energyPriceChf: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case energyPriceChf = "energy_price_chf"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(energyPriceChf, forKey: .energyPriceChf)
+    }
 }
 
 // One row of the changes feed in its current state.
@@ -287,7 +320,17 @@ nonisolated struct APIClient: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
-        request.httpBody = try encoder.encode(SettingsPatch(fileLimitMb: fileLimitMb))
+        request.httpBody = try encoder.encode(FileLimitPatch(fileLimitMb: fileLimitMb))
+        return try await send(request)
+    }
+
+    // Sets or clears the price of a kWh, directly like the file limit.
+    @concurrent
+    func update(energyPriceChf: Double?) async throws -> ServerSettings {
+        var request = URLRequest(url: baseURL.appending(path: "api/settings"))
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(EnergyPricePatch(energyPriceChf: energyPriceChf))
         return try await send(request)
     }
 

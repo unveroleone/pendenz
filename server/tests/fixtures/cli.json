@@ -78,6 +78,7 @@
           "write"
         ],
         "settings": {
+          "energy_price_chf": null,
           "file_limit_ceiling_mb": 100,
           "file_limit_mb": 25
         },
@@ -1384,6 +1385,7 @@
         "has_more": false,
         "reset": false,
         "settings": {
+          "energy_price_chf": null,
           "file_limit_ceiling_mb": 100,
           "file_limit_mb": 25
         }
@@ -1454,6 +1456,7 @@
         "has_more": true,
         "reset": false,
         "settings": {
+          "energy_price_chf": null,
           "file_limit_ceiling_mb": 100,
           "file_limit_mb": 25
         }

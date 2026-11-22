@@ -235,6 +235,114 @@ fn job_path(home: &Path) -> String {
     parts.join(":")
 }
 
+fn gui_domain() -> anyhow::Result<String> {
+    let uid = String::from_utf8(std::process::Command::new("id").arg("-u").output()?.stdout)?;
+    Ok(format!("gui/{}", uid.trim()))
+}
+
+// Writes a LaunchAgent and starts it, in place of one installed before under the same label.
+fn launch(label: &str, path: &Path, plist: &str) -> anyhow::Result<()> {
+    std::fs::create_dir_all(path.parent().expect("a folder"))?;
+    let domain = gui_domain()?;
+    let _ = std::process::Command::new("launchctl")
+        .args(["bootout", &format!("{domain}/{label}")])
+        .stderr(std::process::Stdio::null())
+        .status();
+    std::fs::write(path, plist)?;
+    run(
+        "launchctl",
+        &["bootstrap", &domain, &path.display().to_string()],
+    )
+}
+
+const ENERGY_LABEL: &str = "pendenz.energy";
+
+fn energy_agent_path() -> Option<PathBuf> {
+    super::home().map(|h| h.join(format!("Library/LaunchAgents/{ENERGY_LABEL}.plist")))
+}
+
+pub fn energy_installed() -> bool {
+    energy_agent_path().is_some_and(|p| p.is_file())
+}
+
+// Stops a LaunchAgent and removes its file. A job that was not loaded counts as stopped; one
+// that is still loaded afterwards is an error.
+fn unload(domain: &str, label: &str, path: &Path) -> anyhow::Result<()> {
+    let target = format!("{domain}/{label}");
+    let _ = std::process::Command::new("launchctl")
+        .args(["bootout", &target])
+        .stderr(std::process::Stdio::null())
+        .status();
+    // launchctl answers 113 for a service it does not know.
+    let check = std::process::Command::new("launchctl")
+        .args(["print", &target])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()?;
+    match check.code() {
+        Some(113) => {}
+        Some(0) => anyhow::bail!("launchctl could not stop {label}"),
+        _ => anyhow::bail!("launchctl could not tell whether {label} stopped"),
+    }
+    match std::fs::remove_file(path) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.into()),
+        _ => Ok(()),
+    }
+}
+
+pub fn uninstall_energy() -> anyhow::Result<()> {
+    unload(
+        &gui_domain()?,
+        ENERGY_LABEL,
+        &energy_agent_path().expect("a home"),
+    )
+}
+
+// The energy sampler: one process that runs all the time and is started again when it stops,
+// such as after an update of the binary. macOS only.
+pub fn install_energy(state_dir: Option<&Path>) -> anyhow::Result<Value> {
+    let exe = std::env::current_exe()?.display().to_string();
+    let home = super::home().ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
+    let state_dir = state_dir.map(|d| d.display().to_string());
+    anyhow::ensure!(
+        std::iter::once(&exe)
+            .chain(&state_dir)
+            .all(|o| !o.chars().any(char::is_control)),
+        "A path for the job contains a control character."
+    );
+    let log = home.join("Library/Logs/pendenz-energy.log");
+    let arguments: String = [exe.as_str(), "report", "energy"]
+        .into_iter()
+        .chain(state_dir.iter().flat_map(|d| ["--state-dir", d.as_str()]))
+        .map(|a| format!("<string>{}</string>", xml(a)))
+        .collect();
+    let plist = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>{ENERGY_LABEL}</string>
+    <key>ProgramArguments</key><array>{arguments}</array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>ThrottleInterval</key><integer>30</integer>
+    <key>ProcessType</key><string>Background</string>
+    <key>LowPriorityIO</key><true/>
+    <key>Nice</key><integer>10</integer>
+    <key>StandardOutPath</key><string>{log}</string>
+    <key>StandardErrorPath</key><string>{log}</string>
+</dict>
+</plist>
+"#,
+        log = xml(&log.display().to_string()),
+    );
+    let path = energy_agent_path().expect("a home");
+    launch(ENERGY_LABEL, &path, &plist)?;
+    Ok(
+        json!({"installed": path.display().to_string(), "log": log.display().to_string(), "every_seconds": 5}),
+    )
+}
+
 // Installs the job for a profile, or for the machine's one agent. `options` are the report
 // command's options, written into the job, since the job does not get this shell's environment.
 pub fn install(profile: Option<&str>, options: &[String]) -> anyhow::Result<Value> {
@@ -299,19 +407,7 @@ pub fn install(profile: Option<&str>, options: &[String]) -> anyhow::Result<Valu
             xml(&log.display().to_string()),
             xml(&log.display().to_string()),
         );
-        std::fs::create_dir_all(path.parent().expect("a folder"))?;
-        let uid = String::from_utf8(std::process::Command::new("id").arg("-u").output()?.stdout)?;
-        let domain = format!("gui/{}", uid.trim());
-        // Replaces a job installed before.
-        let _ = std::process::Command::new("launchctl")
-            .args(["bootout", &format!("{domain}/{label}")])
-            .stderr(std::process::Stdio::null())
-            .status();
-        std::fs::write(&path, plist)?;
-        run(
-            "launchctl",
-            &["bootstrap", &domain, &path.display().to_string()],
-        )?;
+        launch(&label, &path, &plist)?;
         Ok(
             json!({"installed": path.display().to_string(), "log": log.display().to_string(), "every_seconds": 120}),
         )
@@ -356,13 +452,16 @@ pub fn install(profile: Option<&str>, options: &[String]) -> anyhow::Result<Valu
 pub fn uninstall(profile: Option<&str>) -> anyhow::Result<Value> {
     let unit = unit(profile);
     if cfg!(target_os = "macos") {
-        let path = launch_agent_path(profile).expect("a home");
-        let uid = String::from_utf8(std::process::Command::new("id").arg("-u").output()?.stdout)?;
-        let _ = std::process::Command::new("launchctl")
-            .args(["bootout", &format!("gui/{}/{}", uid.trim(), label(profile))])
-            .stderr(std::process::Stdio::null())
-            .status();
-        let _ = std::fs::remove_file(&path);
+        let domain = gui_domain()?;
+        unload(
+            &domain,
+            &label(profile),
+            &launch_agent_path(profile).expect("a home"),
+        )?;
+        // The energy sampler goes with the machine's own report.
+        if profile.is_none() {
+            uninstall_energy()?;
+        }
     } else {
         let _ = std::process::Command::new("systemctl")
             .args(["--user", "disable", "--now", &format!("{unit}.timer")])

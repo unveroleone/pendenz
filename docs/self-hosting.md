@@ -175,6 +175,22 @@ The same works by hand: `pendenz add-agent` and `pendenz issue-token --scopes re
 - **The machine**: CPU, memory, disk, the programs that use the most memory and CPU, and samples of the last 24 hours (kept in `~/.local/state/pendenz`). `--no-host` leaves it out.
 - **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** in `~/.hermes`: whether its gateway runs, its models, the cron jobs, the tokens and estimated cost per day and model from its session store, and the plan limits that `hermes usage` reports.
 - **Claude Code** in `~/.claude`: tokens per day and model from its session logs, and the sessions open right now.
+- **The Mac's energy and CPU temperature**, when the energy sampler runs (below).
+
+#### Energy and temperature of a Mac
+
+On a Mac, `pendenz report install --energy` also starts the energy sampler: a second LaunchAgent (`pendenz.energy`, log in `~/Library/Logs/pendenz-energy.log`) that runs all the time and reads the Mac's System Management Controller every five seconds. It needs no `sudo`. It keeps, per day, the energy the whole Mac used as the controller measures it (the key `PSTR`, total system power), the hours it measured, and how warm the CPU ran (the mean of the CPU's sensors), in `energy.json` in the state folder. The report sends this month and the last: kWh, measured hours, the highest and the median CPU temperature, and the last minute's watts and temperature.
+
+```sh
+~/.local/bin/pendenz report install --energy
+```
+
+- It is for the machine's own report, not a profile and not with `--no-host`. Install it on one agent per machine, so the energy is shown once. Later `report install` runs keep it in step with the report job: the same state folder, or removed with `--no-host`. `pendenz report uninstall` stops both.
+- What the controller measures is the Mac's own figure, without the power supply's losses at the wall and without what is plugged into the Mac. Time asleep or with the sampler stopped is not measured, which the measured hours show. The cost in the app is that energy at the price set today, an estimate.
+- A Mac whose controller gives neither the power nor the CPU's temperature is refused at install. Linux machines have no sampler.
+- After an update of the binary the sampler stops itself and launchd starts the new one. An update never adds the sampler, so a machine gets it with `report install --energy` once.
+
+The price per kWh is set in the app, in Settings, Agents, in Swiss francs. Without one, the Agents screen shows the energy alone.
 
 #### A second agent on one machine
 

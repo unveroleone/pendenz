@@ -177,6 +177,9 @@ private struct AgentForm: View {
             }
             if let host = report.host {
                 MachineSection(host: host)
+                if let energy = host.energy, !energy.months.isEmpty || energy.watts != nil || energy.tempC != nil {
+                    EnergySection(energy: energy, sentAt: report.sentAt, price: store.settings?.energyPriceChf)
+                }
             }
         }
         .formStyle(.grouped)
@@ -1065,6 +1068,125 @@ private struct MachineSection: View {
                             maximumUnitCount: 2,
                         )),
                 )
+            }
+        }
+    }
+}
+
+// MARK: Energy
+
+// What the machine used this month and the last, what that cost at the price set in Settings,
+// and how warm its CPU ran. The cost is the energy at today's price, so it is an estimate.
+private struct EnergySection: View {
+    let energy: AgentEnergy
+    // When the report was sent: a reading much older than that is no longer "now".
+    let sentAt: Date
+    let price: Double?
+
+    private static let freshFor: TimeInterval = 10 * 60
+
+    // The month before one the report names, such as "2026-10" for "2026-11".
+    private static func month(before name: String) -> String? {
+        let parts = name.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2 else { return nil }
+        let (year, month) = parts[1] == 1 ? (parts[0] - 1, 12) : (parts[0], parts[1] - 1)
+        return String(format: "%04d-%02d", year, month)
+    }
+
+    // The machine's current month, in its own calendar. A collector that does not name it is
+    // read in the Gregorian calendar at the time the report was sent.
+    private var currentMonth: String {
+        if let name = energy.thisMonth { return name }
+        let parts = Calendar(identifier: .gregorian).dateComponents([.year, .month], from: sentAt)
+        return String(format: "%04d-%02d", parts.year ?? 0, parts.month ?? 0)
+    }
+
+    // The months by their names, not their place: a month without readings is left out, so at
+    // the start of a month the only entry can be the last one.
+    private var thisMonth: AgentEnergyMonth? {
+        energy.months.first { $0.month == currentMonth }
+    }
+
+    private var lastMonth: AgentEnergyMonth? {
+        let previous = Self.month(before: currentMonth)
+        return energy.months.first { $0.month == previous }
+    }
+
+    // Fresh by the report's clock and by this device's, so a reading in a report that stopped
+    // coming is not shown as now. The screen draws again with every refresh of the board.
+    private func isFresh(_ date: Date?) -> Bool {
+        guard let date else { return false }
+        return sentAt.timeIntervalSince(date) <= Self.freshFor && Date.now.timeIntervalSince(date) <= Self.freshFor
+    }
+
+    private var now: String? {
+        var parts: [String] = []
+        if let watts = energy.watts, isFresh(energy.powerAt) {
+            parts.append("\(watts.formatted(.number.precision(.fractionLength(watts < 10 ? 1 : 0)))) W")
+        }
+        if let celsius = energy.tempC, isFresh(energy.tempAt) {
+            parts.append("CPU \(degrees(celsius))")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
+
+    // The energy and its cost, or nil for a month measured without power readings.
+    private func use(_ month: AgentEnergyMonth) -> String? {
+        guard let used = month.kwh else { return nil }
+        // Watt hours below one kWh, where two decimals of a kWh would round to nothing.
+        let kwh = used < 1
+            ? "\(Int((used * 1000).rounded())) Wh"
+            : "\(used.formatted(.number.precision(.fractionLength(used < 10 ? 2 : 1)))) kWh"
+        guard let price else { return kwh }
+        return "\(kwh), \(francs(used * price))"
+    }
+
+    private func francs(_ amount: Double) -> String {
+        amount.formatted(.currency(code: "CHF").precision(.fractionLength(2)))
+    }
+
+    private func degrees(_ celsius: Double) -> String {
+        "\(Int(celsius.rounded())) °C"
+    }
+
+    private func hours(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(value < 10 ? 1 : 0)))
+    }
+
+    var body: some View {
+        Section {
+            if let thisMonth, let use = use(thisMonth) {
+                LabeledContent("This Month", value: use)
+            }
+            if let lastMonth, let use = use(lastMonth) {
+                LabeledContent("Last Month", value: use)
+            }
+            if let now {
+                LabeledContent("Now", value: now)
+            }
+            if let highest = thisMonth?.tempMax {
+                LabeledContent("Highest CPU", value: degrees(highest))
+            }
+            if let median = thisMonth?.tempMedian {
+                LabeledContent("Median CPU", value: degrees(median))
+            }
+        } header: {
+            Text("Energy")
+        } footer: {
+            VStack(alignment: .leading, spacing: 4) {
+                if let thisMonth, thisMonth.kwh != nil {
+                    Text("Measured by the Mac for \(hours(thisMonth.hours)) hours this month.")
+                }
+                // Only where there is energy to put a price on, not for temperatures alone.
+                if energy.months.contains(where: { $0.kwh != nil }) {
+                    if let price {
+                        Text(
+                            "Cost estimated at \(price.formatted(.currency(code: "CHF").precision(.fractionLength(2 ... 4)))) per kWh.",
+                        )
+                    } else {
+                        Text("Set a price per kWh in Settings, Agents, to see the cost.")
+                    }
+                }
             }
         }
     }

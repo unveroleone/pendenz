@@ -1,10 +1,12 @@
 // Status reports: what an agent sends about itself, and the command that collects one on the
 // agent's machine. The server stores the checked report and shows it to the owner's devices.
 mod claude;
+mod energy;
 mod hermes;
 mod host;
 pub mod setup;
 mod skills;
+mod smc;
 mod text;
 pub mod update;
 
@@ -275,6 +277,48 @@ pub struct Host {
     // The last 24 hours, oldest first.
     #[serde(default)]
     pub series: Vec<Sample>,
+    // What the machine used and how warm it ran, where a sampler measures it (a Mac).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub energy: Option<Energy>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(deny_unknown_fields)]
+pub struct Energy {
+    // The last minute's average power in watts, and when it was measured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watts: Option<f64>,
+    // The last CPU temperature in degrees Celsius, and when it was measured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temp_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temp_c: Option<f64>,
+    // The machine's current month, such as "2026-11", so the apps tell this month from the last
+    // in the machine's calendar, not their own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub this_month: Option<String>,
+    // This month, then the last, in the machine's time zone. A month without readings is missing.
+    #[serde(default)]
+    pub months: Vec<EnergyMonth>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct EnergyMonth {
+    // "2026-11".
+    pub month: String,
+    // Missing when the month has no power readings, only temperatures.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kwh: Option<f64>,
+    // The hours that were measured; time asleep or without a sampler is missing.
+    pub hours: f64,
+    // The highest and the median CPU temperature, each the mean of the CPU's sensors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temp_max: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temp_median: Option<f64>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -311,6 +355,7 @@ const MAX_RUNS: usize = 20;
 const MAX_PROCESSES: usize = 16;
 const MAX_SAMPLES: usize = 300;
 const MAX_CHANNELS: usize = 8;
+const MAX_MONTHS: usize = 2;
 
 // The largest count a report keeps: far above any real use, and small enough that the apps can
 // add up a month of them without running over.
@@ -337,6 +382,14 @@ fn percent(value: f64) -> f64 {
 }
 fn money(value: f64) -> f64 {
     finite(value).max(0.0)
+}
+fn within(value: f64, low: f64, high: f64) -> Option<f64> {
+    (value.is_finite() && (low..=high).contains(&value)).then_some(value)
+}
+const CELSIUS: (f64, f64) = (-40.0, 150.0);
+
+fn is_month(text: &str) -> bool {
+    NaiveDate::parse_from_str(&format!("{text}-01"), "%Y-%m-%d").is_ok() && text.len() == 7
 }
 
 impl Report {
@@ -453,6 +506,22 @@ impl Report {
                 sample.cpu_percent = percent(sample.cpu_percent);
                 count(&mut sample.memory_used);
             }
+            if let Some(energy) = &mut host.energy {
+                energy.watts = energy.watts.and_then(|w| within(w, 0.0, 2000.0));
+                energy.temp_c = energy.temp_c.and_then(|c| within(c, CELSIUS.0, CELSIUS.1));
+                energy.this_month = energy.this_month.take().filter(|m| is_month(m));
+                energy.months.retain(|m| is_month(&m.month));
+                energy.months.truncate(MAX_MONTHS);
+                for month in &mut energy.months {
+                    month.kwh = month.kwh.map(|k| finite(k).clamp(0.0, 10_000.0));
+                    // 31 days and the hour a change from summer time adds.
+                    month.hours = finite(month.hours).clamp(0.0, 745.0);
+                    month.temp_max = month.temp_max.and_then(|c| within(c, CELSIUS.0, CELSIUS.1));
+                    month.temp_median = month
+                        .temp_median
+                        .and_then(|c| within(c, CELSIUS.0, CELSIUS.1));
+                }
+            }
         }
         self
     }
@@ -462,9 +531,18 @@ impl Report {
 enum Action {
     /// Send a report every two minutes from now on: a LaunchAgent on macOS, a systemd user
     /// timer on Linux. The options given here go into the job.
-    Install,
-    /// Stop sending reports.
+    Install {
+        /// On a Mac: also measure the machine's power and CPU temperature all the time, so the
+        /// reports carry its energy this month. Not for a profile.
+        #[arg(long)]
+        energy: bool,
+    },
+    /// Stop sending reports, and stop the energy sampler.
     Uninstall,
+    /// Measure the Mac's power and CPU temperature every few seconds until stopped, for the
+    /// reports. `report install --energy` runs it as a LaunchAgent.
+    #[command(hide = true)]
+    Energy,
 }
 
 #[derive(clap::Args)]
@@ -567,6 +645,17 @@ async fn bounded_source<T>(
     }
 }
 
+// The machine's state folder: the report command's samples, and the energy sampler's file.
+fn machine_state_dir(args: &Args) -> Option<PathBuf> {
+    args.state_dir.clone().or_else(|| {
+        std::env::var_os("XDG_STATE_HOME")
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| home().map(|h| h.join(".local/state")))
+            .map(|d| d.join("pendenz"))
+    })
+}
+
 pub async fn collect(args: &Args) -> Report {
     let home = home();
     let hermes_home = args
@@ -577,27 +666,20 @@ pub async fn collect(args: &Args) -> Report {
         .claude_home
         .clone()
         .or_else(|| home.as_ref().map(|h| h.join(".claude")));
-    let state_dir = args
-        .state_dir
-        .clone()
-        .or_else(|| {
-            std::env::var_os("XDG_STATE_HOME")
-                .filter(|v| !v.is_empty())
-                .map(PathBuf::from)
-                .or_else(|| home.as_ref().map(|h| h.join(".local/state")))
-                .map(|d| d.join("pendenz"))
-        })
-        // A profile keeps its own samples and usage totals beside the machine's.
-        .map(|dir| match &args.profile {
-            Some(name) => dir.join(name),
-            None => dir,
-        });
+    let machine_dir = machine_state_dir(args);
+    // A profile keeps its own samples and usage totals beside the machine's.
+    let state_dir = machine_dir.clone().map(|dir| match &args.profile {
+        Some(name) => dir.join(name),
+        None => dir,
+    });
 
     let host = async {
         if args.no_host {
             None
         } else {
-            bounded_source("host", host::collect(state_dir.clone())).await
+            // The machine's energy goes with the machine's own report only, so it shows once.
+            let energy_dir = machine_dir.clone().filter(|_| args.profile.is_none());
+            bounded_source("host", host::collect(state_dir.clone(), energy_dir)).await
         }
     };
     let hermes = async {
@@ -683,10 +765,23 @@ pub async fn run(args: Args) -> i32 {
     }
     let profile = args.profile.as_deref();
     match args.action {
-        Some(Action::Install) => {
-            return print(args.job_options().and_then(|o| setup::install(profile, &o)));
+        Some(Action::Install { energy }) => {
+            return print(install(&args, energy));
         }
         Some(Action::Uninstall) => return print(setup::uninstall(profile)),
+        Some(Action::Energy) => {
+            let Some(dir) = machine_state_dir(&args) else {
+                eprintln!("HOME is not set");
+                return 1;
+            };
+            return match energy::sample(dir).await {
+                Ok(()) => 0,
+                Err(error) => {
+                    eprintln!("energy: {error:#}");
+                    1
+                }
+            };
+        }
         None => {}
     }
     let report = match &args.file {
@@ -721,6 +816,54 @@ pub async fn run(args: Args) -> i32 {
         update::follow(&version).await;
     }
     code
+}
+
+// The report job, and on a Mac the energy sampler with it. A sampler installed before follows the
+// machine's report: it is installed again with the same state folder, or removed with --no-host.
+fn install(args: &Args, energy: bool) -> anyhow::Result<serde_json::Value> {
+    let profile = args.profile.as_deref();
+    if energy {
+        anyhow::ensure!(
+            profile.is_none() && !args.no_host,
+            "--energy measures the whole machine: install it with the machine's own report, without --profile and --no-host."
+        );
+        anyhow::ensure!(cfg!(target_os = "macos"), "--energy works on macOS only.");
+        let smc = smc::Smc::open()?;
+        anyhow::ensure!(
+            smc.power().is_some() || smc.cpu_temperature().is_some(),
+            "The SMC of this Mac gives neither its power nor its CPU temperature."
+        );
+    }
+    anyhow::ensure!(
+        setup::saved(profile).is_some(),
+        "{}",
+        match profile {
+            Some(name) => format!(
+                "Connect this profile first: pendenz connect --profile {name} <server> <code>"
+            ),
+            None => "Connect this machine first: pendenz connect <server> <code>".into(),
+        }
+    );
+    let options = args.job_options()?;
+    let state_dir = args
+        .state_dir
+        .as_ref()
+        .map(std::path::absolute)
+        .transpose()?;
+    let mut result = setup::install(profile, &options)?;
+    if profile.is_none() && cfg!(target_os = "macos") {
+        let sampler = if energy || (setup::energy_installed() && !args.no_host) {
+            setup::install_energy(state_dir.as_deref())
+        } else if setup::energy_installed() {
+            setup::uninstall_energy().map(|()| serde_json::json!({"uninstalled": true}))
+        } else {
+            return Ok(result);
+        };
+        result["energy"] = sampler.map_err(|error| {
+            error.context("The report job is installed, the energy sampler is not")
+        })?;
+    }
+    Ok(result)
 }
 
 fn read_file(path: &std::path::Path) -> anyhow::Result<Report> {
