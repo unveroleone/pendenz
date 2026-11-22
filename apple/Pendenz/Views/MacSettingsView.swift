@@ -70,6 +70,9 @@ struct MacSettingsView: View {
             .navigationTitle(SettingsPane.general.title)
         case .devices:
             Form {
+                // The address once more: a new device asks for it next to the pairing code,
+                // which is lost when the pane is left.
+                ServerSection()
                 DeviceSections()
             }
             .formStyle(.grouped)
