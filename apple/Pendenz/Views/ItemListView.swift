@@ -76,6 +76,7 @@ struct ItemListView: View {
                 ToolbarItem(placement: .primaryAction) { ItemOrderMenu(place: place) }
             }
             SyncStatus()
+            DetailsEdge()
         }
     }
 
@@ -139,6 +140,7 @@ struct SearchResultsView: View {
                 ContentUnavailableView.search
             }
         }
+        .toolbar { DetailsEdge() }
     }
 }
 

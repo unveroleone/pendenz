@@ -62,3 +62,18 @@ struct ListSection<Content: View>: View {
         #endif
     }
 }
+
+// Room between the last control of a list and the edge of the item details, which no bar behind
+// the toolbar marks on the Mac. Last in the toolbar of each view in the detail column: the
+// items of a view come after those of the views around it, so only there is it last.
+struct DetailsEdge: ToolbarContent {
+    @Environment(Navigation.self) private var navigation
+
+    var body: some ToolbarContent {
+        #if os(macOS)
+        if navigation.itemID != nil {
+            ToolbarSpacer(.fixed, placement: .primaryAction)
+        }
+        #endif
+    }
+}

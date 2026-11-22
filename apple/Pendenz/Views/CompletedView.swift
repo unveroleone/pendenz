@@ -25,7 +25,10 @@ struct CompletedView: View {
         }
         .navigationTitle("Completed")
         .refreshable { await store.sync() }
-        .toolbar { SyncStatus() }
+        .toolbar {
+            SyncStatus()
+            DetailsEdge()
+        }
         // Read from disk when the list is first opened, not at launch.
         .task { store.loadCompleted() }
     }

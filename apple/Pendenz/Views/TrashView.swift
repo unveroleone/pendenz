@@ -37,7 +37,10 @@ struct TrashView: View {
         }
         .navigationTitle("Trash")
         .refreshable { await store.sync() }
-        .toolbar { SyncStatus() }
+        .toolbar {
+            SyncStatus()
+            DetailsEdge()
+        }
         // The trash is read from disk when it is first opened, not at launch.
         .task { store.loadTrash() }
     }
