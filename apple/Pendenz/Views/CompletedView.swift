@@ -9,14 +9,10 @@ struct CompletedView: View {
         let sections = store.sections(for: .completed)
         ItemsList {
             ForEach(sections) { section in
-                Section {
+                ListSection(section.title) {
                     ForEach(section.items) { item in
                         ItemRow(item: item, style: ItemRow.Style(showsDay: true, showsProject: true))
                             .tag(item.id)
-                    }
-                } header: {
-                    if let title = section.title {
-                        Text(title)
                     }
                 }
             }
@@ -29,7 +25,10 @@ struct CompletedView: View {
         }
         .navigationTitle("Completed")
         .refreshable { await store.sync() }
-        .toolbar { SyncStatus() }
+        .toolbar {
+            SyncStatus()
+            DetailsEdge()
+        }
         // Read from disk when the list is first opened, not at launch.
         .task { store.loadCompleted() }
     }

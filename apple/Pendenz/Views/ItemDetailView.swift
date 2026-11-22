@@ -160,6 +160,12 @@ struct ItemDetailView: View {
             }
         }
         .formStyle(.grouped)
+        #if os(macOS)
+        // On the ground of the list next to it, instead of a gray of its own. The color of the
+        // list, not `.background`, which lets the desktop through and changes with it.
+        .scrollContentBackground(.hidden)
+        .background(Color(nsColor: .controlBackgroundColor))
+        #endif
         .modifier(ItemAttachmentDrop(itemID: itemID))
         .onAppear { load(item) }
         .onDisappear(perform: saveText)

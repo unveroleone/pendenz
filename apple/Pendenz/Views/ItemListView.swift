@@ -13,7 +13,7 @@ struct ItemListView: View {
                 ReminderBanner()
             }
             ForEach(sections) { section in
-                Section {
+                ListSection(section.title) {
                     if isManual {
                         // The inbox and the projects keep the order they are dragged into, and
                         // take text dropped from another app at the place it is dropped.
@@ -47,10 +47,6 @@ struct ItemListView: View {
                             drop(providers, below: nil, above: nil)
                         }
                     }
-                } header: {
-                    if let title = section.title {
-                        Text(title)
-                    }
                 }
             }
         }
@@ -80,6 +76,7 @@ struct ItemListView: View {
                 ToolbarItem(placement: .primaryAction) { ItemOrderMenu(place: place) }
             }
             SyncStatus()
+            DetailsEdge()
         }
     }
 
@@ -143,6 +140,7 @@ struct SearchResultsView: View {
                 ContentUnavailableView.search
             }
         }
+        .toolbar { DetailsEdge() }
     }
 }
 
@@ -229,7 +227,7 @@ struct ItemsList<Content: View>: View {
             if sizeClass == .compact {
                 List { content }
             } else {
-                List(selection: $navigation.itemID) { content }
+                List(selection: $navigation.itemID) { content.macListRows() }
                     #if os(macOS)
                     // The Delete key, only while the list itself has the focus.
                     .onDeleteCommand {
@@ -238,7 +236,7 @@ struct ItemsList<Content: View>: View {
                     #endif
             }
         }
-        .listStyle(.plain)
+        .macListLook()
     }
 }
 

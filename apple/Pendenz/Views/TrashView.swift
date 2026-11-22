@@ -9,22 +9,25 @@ struct TrashView: View {
         let items = store.trashedItems
         let notes = store.trashedNotes
         List {
-            if !items.isEmpty {
-                Section("Items") {
-                    ForEach(items) { item in
-                        TrashedItemRow(item: item)
+            Group {
+                if !items.isEmpty {
+                    ListSection("Items") {
+                        ForEach(items) { item in
+                            TrashedItemRow(item: item)
+                        }
+                    }
+                }
+                if !notes.isEmpty {
+                    ListSection("Notes") {
+                        ForEach(notes) { note in
+                            TrashedNoteRow(note: note)
+                        }
                     }
                 }
             }
-            if !notes.isEmpty {
-                Section("Notes") {
-                    ForEach(notes) { note in
-                        TrashedNoteRow(note: note)
-                    }
-                }
-            }
+            .macListRows()
         }
-        .listStyle(.plain)
+        .macListLook()
         .animation(.default, value: items.map(\.id))
         .animation(.default, value: notes.map(\.id))
         .overlay {
@@ -34,7 +37,10 @@ struct TrashView: View {
         }
         .navigationTitle("Trash")
         .refreshable { await store.sync() }
-        .toolbar { SyncStatus() }
+        .toolbar {
+            SyncStatus()
+            DetailsEdge()
+        }
         // The trash is read from disk when it is first opened, not at launch.
         .task { store.loadTrash() }
     }

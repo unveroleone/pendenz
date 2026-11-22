@@ -98,6 +98,7 @@ struct AgentsView: View {
             }
         }
         .navigationTitle("Agents")
+        .toolbar { DetailsEdge() }
         .refreshable { await board.refresh() }
         .task { await board.watch() }
     }
