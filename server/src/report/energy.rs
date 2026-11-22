@@ -76,44 +76,60 @@ impl State {
         &mut self.days[index]
     }
 
-    // Adds power between two readings over `seconds` that end at `end`, split at midnight.
-    fn add_power(&mut self, end: DateTime<Local>, seconds: f64, from: f64, to: f64) {
-        let watts = (from + to) / 2.0;
+    // The parts of an interval of `seconds` that ends at `end`, per local day: each day's seconds
+    // and the share of the interval before it, so power can be interpolated where a day begins.
+    fn parts(end: DateTime<Local>, seconds: f64) -> Vec<(NaiveDate, f64, f64)> {
         let start = end - Span::milliseconds((seconds * 1000.0) as i64);
-        let parts = if start.date_naive() == end.date_naive() {
-            vec![(end.date_naive(), seconds)]
-        } else {
-            let midnight = end
-                .date_naive()
-                .and_hms_opt(0, 0, 0)
-                .and_then(|t| t.and_local_timezone(Local).earliest())
-                .unwrap_or(end);
-            let after = ((end - midnight).num_milliseconds() as f64 / 1000.0).clamp(0.0, seconds);
-            vec![
-                (start.date_naive(), seconds - after),
-                (end.date_naive(), after),
-            ]
-        };
-        for (date, part) in parts {
+        if start.date_naive() == end.date_naive() || seconds <= 0.0 {
+            return vec![(end.date_naive(), seconds, 0.0)];
+        }
+        let after = ((end - day_start(end.date_naive()).unwrap_or(end)).num_milliseconds() as f64
+            / 1000.0)
+            .clamp(0.0, seconds);
+        vec![
+            (start.date_naive(), seconds - after, 0.0),
+            (end.date_naive(), after, (seconds - after) / seconds),
+        ]
+    }
+
+    // Adds power between two readings, the line between them integrated over each day's part.
+    fn add_power(&mut self, end: DateTime<Local>, seconds: f64, from: f64, to: f64) {
+        let at = |share: f64| from + (to - from) * share;
+        for (date, part, before) in Self::parts(end, seconds) {
             if part <= 0.0 {
                 continue;
             }
+            let share = part / seconds;
             let day = self.day(date);
-            day.wh += watts * part / 3600.0;
+            day.wh += (at(before) + at(before + share)) / 2.0 * part / 3600.0;
             day.power_s += part;
         }
     }
 
-    fn add_temperature(&mut self, date: NaiveDate, seconds: f64, celsius: f64) {
-        let day = self.day(date);
-        *day.temps.entry(celsius.round() as i32).or_default() += seconds;
-        day.temp_max = Some(day.temp_max.map_or(celsius, |m| m.max(celsius)));
+    fn add_temperature(&mut self, end: DateTime<Local>, seconds: f64, celsius: f64) {
+        for (date, part, _) in Self::parts(end, seconds) {
+            if part <= 0.0 {
+                continue;
+            }
+            let day = self.day(date);
+            *day.temps.entry(celsius.round() as i32).or_default() += part;
+            day.temp_max = Some(day.temp_max.map_or(celsius, |m| m.max(celsius)));
+        }
     }
 
     fn trim(&mut self, today: NaiveDate) {
         let oldest = today - Span::days(KEEP_DAYS);
         self.days.retain(|d| d.date > oldest && d.date <= today);
     }
+}
+
+// The first moment of a local day: midnight, or later where the clock jumps over it.
+fn day_start(date: NaiveDate) -> Option<DateTime<Local>> {
+    (0..4).find_map(|hour| {
+        date.and_hms_opt(hour, 0, 0)?
+            .and_local_timezone(Local)
+            .earliest()
+    })
 }
 
 fn read(dir: &Path) -> Option<State> {
@@ -171,11 +187,19 @@ pub async fn sample(dir: PathBuf) -> anyhow::Result<()> {
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     let mut ticks = tokio::time::interval(EVERY);
     ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    // The previous readings, each with the moment it was taken.
-    let mut last_power: Option<(Instant, f64)> = None;
-    let mut last_temp: Option<Instant> = None;
-    // This minute's energy and its seconds, for the average power.
+    // The previous readings, each with the moment it was taken on the monotonic clock and on
+    // the wall clock. The monotonic clock stops while the Mac sleeps, the wall clock does not:
+    // an interval counts only when both say it was short, so sleep is never counted.
+    let mut last_power: Option<(Instant, DateTime<Utc>, f64)> = None;
+    let mut last_temp: Option<(Instant, DateTime<Utc>)> = None;
+    let short = |then: Instant, then_wall: DateTime<Utc>, now: Instant, wall: DateTime<Utc>| {
+        let gap = now - then;
+        let wall_gap = (wall - then_wall).to_std().unwrap_or(Duration::MAX);
+        (gap <= LONGEST_GAP && wall_gap <= LONGEST_GAP).then_some(gap.as_secs_f64())
+    };
+    // This minute's energy, its seconds, and the end of its last interval, for the average power.
     let mut minute = (0.0, 0.0);
+    let mut minute_end: Option<DateTime<Utc>> = None;
     let mut written = Instant::now();
     loop {
         tokio::select! {
@@ -183,32 +207,31 @@ pub async fn sample(dir: PathBuf) -> anyhow::Result<()> {
             _ = terminate.recv() => break,
         }
         let now = Instant::now();
-        let wall = Local::now();
+        let local = Local::now();
+        let wall = local.to_utc();
         match smc.power() {
             Some(watts) => {
-                if let Some((then, before)) = last_power {
-                    let gap = now - then;
-                    if gap <= LONGEST_GAP {
-                        let seconds = gap.as_secs_f64();
-                        state.add_power(wall, seconds, before, watts);
-                        minute.0 += (before + watts) / 2.0 * seconds;
-                        minute.1 += seconds;
-                    }
+                if let Some((then, then_wall, before)) = last_power
+                    && let Some(seconds) = short(then, then_wall, now, wall)
+                {
+                    state.add_power(local, seconds, before, watts);
+                    minute.0 += (before + watts) / 2.0 * seconds;
+                    minute.1 += seconds;
+                    minute_end = Some(wall);
                 }
-                last_power = Some((now, watts));
+                last_power = Some((now, wall, watts));
             }
             None => last_power = None,
         }
         match smc.cpu_temperature() {
             Some(celsius) => {
-                if let Some(then) = last_temp {
-                    let gap = now - then;
-                    if gap <= LONGEST_GAP {
-                        state.add_temperature(wall.date_naive(), gap.as_secs_f64(), celsius);
-                    }
+                if let Some((then, then_wall)) = last_temp
+                    && let Some(seconds) = short(then, then_wall, now, wall)
+                {
+                    state.add_temperature(local, seconds, celsius);
                 }
-                last_temp = Some(now);
-                state.temp_at = Some(wall.to_utc());
+                last_temp = Some((now, wall));
+                state.temp_at = Some(wall);
                 state.temp_c = Some((celsius * 10.0).round() / 10.0);
             }
             None => last_temp = None,
@@ -216,10 +239,10 @@ pub async fn sample(dir: PathBuf) -> anyhow::Result<()> {
         if now - written >= WRITE_EVERY {
             if minute.1 > 0.0 {
                 state.watts = Some((minute.0 / minute.1 * 100.0).round() / 100.0);
-                state.power_at = Some(wall.to_utc());
+                state.power_at = minute_end;
             }
             minute = (0.0, 0.0);
-            state.trim(wall.date_naive());
+            state.trim(local.date_naive());
             if let Err(error) = write(&dir, &state) {
                 eprintln!("energy: {error:#}");
             }
@@ -232,7 +255,7 @@ pub async fn sample(dir: PathBuf) -> anyhow::Result<()> {
     }
     if minute.1 > 0.0 {
         state.watts = Some((minute.0 / minute.1 * 100.0).round() / 100.0);
-        state.power_at = Some(Utc::now());
+        state.power_at = minute_end;
     }
     state.trim(Local::now().date_naive());
     write(&dir, &state)

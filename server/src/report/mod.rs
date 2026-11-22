@@ -507,7 +507,8 @@ impl Report {
                 energy.months.truncate(MAX_MONTHS);
                 for month in &mut energy.months {
                     month.kwh = finite(month.kwh).clamp(0.0, 10_000.0);
-                    month.hours = finite(month.hours).clamp(0.0, 744.0);
+                    // 31 days and the hour a change from summer time adds.
+                    month.hours = finite(month.hours).clamp(0.0, 745.0);
                     month.temp_max = month.temp_max.and_then(|c| within(c, CELSIUS.0, CELSIUS.1));
                     month.temp_median = month
                         .temp_median
@@ -523,7 +524,12 @@ impl Report {
 enum Action {
     /// Send a report every two minutes from now on: a LaunchAgent on macOS, a systemd user
     /// timer on Linux. The options given here go into the job.
-    Install,
+    Install {
+        /// On a Mac: also measure the machine's power and CPU temperature all the time, so the
+        /// reports carry its energy this month. Not for a profile.
+        #[arg(long)]
+        energy: bool,
+    },
     /// Stop sending reports, and stop the energy sampler.
     Uninstall,
     /// Measure the Mac's power and CPU temperature every few seconds until stopped, for the
@@ -554,10 +560,6 @@ pub struct Args {
     /// With `report install`: a job that leaves the binary as it is.
     #[arg(long, global = true)]
     no_update: bool,
-    /// With `report install` on a Mac: also measure the machine's power and CPU temperature all
-    /// the time, so the reports carry its energy this month. Not for a profile.
-    #[arg(long)]
-    energy: bool,
     /// Leave out the machine's CPU, memory, disk and busiest programs.
     #[arg(long, global = true)]
     no_host: bool,
@@ -758,8 +760,8 @@ pub async fn run(args: Args) -> i32 {
     }
     let profile = args.profile.as_deref();
     match args.action {
-        Some(Action::Install) => {
-            return print(install(&args));
+        Some(Action::Install { energy }) => {
+            return print(install(&args, energy));
         }
         Some(Action::Uninstall) => return print(setup::uninstall(profile)),
         Some(Action::Energy) => {
@@ -811,9 +813,11 @@ pub async fn run(args: Args) -> i32 {
     code
 }
 
-fn install(args: &Args) -> anyhow::Result<serde_json::Value> {
+// The report job, and on a Mac the energy sampler with it. A sampler installed before follows the
+// machine's report: it is installed again with the same state folder, or removed with --no-host.
+fn install(args: &Args, energy: bool) -> anyhow::Result<serde_json::Value> {
     let profile = args.profile.as_deref();
-    if args.energy {
+    if energy {
         anyhow::ensure!(
             profile.is_none() && !args.no_host,
             "--energy measures the whole machine: install it with the machine's own report, without --profile and --no-host."
@@ -825,14 +829,35 @@ fn install(args: &Args) -> anyhow::Result<serde_json::Value> {
             "The SMC of this Mac gives neither its power nor its CPU temperature."
         );
     }
-    let mut result = setup::install(profile, &args.job_options()?)?;
-    if args.energy {
-        let state_dir = args
-            .state_dir
-            .as_ref()
-            .map(std::path::absolute)
-            .transpose()?;
-        result["energy"] = setup::install_energy(state_dir.as_deref())?;
+    anyhow::ensure!(
+        setup::saved(profile).is_some(),
+        "{}",
+        match profile {
+            Some(name) => format!(
+                "Connect this profile first: pendenz connect --profile {name} <server> <code>"
+            ),
+            None => "Connect this machine first: pendenz connect <server> <code>".into(),
+        }
+    );
+    let options = args.job_options()?;
+    let state_dir = args
+        .state_dir
+        .as_ref()
+        .map(std::path::absolute)
+        .transpose()?;
+    // The sampler first, so a sampler that cannot start leaves the report job as it was.
+    let mut sampler = None;
+    if profile.is_none() && cfg!(target_os = "macos") {
+        if energy || (setup::energy_installed() && !args.no_host) {
+            sampler = Some(setup::install_energy(state_dir.as_deref())?);
+        } else if setup::energy_installed() {
+            setup::uninstall_energy()?;
+            sampler = Some(serde_json::json!({"uninstalled": true}));
+        }
+    }
+    let mut result = setup::install(profile, &options)?;
+    if let Some(sampler) = sampler {
+        result["energy"] = sampler;
     }
     Ok(result)
 }

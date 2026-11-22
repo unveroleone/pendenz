@@ -261,6 +261,39 @@ fn energy_agent_path() -> Option<PathBuf> {
     super::home().map(|h| h.join(format!("Library/LaunchAgents/{ENERGY_LABEL}.plist")))
 }
 
+pub fn energy_installed() -> bool {
+    energy_agent_path().is_some_and(|p| p.is_file())
+}
+
+// Stops a LaunchAgent and removes its file. A job that was not loaded counts as stopped; one
+// that is still loaded afterwards is an error.
+fn unload(domain: &str, label: &str, path: &Path) -> anyhow::Result<()> {
+    let target = format!("{domain}/{label}");
+    let _ = std::process::Command::new("launchctl")
+        .args(["bootout", &target])
+        .stderr(std::process::Stdio::null())
+        .status();
+    let loaded = std::process::Command::new("launchctl")
+        .args(["print", &target])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success());
+    anyhow::ensure!(!loaded, "launchctl could not stop {label}");
+    match std::fs::remove_file(path) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.into()),
+        _ => Ok(()),
+    }
+}
+
+pub fn uninstall_energy() -> anyhow::Result<()> {
+    unload(
+        &gui_domain()?,
+        ENERGY_LABEL,
+        &energy_agent_path().expect("a home"),
+    )
+}
+
 // The energy sampler: one process that runs all the time and is started again when it stops,
 // such as after an update of the binary. macOS only.
 pub fn install_energy(state_dir: Option<&Path>) -> anyhow::Result<Value> {
@@ -416,20 +449,14 @@ pub fn uninstall(profile: Option<&str>) -> anyhow::Result<Value> {
     let unit = unit(profile);
     if cfg!(target_os = "macos") {
         let domain = gui_domain()?;
-        let mut jobs = vec![(label(profile), launch_agent_path(profile).expect("a home"))];
+        unload(
+            &domain,
+            &label(profile),
+            &launch_agent_path(profile).expect("a home"),
+        )?;
         // The energy sampler goes with the machine's own report.
         if profile.is_none() {
-            jobs.push((
-                ENERGY_LABEL.to_owned(),
-                energy_agent_path().expect("a home"),
-            ));
-        }
-        for (label, path) in jobs {
-            let _ = std::process::Command::new("launchctl")
-                .args(["bootout", &format!("{domain}/{label}")])
-                .stderr(std::process::Stdio::null())
-                .status();
-            let _ = std::fs::remove_file(&path);
+            uninstall_energy()?;
         }
     } else {
         let _ = std::process::Command::new("systemctl")

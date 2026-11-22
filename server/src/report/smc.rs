@@ -57,6 +57,7 @@ mod mac {
         reserved: u8,
         release: u16,
     }
+    // Every byte of the structure is a named field, so none is sent to the kernel unset.
     #[repr(C)]
     #[derive(Default, Clone, Copy)]
     struct PowerLimits {
@@ -72,22 +73,27 @@ mod mac {
         size: u32,
         kind: u32,
         attributes: u8,
+        padding: [u8; 3],
     }
     #[repr(C)]
     #[derive(Default, Clone, Copy)]
     struct KeyData {
         key: u32,
         version: Version,
+        padding: [u8; 2],
         limits: PowerLimits,
         info: KeyInfo,
         result: u8,
         status: u8,
         command: u8,
+        padding_after_command: u8,
         index: u32,
         bytes: [u8; 32],
     }
     const _: () = {
         assert!(std::mem::size_of::<KeyData>() == 80);
+        assert!(std::mem::size_of::<KeyInfo>() == 12);
+        assert!(std::mem::offset_of!(KeyData, padding) == 10);
         assert!(std::mem::offset_of!(KeyData, limits) == 12);
         assert!(std::mem::offset_of!(KeyData, info) == 28);
         assert!(std::mem::offset_of!(KeyData, result) == 40);
