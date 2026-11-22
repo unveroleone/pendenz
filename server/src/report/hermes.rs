@@ -67,11 +67,33 @@ pub async fn collect(home: PathBuf, state_dir: Option<PathBuf>) -> anyhow::Resul
         }
     }
     let skill_dirs = config.skill_dirs.clone();
-    let (mut agent, jobs) = tokio::task::spawn_blocking(move || {
-        let skills = super::skills::Skills::index(&home, &skill_dirs);
-        (gateway(&home), jobs(&home.join("cron"), &skills))
-    })
-    .await?;
+    let (mut agent, (mut jobs, skill_of), home) =
+        tokio::task::spawn_blocking(move || (gateway(&home), jobs(&home.join("cron")), home))
+            .await?;
+    // The skills' sentences have a time of their own: a slow skills folder costs the sentences,
+    // never the jobs or the gateway's state.
+    let summaries = tokio::time::timeout(
+        SKILL_TIME,
+        tokio::task::spawn_blocking(move || {
+            let skills = super::skills::Skills::index(&home, &skill_dirs);
+            skill_of
+                .into_iter()
+                .filter_map(|(job, skill)| Some((job, skills.summary(&skill)?)))
+                .collect::<HashMap<String, String>>()
+        }),
+    )
+    .await;
+    match summaries {
+        Ok(Ok(summaries)) => {
+            for job in &mut jobs {
+                job.skill_summary = summaries.get(&job.name).cloned();
+            }
+        }
+        _ => eprintln!(
+            "hermes: the skills took longer than {} s",
+            SKILL_TIME.as_secs()
+        ),
+    }
     agent.version = version;
     agent.model = config.model.clone();
     agent.fallbacks = config.fallbacks.iter().map(|(_, m)| m.clone()).collect();
@@ -756,7 +778,11 @@ fn time(value: Option<&str>) -> Option<DateTime<Utc>> {
         .map(|t| t.with_timezone(&Utc))
 }
 
-fn jobs(cron: &Path, skills: &super::skills::Skills) -> Vec<Job> {
+// How long finding the skills' sentences may take, within the source's own limit.
+const SKILL_TIME: std::time::Duration = std::time::Duration::from_secs(6);
+
+// The jobs, and the skill each job runs by the job's name.
+fn jobs(cron: &Path) -> (Vec<Job>, HashMap<String, String>) {
     let list: Vec<CronJob> = std::fs::read(cron.join("jobs.json"))
         .ok()
         .and_then(|bytes| {
@@ -784,6 +810,7 @@ fn jobs(cron: &Path, skills: &super::skills::Skills) -> Vec<Job> {
             entry.2 = audit.duration_ms.map(|ms| (ms / 100.0).round() / 10.0);
         }
     }
+    let mut skill_of = HashMap::new();
     let mut jobs: Vec<Job> = list
         .into_iter()
         .map(|job| {
@@ -798,7 +825,9 @@ fn jobs(cron: &Path, skills: &super::skills::Skills) -> Vec<Job> {
             });
             let failing = status.as_deref() == Some("error") || job.failure_streak > 0;
             let name = job.name.clone().unwrap_or_else(|| job.id.clone());
-            let skill_summary = job.skill(&name).and_then(|skill| skills.summary(&skill));
+            if let Some(skill) = job.skill(&name) {
+                skill_of.entry(name.clone()).or_insert(skill);
+            }
             Job {
                 name,
                 schedule: schedule(&job.schedule, job.schedule_display.as_deref()),
@@ -817,12 +846,12 @@ fn jobs(cron: &Path, skills: &super::skills::Skills) -> Vec<Job> {
                 runs_week,
                 tokens_week,
                 last_duration_s,
-                skill_summary,
+                skill_summary: None,
             }
         })
         .collect();
     jobs.sort_by(|a, b| a.next_run_at.cmp(&b.next_run_at).then(a.name.cmp(&b.name)));
-    jobs
+    (jobs, skill_of)
 }
 
 const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

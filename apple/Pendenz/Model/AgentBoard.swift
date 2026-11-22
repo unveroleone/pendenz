@@ -128,9 +128,10 @@ final class AgentBoard {
     }
 
     // How many lines this board has written, so a list fetched during a write is not shown, and
-    // how many saves it started, so a save that ends after a later one does not show its line.
+    // how many saves it started per job, so a save that ends after a later one of the same job
+    // does not show its line.
     private var writes = 0
-    private var saves = 0
+    private var saves: [String: Int] = [:]
 
     // Writes the owner's line about one of an agent's jobs, or removes it with an empty text,
     // then reads the list again, which also keeps it on disk. Throws when the server refused
@@ -138,8 +139,9 @@ final class AgentBoard {
     // list cannot be read right after.
     func setJobDescription(agent: String, job: String, text: String) async throws {
         guard !isClosed else { return }
-        saves += 1
-        let save = saves
+        let key = "\(agent)\n\(job)"
+        let save = saves[key, default: 0] + 1
+        saves[key] = save
         do {
             try await api.setJobDescription(agent: agent, job: job, text: text)
         } catch APIError.status(401, let message) {
@@ -148,7 +150,7 @@ final class AgentBoard {
         }
         guard !isClosed else { return }
         writes += 1
-        if save == saves {
+        if save == saves[key] {
             show(agent: agent, job: job, text: text.split(whereSeparator: \.isWhitespace).joined(separator: " "))
         }
         // A refresh in flight asks again by itself, since `writes` changed.
