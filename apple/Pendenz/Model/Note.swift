@@ -17,6 +17,9 @@ nonisolated struct Note: Identifiable, Hashable, Sendable, Codable {
     // The time of the last edit as the server writes it, "2026-11-12T14:33:36.095Z". Kept as
     // text: these sort in the order of their times.
     var updatedAt: String
+    // The files the server holds for it, pictures among them. Missing in rows from a server or
+    // a build before files on notes.
+    var files: [ItemFile] = []
 
     // What the server accepts.
     static let bodyLimit = 100_000
@@ -51,8 +54,8 @@ nonisolated struct Note: Identifiable, Hashable, Sendable, Codable {
     }
 }
 
-// Written by hand for one reason: a server or a stored row from before the lock sends no
-// `locked`, and such a note has to read as one without a lock. In an extension, so the
+// Written by hand for one reason: a server or a stored row from before the lock or the files
+// sends no `locked` or `files`, and such a note has to read as one without a lock or files. In an extension, so the
 // memberwise initialiser stays.
 nonisolated extension Note {
     init(from decoder: Decoder) throws {
@@ -68,6 +71,7 @@ nonisolated extension Note {
             version: container.decode(Int.self, forKey: .version),
             seq: container.decode(Int.self, forKey: .seq),
             updatedAt: container.decode(String.self, forKey: .updatedAt),
+            files: container.decodeIfPresent([ItemFile].self, forKey: .files) ?? [],
         )
     }
 }

@@ -137,7 +137,7 @@ nonisolated struct PendingFile: Identifiable, Hashable, Sendable, Codable {
     var isUnwanted = false
 }
 
-// One file as an item shows it: held by the server, or still waiting here.
+// One file as an item or a note shows it: held by the server, or still waiting here.
 nonisolated enum ShownFile: Identifiable, Hashable, Sendable {
     case stored(ItemFile)
     case waiting(PendingFile)
@@ -348,6 +348,9 @@ nonisolated enum PendingWrite: Sendable, Codable {
     case removeFile(itemID: Int, fileID: Int)
     case updateComment(itemID: Int, commentID: Int, patch: CommentPatch)
     case deleteComment(itemID: Int, commentID: Int)
+    // Files on a note. New cases at the end, so a queue on disk reads as before.
+    case addNoteFile(noteID: Int, file: PendingFile)
+    case removeNoteFile(noteID: Int, fileID: Int)
 }
 
 extension PendingWrite {
@@ -371,6 +374,7 @@ extension PendingWrite {
         case .updateProject(let id, _), .deleteProject(let id): Rows(project: id)
         case .addFile(let id, _), .removeFile(let id, _): Rows(items: [id])
         case .updateComment(let id, _, _), .deleteComment(let id, _): Rows(items: [id])
+        case .addNoteFile(let id, _), .removeNoteFile(let id, _): Rows(notes: [id])
         }
     }
 }

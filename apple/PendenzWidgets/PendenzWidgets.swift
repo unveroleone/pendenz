@@ -5,6 +5,9 @@ import WidgetKit
 struct PendenzWidgets: WidgetBundle {
     var body: some Widget {
         ListWidget()
+        #if os(iOS)
+        LockWidget()
+        #endif
         NewItemControl()
     }
 }

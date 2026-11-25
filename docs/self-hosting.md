@@ -31,7 +31,7 @@ chown 10001:10001 /srv/pendenz/data /srv/pendenz/backups
 chmod 700 /srv/pendenz
 ```
 
-The containers run as the user 10001, which needs to write `data` and `backups`. Put `data` on a disk you trust, since it holds everything. Images and files attached to items are stored in the database too, so it and its backups grow with them. The owner sets the largest file in the app (up to 100 MB); a reverse proxy in front of the server has to let request bodies of that size through.
+The containers run as the user 10001, which needs to write `data` and `backups`. Put `data` on a disk you trust, since it holds everything. Images and files attached to items and notes are stored in the database too, so it and its backups grow with them. The owner sets the largest file in the app (up to 100 MB); a reverse proxy in front of the server has to let request bodies of that size through.
 
 Copy these files from the repo into `/srv/pendenz`:
 
@@ -150,6 +150,8 @@ claude mcp add --transport http pendenz https://<hostname>/mcp --header "Authori
 ```
 
 The stdio server is `pendenz mcp` with `PENDENZ_API_URL` and `PENDENZ_API_TOKEN` in its environment. It also offers `add_item_image`, which reads a file next to the agent. Both servers offer only the tools the token's scopes allow. Install the binary on the agent's machine with `install.sh` (see below) or from a checkout with `cargo install --path server`; it needs no database there. `pendenz --help` lists the CLI commands, which take the same environment.
+
+Both servers also serve one skill, `agent-loop`: a playbook for working through the owner's items with these tools, from triage through questions and a brief to closing the item, with the exact call for each step. A client that supports skills over MCP offers it as a command. In Claude Code (v2.1.331 or later, where skills over MCP are a beta) it is `/pendenz:agent-loop` when the server was added under the name `pendenz`; it shows up in `/skills` and is not available in `claude -p`. Other clients can read the same text as the resource `skill://pendenz/agent-loop/SKILL.md`, and the server instructions point agents to it. The skill is part of the binary, so it always matches the tools of the server that serves it.
 
 ### Connect an agent from the app
 
@@ -323,7 +325,7 @@ docker compose --profile backup run --rm -e RESTIC_CACHE_DIR=/tmp/restic-cache -
 docker compose --profile backup run --rm backup
 ```
 
-The backup uses SQLite's online backup and `PRAGMA integrity_check`, uploads the snapshot and keeps 30 days in restic. Files on items, pictures among them, are rows in the same database, so they are in every snapshot, and they are what makes the database grow. Keep the restic password somewhere outside the server: the archive cannot supply its own password.
+The backup uses SQLite's online backup and `PRAGMA integrity_check`, uploads the snapshot and keeps 30 days in restic. Files on items and notes, pictures among them, are rows in the same database, so they are in every snapshot, and they are what makes the database grow. Keep the restic password somewhere outside the server: the archive cannot supply its own password.
 
 For a nightly run, copy `deploy/pendenz-backup.service` and `deploy/pendenz-backup.timer` to `/etc/systemd/system`, then:
 

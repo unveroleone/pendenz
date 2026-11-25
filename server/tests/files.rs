@@ -493,3 +493,371 @@ async fn the_old_image_routes_reach_pictures_only() {
     assert_eq!(body["files"][0]["name"], "Offer.pdf");
     assert_eq!(body["images"], json!([]));
 }
+
+// Notes hold files the same way. These are the cases above, for a note.
+
+async fn note(server: &Server, body: Value) -> i64 {
+    server
+        .api(&server.owner, "POST", "/notes", Some(body))
+        .await["id"]
+        .as_i64()
+        .unwrap()
+}
+
+async fn note_actions(server: &Server, id: i64) -> Vec<String> {
+    server
+        .api(
+            &server.owner,
+            "GET",
+            &format!("/notes/{id}?activity=20"),
+            None,
+        )
+        .await["activity"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| entry["action"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[tokio::test]
+async fn a_note_holds_files_like_an_item() {
+    let server = Server::start().await;
+    let id = note(&server, json!({"body": "Trip\nReceipts"})).await;
+    let picture = png_of(30, 20);
+    let (status, body) = status_and_body(
+        server
+            .upload_to(
+                &server.owner,
+                &format!("/notes/{id}"),
+                ("Receipt.png", "image/png", picture.clone()),
+                "k1",
+                Some("upload-1"),
+            )
+            .await,
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["id"], id);
+    assert_eq!(body["version"], 2);
+    assert_eq!(body["body"], "Trip\nReceipts");
+    let file = &body["files"][0];
+    assert_eq!(file["name"], "Receipt.png");
+    assert_eq!(file["upload_id"], "upload-1");
+    assert_eq!(
+        (file["width"].clone(), file["height"].clone()),
+        (json!(30), json!(20))
+    );
+    // A note has no old `images` list: no app of 0.2.0 knew files on notes.
+    assert!(body.get("images").is_none());
+    let file = file["id"].as_i64().unwrap();
+
+    let download = get(&server, &server.owner, &format!("/notes/{id}/files/{file}")).await;
+    assert_eq!(download.status(), 200);
+    assert_eq!(download.headers()["content-type"], "image/png");
+    assert_eq!(download.bytes().await.unwrap().to_vec(), picture);
+
+    // The changes feed carries the list, so the apps learn of it.
+    let changes = server
+        .api(&server.owner, "GET", "/changes?cursor=0", None)
+        .await;
+    let row = changes["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|change| change["type"] == "note")
+        .unwrap();
+    assert_eq!(row["data"]["files"][0]["id"], file);
+
+    let (status, body) = delete(
+        &server,
+        &server.owner,
+        &format!("/notes/{id}/files/{file}"),
+        "k2",
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["files"], json!([]));
+    // A retry of the removal, whose answer got lost, gets the note as it is, not a 404.
+    let (status, again) = delete(
+        &server,
+        &server.owner,
+        &format!("/notes/{id}/files/{file}"),
+        "k2",
+    )
+    .await;
+    assert_eq!(status, 200, "{again}");
+    assert_eq!(again["version"], body["version"]);
+    assert_eq!(
+        get(&server, &server.owner, &format!("/notes/{id}/files/{file}"))
+            .await
+            .status(),
+        404
+    );
+    let actions = note_actions(&server, id).await;
+    assert_eq!(actions, ["file_removed", "file_added", "created"]);
+}
+
+#[tokio::test]
+async fn a_note_file_is_found_only_under_its_note() {
+    let server = Server::start().await;
+    // The first item and the first note share their number, and so do their first files.
+    let item = item(&server, json!({"title": "Offer"})).await;
+    let first = note(&server, json!({"body": "First"})).await;
+    let second = note(&server, json!({"body": "Second"})).await;
+    assert_eq!(item, first);
+    for (holder, data, key) in [
+        (format!("/items/{item}"), b"item bytes".to_vec(), "k1"),
+        (format!("/notes/{first}"), b"note bytes".to_vec(), "k2"),
+    ] {
+        let response = server
+            .upload_to(
+                &server.owner,
+                &holder,
+                ("a.txt", "text/plain", data),
+                key,
+                None,
+            )
+            .await;
+        assert_eq!(response.status(), 200);
+    }
+    let bytes = |path: String| {
+        let server = &server;
+        async move {
+            let response = get(server, &server.owner, &path).await;
+            (
+                response.status().as_u16(),
+                response.bytes().await.unwrap().to_vec(),
+            )
+        }
+    };
+    assert_eq!(
+        bytes(format!("/items/{item}/files/1")).await,
+        (200, b"item bytes".to_vec())
+    );
+    assert_eq!(
+        bytes(format!("/notes/{first}/files/1")).await,
+        (200, b"note bytes".to_vec())
+    );
+    assert_eq!(bytes(format!("/notes/{second}/files/1")).await.0, 404);
+    let (status, _) = delete(
+        &server,
+        &server.owner,
+        &format!("/notes/{second}/files/1"),
+        "k3",
+    )
+    .await;
+    assert_eq!(status, 404);
+    assert_eq!(
+        bytes(format!("/notes/{first}/files/1")).await,
+        (200, b"note bytes".to_vec())
+    );
+}
+
+#[tokio::test]
+async fn an_agent_cannot_reach_the_files_of_a_hidden_note() {
+    let server = Server::start().await;
+    let bot = server.token("bot", "read,write");
+    let hidden = note(
+        &server,
+        json!({"body": "Secret", "hidden_from_agents": true}),
+    )
+    .await;
+    let open = note(&server, json!({"body": "Open"})).await;
+    let response = server
+        .upload_to(
+            &server.owner,
+            &format!("/notes/{hidden}"),
+            ("s.txt", "text/plain", b"secret".to_vec()),
+            "k1",
+            None,
+        )
+        .await;
+    assert_eq!(response.status(), 200);
+    for path in [
+        format!("/notes/{hidden}/files/1"),
+        // The hidden note's file, asked for under a note the agent may see.
+        format!("/notes/{open}/files/1"),
+    ] {
+        assert_eq!(get(&server, &bot, &path).await.status(), 404, "{path}");
+    }
+    let upload = server
+        .upload_to(
+            &bot,
+            &format!("/notes/{hidden}"),
+            ("x.txt", "text/plain", b"x".to_vec()),
+            "b1",
+            None,
+        )
+        .await;
+    assert_eq!(upload.status(), 404);
+    let (status, _) = delete(&server, &bot, &format!("/notes/{hidden}/files/1"), "b2").await;
+    assert_eq!(status, 404);
+
+    // An agent's upload to a note it may see, retried after the owner hid the note.
+    let open_path = format!("/notes/{open}");
+    let send = || {
+        server.upload_to(
+            &bot,
+            &open_path,
+            ("b.txt", "text/plain", b"b".to_vec()),
+            "b3",
+            None,
+        )
+    };
+    assert_eq!(send().await.status(), 200);
+    let version = server
+        .api(&server.owner, "GET", &format!("/notes/{open}"), None)
+        .await["note"]["version"]
+        .clone();
+    server
+        .api(
+            &server.owner,
+            "PATCH",
+            &format!("/notes/{open}"),
+            Some(json!({"version": version, "hidden_from_agents": true})),
+        )
+        .await;
+    assert_eq!(send().await.status(), 404);
+    // The owner still has both.
+    for path in [
+        format!("/notes/{hidden}/files/1"),
+        format!("/notes/{open}/files/2"),
+    ] {
+        assert_eq!(
+            get(&server, &server.owner, &path).await.status(),
+            200,
+            "{path}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_trashed_note_keeps_its_files_but_takes_no_new_ones() {
+    let server = Server::start().await;
+    let id = note(&server, json!({"body": "Old"})).await;
+    let response = server
+        .upload_to(
+            &server.owner,
+            &format!("/notes/{id}"),
+            ("a.txt", "text/plain", b"a".to_vec()),
+            "k1",
+            None,
+        )
+        .await;
+    let version = response.json::<Value>().await.unwrap()["version"].clone();
+    let trashed = server
+        .api(
+            &server.owner,
+            "PATCH",
+            &format!("/notes/{id}"),
+            Some(json!({"version": version, "trashed": true})),
+        )
+        .await;
+    // An edit of the note keeps its files.
+    assert_eq!(trashed["files"][0]["name"], "a.txt");
+    assert_eq!(
+        get(&server, &server.owner, &format!("/notes/{id}/files/1"))
+            .await
+            .status(),
+        200
+    );
+    let added = server
+        .upload_to(
+            &server.owner,
+            &format!("/notes/{id}"),
+            ("b.txt", "text/plain", b"b".to_vec()),
+            "k2",
+            None,
+        )
+        .await;
+    assert_eq!(added.status(), 400);
+    let (status, _) = delete(
+        &server,
+        &server.owner,
+        &format!("/notes/{id}/files/1"),
+        "k3",
+    )
+    .await;
+    assert_eq!(status, 400);
+}
+
+#[tokio::test]
+async fn a_note_upload_retried_after_the_limit_was_lowered_is_stored_once() {
+    let server = Server::start().await;
+    let id = note(&server, json!({"body": "Scan"})).await;
+    let path = format!("/notes/{id}");
+    let send = || {
+        server.upload_to(
+            &server.owner,
+            &path,
+            ("scan.bin", "application/octet-stream", vec![7u8; 2_000_000]),
+            "k1",
+            None,
+        )
+    };
+    let (status, first) = status_and_body(send().await).await;
+    assert_eq!(status, 200, "{first}");
+    assert_eq!(set_limit(&server, &server.owner, json!(1)).await.0, 200);
+    let (status, again) = status_and_body(send().await).await;
+    assert_eq!(status, 200, "{again}");
+    assert_eq!(again["files"], first["files"]);
+    assert_eq!(again["version"], first["version"]);
+    let added = note_actions(&server, id)
+        .await
+        .iter()
+        .filter(|action| *action == "file_added")
+        .count();
+    assert_eq!(added, 1);
+}
+
+#[tokio::test]
+async fn a_token_without_read_gets_a_receipt_for_a_note_file() {
+    let server = Server::start().await;
+    let writer = server.token("writer", "write");
+    let id = note(&server, json!({"body": "Drop box"})).await;
+    let (status, body) = status_and_body(
+        server
+            .upload_to(
+                &writer,
+                &format!("/notes/{id}"),
+                ("a.txt", "text/plain", b"a".to_vec()),
+                "w1",
+                None,
+            )
+            .await,
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(body, json!({"id": id, "version": 2}));
+}
+
+#[tokio::test]
+async fn no_edit_writes_the_files_of_a_note() {
+    let server = Server::start().await;
+    let id = note(&server, json!({"body": "Plain"})).await;
+    let list = json!([{"id": 1, "name": "a.txt", "mime": "text/plain", "bytes": 1, "sha256": "0"}]);
+    let client = reqwest::Client::new();
+    let created = client
+        .post(format!("{}/api/notes", server.url()))
+        .bearer_auth(&server.owner)
+        .header("Idempotency-Key", "k1")
+        .json(&json!({"body": "With files", "files": list}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(created.status(), 400);
+    let edited = client
+        .patch(format!("{}/api/notes/{id}", server.url()))
+        .bearer_auth(&server.owner)
+        .header("Idempotency-Key", "k2")
+        .json(&json!({"version": 1, "files": list}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(edited.status(), 400);
+    let stored = server
+        .api(&server.owner, "GET", &format!("/notes/{id}"), None)
+        .await;
+    assert_eq!(stored["note"]["files"], json!([]));
+}

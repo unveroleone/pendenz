@@ -6,5 +6,6 @@ mod client;
 pub mod hosted;
 mod schema;
 mod server;
+mod skills;
 pub mod stdio;
 mod tools;
