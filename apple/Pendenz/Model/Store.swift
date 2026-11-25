@@ -816,10 +816,13 @@ final class Store {
                     write: .addFile(itemID: id, file: file),
                 )
             }
+        // The receipt goes in the same save, so the drop is known as queued for as long as it
+        // is there, also after the outbox has sent the item.
         let rows = entries.compactMap { disk.put($0) }
+        let receipt = disk.putShare(drop.id)
         guard disk.commit() else {
             // Only these rows: other changes that wait for a save stay as they are.
-            disk.unput(rows)
+            disk.unput(rows, share: receipt)
             files.forEach(attachments.discard)
             reportStorageProblem()
             return false
@@ -830,10 +833,14 @@ final class Store {
         return true
     }
 
-    // Whether a share is in the outbox already: it was queued, and the app ended before its
-    // drop was deleted.
+    // Whether a share was queued already, and the app ended or failed to delete its drop.
     func hasShared(_ drop: SharedDrop) -> Bool {
-        outbox.contains { $0.key == drop.key }
+        outbox.contains { $0.key == drop.key } || disk.hasShare(drop.id)
+    }
+
+    // Forgets the receipts of shares whose drops are gone.
+    func forgetShares(except waiting: [SharedDrop]) {
+        disk.forgetShares(except: Set(waiting.map(\.id)))
     }
 
     // A local ID that was not used since launch. One that the server has already answered

@@ -156,28 +156,12 @@ nonisolated enum SharedDrops {
         folder?.appending(path: drop.id, directoryHint: .isDirectory).appending(path: name)
     }
 
-    // Removes a drop that is queued or not wanted. A drop whose folder could not be removed
-    // keeps a receipt, so it is not queued a second time after its item was sent.
+    // Removes a drop that is queued or not wanted. The app keeps a receipt for a queued one
+    // until its folder is gone (`StoredShare`).
     static func remove(_ drop: SharedDrop) {
         guard let folder else { return }
-        var receipts = Set(UserDefaults.standard.stringArray(forKey: receiptsKey) ?? [])
-        do {
-            try FileManager.default.removeItem(at: folder.appending(path: drop.id, directoryHint: .isDirectory))
-            guard receipts.remove(drop.id) != nil else { return }
-        } catch CocoaError.fileNoSuchFile {
-            guard receipts.remove(drop.id) != nil else { return }
-        } catch {
-            receipts.insert(drop.id)
-        }
-        UserDefaults.standard.set(Array(receipts), forKey: receiptsKey)
+        try? FileManager.default.removeItem(at: folder.appending(path: drop.id, directoryHint: .isDirectory))
     }
-
-    // Whether this drop was queued already and only its folder is left.
-    static func isQueued(_ drop: SharedDrop) -> Bool {
-        UserDefaults.standard.stringArray(forKey: receiptsKey)?.contains(drop.id) == true
-    }
-
-    private static let receiptsKey = "queuedShares"
 
     // Every drop and draft: the device was unpaired. A share sheet that was saving just then
     // can still leave one, which `isFromEndedPairing` turns away.

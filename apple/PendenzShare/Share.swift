@@ -80,8 +80,10 @@ final class Share {
                     case .tooLarge: tooLarge += 1
                     case .unread: unread += 1
                     }
-                } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-                    if let url = await Self.loadURL(from: provider) { links.append(url) }
+                } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
+                          let url = await Self.loadURL(from: provider)
+                {
+                    links.append(url)
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier),
                           let text = await Self.loadText(from: provider) { texts.append(text) }
             }

@@ -52,7 +52,7 @@ extension Session {
                 SharedDrops.remove(drop)
                 continue
             }
-            if store.hasShared(drop) || SharedDrops.isQueued(drop) {
+            if store.hasShared(drop) {
                 SharedDrops.remove(drop)
                 continue
             }
@@ -89,5 +89,7 @@ extension Session {
                     : "\(unread) images shared with “\(drop.title)” could not be read and were left out."
             }
         }
+        guard self.store === store, !store.isClosed else { return }
+        store.forgetShares(except: SharedDrops.waiting())
     }
 }
