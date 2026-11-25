@@ -5,6 +5,8 @@ import SwiftUI
 struct QuickAddView: View {
     @Environment(Store.self) private var store
     let place: Place
+    // Called after an item was added, which here means queued in the outbox.
+    var onAdd: (() -> Void)?
 
     @State private var title = ""
     // Kinds the person switched off by tapping their chip, because the word was meant literally.
@@ -126,11 +128,14 @@ struct QuickAddView: View {
     }
 
     private func save(_ parsed: QuickAddParser.Result) {
-        guard !parsed.title.isEmpty else { return }
+        // A store that was just closed (unpaired, or another server) would drop the item, and the
+        // text has to stay. The view gets the new store a moment later.
+        guard !parsed.title.isEmpty, !store.isClosed else { return }
         store.add(store.newItem(parsed, hidden: false, in: place))
         title = ""
         ignored = []
         isFocused = true
+        onAdd?()
     }
 }
 
