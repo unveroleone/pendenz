@@ -99,6 +99,7 @@ The notes are for the person who updates: what they will notice and what they ha
 - The hosted endpoint calls the API router in process with the caller's token (`Client::local`). Keep it that way: a tool that reads the database itself would skip the scope checks and the hidden filter.
 - `server/tests/agent.rs` runs every tool, the hosted endpoint's HTTP rules, the stdio server and the CLI against a scratch server and compares each answer with `server/tests/fixtures/`. Add steps for a new tool. When what an agent should see changes on purpose, record again with `PENDENZ_RECORD_FIXTURES=1 cargo test --test agent` and read the fixture diff before committing it.
 - No agent token may approve or pair a device, and no agent sees a hidden row. Keep it that way in every new tool.
+- The skill `agent-loop` is `server/src/agent/skills/agent-loop/SKILL.md`, compiled in and served by `skills.rs`. It names tools and their fields, so a change to a tool updates it in the same change: `skills.rs` checks every `tool {json}` example in it against the input schemas, and `agent_loop` in `server/tests/agent.rs` walks one item through the flow it describes. Keep it free of names and of any one setup, like the tool descriptions. The fixtures hold its size, so an edit to it records them again.
 
 ## The push relay
 
