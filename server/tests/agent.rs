@@ -2051,3 +2051,157 @@ async fn cli() {
     }
     t.finish();
 }
+
+async fn read_item(agent: &Hosted, id: &str) -> Value {
+    agent.call("get_item", json!({"id": id})).await["content"][0]["json"].clone()
+}
+
+// One item walked through the loop with the calls the agent-loop skill shows: found in stage new,
+// a question, the owner's answer, a brief, the start, the result and the close.
+#[tokio::test]
+async fn agent_loop() {
+    let server = Server::start().await;
+    let agent = server.hosted(&server.token("bot", "read,write"));
+    let owner = server.hosted(&server.owner);
+    let json = |answer: Value| answer["content"][0]["json"].clone();
+
+    let created = json(
+        owner
+            .call(
+                "create_item",
+                json!({"item": {"title": "Plan the weekly digest"}, "key": "owner-create"}),
+            )
+            .await,
+    );
+    let id = created["ref"].as_str().unwrap().to_owned();
+
+    // Triage finds it, and only it.
+    let waiting = json(agent.call("list_items", json!({"stage": "new"})).await);
+    let found: Vec<&Value> = waiting["items"].as_array().unwrap().iter().collect();
+    assert_eq!(found.len(), 1, "{waiting}");
+    assert_eq!(found[0]["ref"], json!(id));
+
+    let version = |item: &Value| item["item"]["version"].as_i64().unwrap();
+
+    // A question, then needs_answer.
+    let item = read_item(&agent, &id).await;
+    let asked = json(
+        agent
+            .call(
+                "add_comment",
+                json!({"id": id, "body": "Questions:\n1. Weekly only?", "key": "questions-1"}),
+            )
+            .await,
+    );
+    assert!(asked.get("error").is_none(), "{asked}");
+    let moved = json(
+        agent
+            .call(
+                "update_item",
+                json!({"id": id, "version": version(&item), "key": "ask-1", "changes": {"agent_stage": "needs_answer"}}),
+            )
+            .await,
+    );
+    assert_eq!(moved["agent_stage"], "needs_answer", "{moved}");
+    let none = json(agent.call("list_items", json!({"stage": "new"})).await);
+    assert_eq!(none["items"], json!([]), "{none}");
+
+    // The owner answers in a comment, which the agent tells apart by its author.
+    owner
+        .call(
+            "add_comment",
+            json!({"id": id, "body": "Weekly only.", "key": "owner-answer"}),
+        )
+        .await;
+    let item = read_item(&agent, &id).await;
+    let workspace = json(agent.call("workspace", json!({})).await);
+    let human = workspace["actors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|actor| actor["kind"] == "human")
+        .unwrap()["id"]
+        .clone();
+    let comments = item["comments"].as_array().unwrap();
+    assert_eq!(comments.last().unwrap()["author_id"], human, "{item}");
+    assert_ne!(comments[0]["author_id"], human, "{item}");
+
+    // The brief, then ready.
+    agent
+        .call(
+            "add_comment",
+            json!({"id": id, "body": "Brief v1: Draft the weekly digest.", "key": "brief-v1"}),
+        )
+        .await;
+    let ready = json(
+        agent
+            .call(
+                "update_item",
+                json!({"id": id, "version": version(&item), "key": "ready-v1", "changes": {"agent_stage": "ready"}}),
+            )
+            .await,
+    );
+    assert_eq!(ready["agent_stage"], "ready", "{ready}");
+
+    // The start claims the item with the version just read; a stale version is refused.
+    let item = read_item(&agent, &id).await;
+    let stale = agent
+        .call(
+            "update_item",
+            json!({"id": id, "version": version(&item) - 1, "key": "start-stale", "changes": {"agent_stage": "running", "status": "doing"}}),
+        )
+        .await;
+    assert_eq!(stale["isError"], true, "{stale}");
+    let started = json(
+        agent
+            .call(
+                "update_item",
+                json!({"id": id, "version": version(&item), "key": "start-v1", "changes": {"agent_stage": "running", "status": "doing"}}),
+            )
+            .await,
+    );
+    assert_eq!(
+        (&started["agent_stage"], &started["status"]),
+        (&json!("running"), &json!("doing")),
+        "{started}"
+    );
+
+    // The result, then closed in one write.
+    agent
+        .call(
+            "add_comment",
+            json!({"id": id, "body": "Result: The draft is in a note.", "key": "result"}),
+        )
+        .await;
+    let item = read_item(&agent, &id).await;
+    let closed = json(
+        agent
+            .call(
+                "update_item",
+                json!({"id": id, "version": version(&item), "key": "close", "changes": {"status": "done", "agent_stage": "none"}}),
+            )
+            .await,
+    );
+    assert_eq!(closed["status"], "done", "{closed}");
+    let item = read_item(&agent, &id).await;
+    assert_eq!(
+        (&item["item"]["agent_stage"], &item["item"]["status"]),
+        (&json!("none"), &json!("done")),
+        "{item}"
+    );
+    let bodies: Vec<&str> = item["comments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["body"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        bodies,
+        [
+            "Questions:\n1. Weekly only?",
+            "Weekly only.",
+            "Brief v1: Draft the weekly digest.",
+            "Result: The draft is in a note."
+        ]
+    );
+}

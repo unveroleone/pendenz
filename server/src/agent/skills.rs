@@ -116,6 +116,46 @@ mod tests {
         }
     }
 
+    // The example calls of a skill: spans in backticks of the form `tool {json}`.
+    fn examples(text: &str) -> Vec<(&str, &str)> {
+        text.split('`')
+            .skip(1)
+            .step_by(2)
+            .filter_map(|span| {
+                let (name, args) = span.split_once(' ')?;
+                let plain =
+                    !name.is_empty() && name.bytes().all(|b| b.is_ascii_lowercase() || b == b'_');
+                (plain && args.starts_with('{')).then_some((name, args))
+            })
+            .collect()
+    }
+
+    // Every call a skill shows names a tool of this server and passes its input schema, so a
+    // change to tools.json that the skill no longer matches fails here.
+    #[test]
+    fn examples_match_the_tools() {
+        let tools = super::super::tools::definitions();
+        for skill in SKILLS {
+            let found = examples(skill.text);
+            assert!(
+                found.len() >= 10,
+                "{}: only {} examples",
+                skill.name,
+                found.len()
+            );
+            for (name, args) in found {
+                let tool = tools
+                    .iter()
+                    .find(|tool| tool["name"] == name)
+                    .unwrap_or_else(|| panic!("{}: no tool {name}", skill.name));
+                let mut args: serde_json::Value = serde_json::from_str(args)
+                    .unwrap_or_else(|error| panic!("{}: {name} {args}: {error}", skill.name));
+                super::super::schema::validate(&tool["inputSchema"], &mut args)
+                    .unwrap_or_else(|issues| panic!("{}: {name}: {issues}", skill.name));
+            }
+        }
+    }
+
     #[test]
     fn unknown_uris_are_not_served() {
         assert!(get("skill://pendenz/other/SKILL.md").is_none());
