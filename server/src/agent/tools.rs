@@ -26,7 +26,7 @@ const SHOWN_TEXT: i64 = 1_000_000;
 const SHOWN_IMAGE: i64 = 5 * 1024 * 1024;
 const SHOWN_PIXELS: u64 = 40_000_000;
 
-fn definitions() -> &'static [Value] {
+pub(super) fn definitions() -> &'static [Value] {
     static TOOLS: OnceLock<Vec<Value>> = OnceLock::new();
     TOOLS.get_or_init(|| {
         let tools: Vec<Value> =

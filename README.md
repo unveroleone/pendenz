@@ -60,13 +60,13 @@ Pendenz is a private app for the things you still have to do. You write an item 
 - **Reminders and tasks.** One kind of item. With a date it appears in Reminders and notifies you on the device, with the actions Done, In 1 Hour and Tomorrow. Without a project it sits in the inbox.
 - **Quick add.** Type "Call the dentist tomorrow 9:00 #health" and the date and the project are set. Repeats work the same way, in English and German.
 - **Notes.** Plain markdown, grouped in the same projects as the items. A note can be turned into an item, and a locked note is kept in Locked Notes, behind Face ID or Touch ID.
-- **Projects and images.** A project has a name and an icon, and each list keeps its own order. An item can carry images.
+- **Projects and images.** A project has a name and an icon, and each list keeps its own order. Items and notes can carry images and files.
 - **Offline.** Every change is written to a local store first and sent when the server is reachable.
 - **Sync by push.** After a change the server asks your other devices to sync with a silent push.
-- **Widget.** One list widget in three sizes for the home screen and the Mac desktop, set to Reminders, the inbox, a project or all open items. Every row has a tick that completes the item without opening the app.
+- **Widgets.** One list widget in three sizes for the home screen and the Mac desktop, set to Reminders, the inbox, a project or all open items. Every row has a tick that completes the item without opening the app. On the lock screen of iPhone and iPad, a smaller widget shows how many items the list has and the next one.
 - **Share from other apps.** On the iPhone and iPad, a link, a text or up to ten images go from any app's share menu to the inbox as one item, also without a connection.
 - **Siri, Shortcuts and Spotlight.** "Add to Pendenz" works without setup, and Shortcuts can add, complete, find and open items and notes. Spotlight finds the open items and the notes on the device, a locked note by its title alone. A New Item control goes into Control Center, on the lock screen or on the Action button.
-- **Agents.** The MCP server and the CLI can do what the app can do with items, notes and projects. An item or note you hide does not exist for an agent.
+- **Agents.** The MCP server and the CLI can do what the app can do with items, notes and projects. The MCP server also serves a skill, `agent-loop`, that shows an agent how to triage your items, ask, write a brief and close an item when the work is done. An item or note you hide does not exist for an agent.
 - **Agents screen.** What waits for you, what your agents work on, their plan limits and spend, their scheduled jobs and the load of the machine they run on. An agent's machine sends it with `pendenz report`, which reads Hermes Agent and Claude Code by itself. Connect a machine from Settings with a one-time code.
 - **Self-hosted.** The server is one Rust binary with one SQLite file. A device pairs with a one-time code.
 

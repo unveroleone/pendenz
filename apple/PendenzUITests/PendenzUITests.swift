@@ -1,7 +1,8 @@
 import XCTest
 
 // Flows that need a finger: swipes, drags, the notification prompt, typing a pairing code,
-// searching, putting back from the trash, deleting a project and sharing a page from Safari.
+// searching, putting back from the trash, deleting a project, the attachments of a note and
+// sharing a page from Safari.
 // They run against servers that `apple/uitest.sh` starts and seeds. Without its environment
 // every test is skipped.
 @MainActor
@@ -181,6 +182,53 @@ final class PendenzUITests: XCTestCase {
             .firstMatch.waitForExistence(timeout: 5))
         app.buttons["Done"].firstMatch.tap()
         XCTAssertTrue(note.waitForNonExistence(timeout: 10), "The note went to the trash.")
+    }
+
+    // A note shows its picture and its file under the text, opens the picture in the preview, and
+    // removes it after asking. The server seeded both.
+    func testNoteShowsOpensAndRemovesAttachments() throws {
+        try XCTSkipIf(isSidebarLayout, "Runs on the iPhone layout.")
+        let server = try value("PENDENZ_LOCAL")
+        let id = try value("PENDENZ_NOTE_ID")
+        let app = try launch(tab: "notes")
+        let note = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Attachments'")).firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 10), "The note is in the list.")
+        note.tap()
+        // The exact label once the picture has loaded; until then it ends in ", loading".
+        let picture = app.buttons["Image 1 of 1"].firstMatch
+        XCTAssertTrue(picture.waitForExistence(timeout: 20), "The picture is under the text.")
+        let file = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reminder.txt'")).firstMatch
+        XCTAssertTrue(file.exists, "So is the file.")
+
+        picture.tap()
+        let close = app.buttons.matching(NSPredicate(format: "label IN {'Close', 'Done'}")).firstMatch
+        XCTAssertTrue(close.waitForExistence(timeout: 10), "The picture opens in the preview.")
+        close.tap()
+        XCTAssertTrue(close.waitForNonExistence(timeout: 10))
+
+        picture.press(forDuration: 2)
+        app.buttons["Remove"].firstMatch.tap()
+        let alert = app.alerts["Remove this image?"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 10), "Removing asks first.")
+        alert.buttons["Remove"].tap()
+        XCTAssertTrue(picture.waitForNonExistence(timeout: 10), "The picture is gone.")
+        XCTAssertTrue(file.exists, "The file stays.")
+
+        var names: [String]?
+        let deadline = Date.now.addingTimeInterval(15)
+        while names != ["Reminder.txt"], Date.now < deadline {
+            names = try files(ofNote: id, on: server)
+            if names != ["Reminder.txt"] { Thread.sleep(forTimeInterval: 0.5) }
+        }
+        XCTAssertEqual(names, ["Reminder.txt"], "The server removed the picture and kept the file.")
+        app.navigationBars.buttons.firstMatch.tap()
+    }
+
+    private func files(ofNote id: String, on server: String) throws -> [String] {
+        let data = try Data(contentsOf: URL(string: server + "/api/notes/\(id)")!)
+        let body = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let note = body?["note"] as? [String: Any]
+        return (note?["files"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String }
     }
 
     // Return in the description starts a new line, and the server keeps it.

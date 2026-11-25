@@ -122,7 +122,8 @@ final class LocalStore {
     // 6: an item's pictures are among its files.
     // 7: comments are kept.
     // 8: an item's row says where an agent is with it.
-    private static let format = 8
+    // 9: a note's row lists its files.
+    private static let format = 9
 
     // Kept alive here: a context whose container is gone traps on its first fetch.
     private let container: ModelContainer
@@ -183,12 +184,12 @@ final class LocalStore {
             for row in closed where (try? decoder.decode(Item.self, from: row.payload))?.trashed == true {
                 row.isTrashed = true
             }
-            if state.format < 8 {
+            if state.format < 9 {
                 // Rows stored by an older build lack a field: when a project was made, when an
-                // item was completed, whether a note is locked, which files an item has, its
-                // pictures among them, where an agent is with it. Such a build stored a row without a list it did not
-                // know,
-                // or skipped the comments, and its cursor has passed that row. The server sends
+                // item was completed, whether a note is locked, which files an item or a note
+                // has, its pictures among them, where an agent is with it. Such a build stored a
+                // row without a list it did not know, or skipped the comments, and its cursor has
+                // passed that row. The server sends
                 // every row again from the start, and each replaces the one kept here. The
                 // waiting changes stay.
                 state.cursor = 0
@@ -248,7 +249,10 @@ final class LocalStore {
             snapshot.projects = try context.fetch(FetchDescriptor<StoredProject>())
                 .map { try decoder.decode(Project.self, from: $0.payload) }
             let noteTargets = snapshot.outbox.compactMap { entry -> Int? in
-                if case .updateNote(let id, _) = entry.write { id } else { nil }
+                switch entry.write {
+                case .updateNote(let id, _), .addNoteFile(let id, _), .removeNoteFile(let id, _): id
+                default: nil
+                }
             }
             let listed =
                 FetchDescriptor<StoredNote>(predicate: #Predicate { !$0.isTrashed || noteTargets.contains($0.id) })

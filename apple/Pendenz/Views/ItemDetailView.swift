@@ -166,7 +166,7 @@ struct ItemDetailView: View {
         .scrollContentBackground(.hidden)
         .background(Color(nsColor: .controlBackgroundColor))
         #endif
-        .modifier(ItemAttachmentDrop(itemID: itemID))
+        .modifier(ItemAttachmentDrop(holder: .item(itemID)))
         .onAppear { load(item) }
         .onDisappear(perform: saveText)
         .onChange(of: focus) { old, new in

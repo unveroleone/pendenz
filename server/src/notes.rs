@@ -3,7 +3,7 @@ use crate::{
     auth::Identity,
     error::{ApiError, Result},
     items::{About, Written, guard_hidden, item_id, next_seq, record, settle_project},
-    model::Activity,
+    model::{Activity, FileRef},
 };
 use axum::{
     Extension, Json,
@@ -25,6 +25,9 @@ pub struct Note {
     pub hidden_from_agents: bool,
     pub locked: bool,
     pub trashed: bool,
+    // Changed only by the file routes in files.rs. An edit of the note cannot write it.
+    #[sqlx(json)]
+    pub files: Vec<FileRef>,
     pub version: i64,
     pub seq: i64,
     pub created_by: String,
