@@ -45,9 +45,10 @@ extension Session {
     func takeSharedDrops() async {
         guard let connection, let store, !store.isClosed else { return }
         let server = connection.server.absoluteString
-        for drop in SharedDrops.waiting() {
-            guard drop.server == server else {
-                // Shared while the device was paired with another server.
+        drops: for drop in SharedDrops.waiting() {
+            // Shared while the device was paired with another server, or before it was unpaired
+            // and the waiting shares went with the outbox.
+            guard drop.server == server, !SharedDrops.isFromEndedPairing(drop) else {
                 SharedDrops.remove(drop)
                 continue
             }
@@ -59,6 +60,7 @@ extension Session {
             var unread = 0
             for name in drop.pictures {
                 guard let url = SharedDrops.picture(name, of: drop) else { return }
+                // The read is retried at the next intake; newer shares go on meanwhile.
                 let data: Data
                 do {
                     data = try Data(contentsOf: url)
@@ -67,7 +69,7 @@ extension Session {
                     continue
                 } catch {
                     // Perhaps only for now, such as while the device is locked. The drop waits.
-                    return
+                    continue drops
                 }
                 if let scaled = await Pictures.scaled(data) {
                     pictures.append(scaled)

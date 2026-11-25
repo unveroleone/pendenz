@@ -179,9 +179,18 @@ nonisolated enum SharedDrops {
 
     private static let receiptsKey = "queuedShares"
 
-    // Every drop and draft: the device was unpaired.
+    // Every drop and draft: the device was unpaired. A share sheet that was saving just then
+    // can still leave one, which `isFromEndedPairing` turns away.
     static func removeAll() {
+        UserDefaults.standard.set(Date.now, forKey: unpairedKey)
         guard let folder else { return }
         try? FileManager.default.removeItem(at: folder)
     }
+
+    static func isFromEndedPairing(_ drop: SharedDrop) -> Bool {
+        guard let unpaired = UserDefaults.standard.object(forKey: unpairedKey) as? Date else { return false }
+        return drop.createdAt <= unpaired
+    }
+
+    private static let unpairedKey = "sharesUnpairedAt"
 }

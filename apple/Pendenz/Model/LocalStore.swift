@@ -352,11 +352,14 @@ final class LocalStore {
             .filter { $0.status == .done && !$0.archived }
     }
 
-    func put(_ entry: PendingEntry) {
-        guard !isClosed, let payload = try? JSONEncoder().encode(entry.write) else { return }
-        context.insert(StoredWrite(
+    @discardableResult
+    func put(_ entry: PendingEntry) -> StoredWrite? {
+        guard !isClosed, let payload = try? JSONEncoder().encode(entry.write) else { return nil }
+        let row = StoredWrite(
             key: entry.key, order: entry.order, sendAfter: entry.sendAfter, payload: payload, heldFor: entry.heldFor,
-        ))
+        )
+        context.insert(row)
+        return row
     }
 
     func remove(key: String) {
@@ -395,13 +398,9 @@ final class LocalStore {
         }
     }
 
-    // Takes back entries that were put but could not be committed.
-    func unput(keys: [String]) {
+    // Takes back rows that were put but could not be committed.
+    func unput(_ rows: [StoredWrite]) {
         guard !isClosed else { return }
-        let rows = (
-            try? context.fetch(FetchDescriptor<StoredWrite>(predicate: #Predicate { keys.contains($0.key) })),
-        ) ??
-            []
         rows.forEach(context.delete)
     }
 

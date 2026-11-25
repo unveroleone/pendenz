@@ -161,17 +161,24 @@ final class Share {
 
     // A text that is one web address and nothing else.
     private static func webLink(_ text: String) -> URL? {
-        guard !text.contains(where: \.isWhitespace), let url = URL(string: text),
-              ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host() != nil
-        else { return nil }
+        guard !text.contains(where: \.isWhitespace), let url = URL(string: text), isWebLink(url) else { return nil }
         return url
+    }
+
+    // A link the server takes: http or https, with a host and a port it can parse. One it
+    // refuses would cost the whole share, its text and pictures too.
+    private static func isWebLink(_ url: URL) -> Bool {
+        guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""), let host = url.host(), !host.isEmpty,
+              let parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return false }
+        return parts.port.map { (0 ... 65535).contains($0) } ?? true
     }
 
     private static func loadURL(from provider: NSItemProvider) async -> URL? {
         let url: URL? = await withCheckedContinuation { continuation in
             _ = provider.loadObject(ofClass: URL.self) { url, _ in continuation.resume(returning: url) }
         }
-        guard let url, ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host() != nil else { return nil }
+        guard let url, isWebLink(url) else { return nil }
         return url
     }
 

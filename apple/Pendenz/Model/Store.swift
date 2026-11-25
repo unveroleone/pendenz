@@ -816,10 +816,10 @@ final class Store {
                     write: .addFile(itemID: id, file: file),
                 )
             }
-        entries.forEach(disk.put)
+        let rows = entries.compactMap { disk.put($0) }
         guard disk.commit() else {
-            // Only these entries: other changes that wait for a save stay as they are.
-            disk.unput(keys: entries.map(\.key))
+            // Only these rows: other changes that wait for a save stay as they are.
+            disk.unput(rows)
             files.forEach(attachments.discard)
             reportStorageProblem()
             return false
