@@ -100,6 +100,7 @@ final class Push {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_: Notification) {
         Push.shared.launched()
+        if let session = Session.current { MenuBarCapture.shared.start(session: session) }
         #if SPARKLE
         // Made here, so the updater starts and checks on its own schedule.
         _ = Updater.shared

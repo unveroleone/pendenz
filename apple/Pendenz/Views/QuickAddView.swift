@@ -5,6 +5,8 @@ import SwiftUI
 struct QuickAddView: View {
     @Environment(Store.self) private var store
     let place: Place
+    // Called after an item was added, which here means queued in the outbox.
+    var onAdd: (() -> Void)?
 
     @State private var title = ""
     // Kinds the person switched off by tapping their chip, because the word was meant literally.
@@ -131,6 +133,7 @@ struct QuickAddView: View {
         title = ""
         ignored = []
         isFocused = true
+        onAdd?()
     }
 }
 
