@@ -193,8 +193,9 @@ final class PendenzUITests: XCTestCase {
         let note = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Attachments'")).firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 10), "The note is in the list.")
         note.tap()
+        // The exact label once the picture has loaded; until then it ends in ", loading".
         let picture = app.buttons["Image 1 of 1"].firstMatch
-        XCTAssertTrue(picture.waitForExistence(timeout: 10), "The picture is under the text.")
+        XCTAssertTrue(picture.waitForExistence(timeout: 20), "The picture is under the text.")
         let file = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reminder.txt'")).firstMatch
         XCTAssertTrue(file.exists, "So is the file.")
 

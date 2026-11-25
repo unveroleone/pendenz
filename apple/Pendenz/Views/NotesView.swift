@@ -449,10 +449,6 @@ struct NoteEditorView: View {
         .modifier(NoteTitle(title: showsTitle ? note.map(\.title) ?? "New Note" : nil))
         .toolbar { toolbar(note) }
         .onChange(of: navigation.noteID, initial: true) { _, id in open(id) }
-        .onChange(of: currentID.map(store.noteID)) {
-            attachmentFailure = nil
-            attachmentRequest = nil
-        }
         .onChange(of: navigation.isWritingNote, initial: true) { _, isWriting in
             if isWriting { isFocused = true }
         }
@@ -677,6 +673,10 @@ struct NoteEditorView: View {
         }
         leave()
         currentID = id
+        // Another note: what the last one asked to add or said went wrong is not about it. A
+        // note that only got its server ID is the same note and does not come here.
+        attachmentRequest = nil
+        attachmentFailure = nil
         let note = id.flatMap(store.note)
         text = note?.body ?? ""
         // A new note has nothing to load.

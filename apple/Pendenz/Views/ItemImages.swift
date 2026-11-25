@@ -73,6 +73,8 @@ struct ItemImageTile: View {
 
     private var accessibilityText: String {
         if hasFailed { return "\(label), could not be loaded. Try again" }
+        // Until its file is here a tap does nothing, and the label says why.
+        if file == nil { return "\(label), loading" }
         return image.isWaiting ? "\(label), not sent yet" : label
     }
 
