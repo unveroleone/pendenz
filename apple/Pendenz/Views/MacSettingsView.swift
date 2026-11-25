@@ -64,6 +64,7 @@ struct MacSettingsView: View {
                 } else {
                     NotPairedSection()
                 }
+                MenuBarSettingsSection()
                 VersionSection()
             }
             .formStyle(.grouped)
