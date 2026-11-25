@@ -441,6 +441,10 @@ struct NoteEditorView: View {
             holder: attachable, room: attachmentRoom, request: $attachmentRequest, failure: $attachmentFailure,
         ))
         .modifier(ItemAttachmentDrop(holder: attachable))
+        // A picker over the editor would sit under its keyboard.
+        .onChange(of: attachmentRequest) { _, request in
+            if request != nil { isFocused = false }
+        }
         .alert("This note was not locked", isPresented: isShowingLockFailure) {
             Button("OK") {}
         } message: {
