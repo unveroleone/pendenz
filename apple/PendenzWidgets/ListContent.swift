@@ -77,6 +77,15 @@ nonisolated struct ListContent: Sendable {
         }
     }
 
+    // What a widget says when the list is loaded and has no rows.
+    var emptyText: String {
+        switch list {
+        case .reminders: "Nothing due today."
+        case .inbox: "The inbox is empty."
+        case .all, .project: "Nothing open."
+        }
+    }
+
     // For the widget gallery on a device that is not paired, and behind the placeholder.
     static func sample(_ list: WidgetList, at date: Date) -> ListContent {
         let today = Day(date)

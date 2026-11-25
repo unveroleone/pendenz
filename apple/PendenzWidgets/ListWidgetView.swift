@@ -13,7 +13,7 @@ struct ListWidgetView: View {
             case .rows where !content.rows.isEmpty:
                 rows
             case .rows:
-                message(emptyText)
+                message(content.emptyText)
             case .loading:
                 message("Open Pendenz to load your items.")
             case .unpaired:
@@ -77,14 +77,6 @@ struct ListWidgetView: View {
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var emptyText: String {
-        switch content.list {
-        case .reminders: "Nothing due today."
-        case .inbox: "The inbox is empty."
-        case .all, .project: "Nothing open."
-        }
     }
 
     private var layout: ListWidgetRow.Layout {
