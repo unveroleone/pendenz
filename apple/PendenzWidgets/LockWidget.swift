@@ -34,25 +34,20 @@ struct LockWidgetView: View {
         .widgetURL(WidgetLink.list(content.list).url)
     }
 
-    // Titles of items and projects are hidden where the lock screen's privacy settings ask
-    // for it; the count and the names of the fixed lists are not.
-    private var isProject: Bool {
-        if case .project = content.list { true } else { false }
-    }
-
     private var hasRows: Bool {
         content.state == .rows && !content.rows.isEmpty
     }
 
-    // MARK: Circular
+    // MARK: The count
 
-    // The list's symbol over the count, or a check mark once the list is done.
-    private var circular: some View {
+    // The list's symbol over the count, or a check mark once the list is done. It is the
+    // whole circular widget and the left edge of the rectangular one. The list's name is
+    // left out to give the room to the items; VoiceOver still says it.
+    private var countMark: some View {
         VStack(spacing: 0) {
             Image(systemName: content.symbol)
                 .font(.caption)
                 .widgetAccentable()
-                .accessibilityHidden(true)
             switch content.state {
             case .rows where hasRows:
                 Text(countText)
@@ -71,43 +66,37 @@ struct LockWidgetView: View {
         .accessibilityLabel("\(content.title), \(spokenState)")
     }
 
+    // MARK: Circular
+
+    private var circular: some View {
+        countMark
+    }
+
     // MARK: Rectangular
 
-    // The list's name and count, then the next items, as many as fit.
+    // The count on the left, the next items beside it, as many as fit.
     private var rectangular: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 4) {
-                Image(systemName: content.symbol)
-                    .widgetAccentable()
-                    .accessibilityHidden(true)
-                Text(content.title)
-                    .lineLimit(1)
-                    .privacySensitive(isProject)
-                Spacer(minLength: 4)
-                if content.state == .rows {
-                    Text(countText)
-                        .monospacedDigit()
-                        .accessibilityLabel(spokenCount)
+        HStack(alignment: .center, spacing: 8) {
+            countMark
+                .frame(minWidth: 24)
+            Group {
+                if hasRows {
+                    ViewThatFits(in: .vertical) {
+                        rows(3)
+                        rows(2)
+                        rows(1)
+                    }
+                    .privacySensitive()
+                } else {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
                 }
             }
-            .font(.headline)
-            .widgetAccentable()
-            .accessibilityElement(children: .combine)
-
-            if hasRows {
-                ViewThatFits(in: .vertical) {
-                    rows(2)
-                    rows(1)
-                }
-                .privacySensitive()
-            } else {
-                Text(message)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
     private func rows(_ count: Int) -> some View {
