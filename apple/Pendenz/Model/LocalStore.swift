@@ -74,6 +74,17 @@ final class StoredWrite {
     }
 }
 
+// A share from another app that went into the outbox. Saved with its entries and kept until its
+// drop is gone, so a drop that is found again is never queued a second time.
+@Model
+final class StoredShare {
+    @Attribute(.unique) var id: String
+
+    init(id: String) {
+        self.id = id
+    }
+}
+
 @Model
 final class StoredState {
     var server: String
@@ -133,6 +144,7 @@ final class LocalStore {
             StoredComment.self,
             StoredWrite.self,
             StoredState.self,
+            StoredShare.self,
         ])
         do {
             container = try ModelContainer(for: schema)
@@ -356,11 +368,14 @@ final class LocalStore {
             .filter { $0.status == .done && !$0.archived }
     }
 
-    func put(_ entry: PendingEntry) {
-        guard !isClosed, let payload = try? JSONEncoder().encode(entry.write) else { return }
-        context.insert(StoredWrite(
+    @discardableResult
+    func put(_ entry: PendingEntry) -> StoredWrite? {
+        guard !isClosed, let payload = try? JSONEncoder().encode(entry.write) else { return nil }
+        let row = StoredWrite(
             key: entry.key, order: entry.order, sendAfter: entry.sendAfter, payload: payload, heldFor: entry.heldFor,
-        ))
+        )
+        context.insert(row)
+        return row
     }
 
     func remove(key: String) {
@@ -399,6 +414,33 @@ final class LocalStore {
         }
     }
 
+    // Takes back rows that were put but could not be committed.
+    func unput(_ rows: [StoredWrite], share: StoredShare?) {
+        guard !isClosed else { return }
+        rows.forEach(context.delete)
+        if let share { context.delete(share) }
+    }
+
+    func putShare(_ id: String) -> StoredShare? {
+        guard !isClosed else { return nil }
+        let row = StoredShare(id: id)
+        context.insert(row)
+        return row
+    }
+
+    func hasShare(_ id: String) -> Bool {
+        ((try? context.fetchCount(FetchDescriptor<StoredShare>(predicate: #Predicate { $0.id == id }))) ?? 0) > 0
+    }
+
+    // The shares whose drops are gone need no receipt any more.
+    func forgetShares(except kept: Set<String>) {
+        guard !isClosed, let rows = try? context.fetch(FetchDescriptor<StoredShare>()) else { return }
+        let gone = rows.filter { !kept.contains($0.id) }
+        guard !gone.isEmpty else { return }
+        gone.forEach(context.delete)
+        commit()
+    }
+
     private func state() -> StoredState {
         if let state = try? context.fetch(FetchDescriptor<StoredState>()).first {
             return state
@@ -415,6 +457,7 @@ final class LocalStore {
         try context.delete(model: StoredComment.self)
         if includingOutbox {
             try context.delete(model: StoredWrite.self)
+            try context.delete(model: StoredShare.self)
         }
         try context.delete(model: StoredState.self)
         context.insert(StoredState(server: server, cursor: 0, format: Self.format))

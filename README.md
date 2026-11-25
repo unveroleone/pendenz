@@ -64,6 +64,7 @@ Pendenz is a private app for the things you still have to do. You write an item 
 - **Offline.** Every change is written to a local store first and sent when the server is reachable.
 - **Sync by push.** After a change the server asks your other devices to sync with a silent push.
 - **Widgets.** One list widget in three sizes for the home screen and the Mac desktop, set to Reminders, the inbox, a project or all open items. Every row has a tick that completes the item without opening the app. On the lock screen of iPhone and iPad, a smaller widget shows how many items the list has and the next one.
+- **Share from other apps.** On the iPhone and iPad, a link, a text or up to ten images go from any app's share menu to the inbox as one item, also without a connection.
 - **Siri, Shortcuts and Spotlight.** "Add to Pendenz" works without setup, and Shortcuts can add, complete, find and open items and notes. Spotlight finds the open items and the notes on the device, a locked note by its title alone. A New Item control goes into Control Center, on the lock screen or on the Action button.
 - **Quick capture on the Mac.** An item in the menu bar and a keyboard shortcut (⌃⌥P by default) open one line of quick add from any app, without bringing Pendenz to the front.
 - **Agents.** The MCP server and the CLI can do what the app can do with items, notes and projects. The MCP server also serves a skill, `agent-loop`, that shows an agent how to triage your items, ask, write a brief and close an item when the work is done. An item or note you hide does not exist for an agent.
@@ -77,7 +78,7 @@ Pendenz is in daily use by its author and young as a public project. Expect the 
 - [x] **Server, CLI and MCP server.** Items, notes, projects, images, the changes feed, tokens and device pairing.
 - [x] **The app for iPhone, iPad and Mac.** Pairing, capture, the lists, reminders, notes, projects, images and sync, built from Xcode.
 - [x] **Sync by push**, through a relay that holds the APNs keys.
-- [x] **Widget, icon menu, Siri, Shortcuts, Spotlight and the New Item control.**
+- [x] **Widget, icon menu, share extension, Siri, Shortcuts, Spotlight and the New Item control.**
 - [x] **The Mac app as a download**, signed with Developer ID, notarized and updating itself.
 - [ ] **The App Store.** Until then the app for iPhone and iPad is built from source.
 
@@ -140,7 +141,7 @@ Download `Pendenz-<version>.dmg` from the [latest release](https://github.com/un
 
 The iPhone and iPad app, and any change to the code, are built from source. Open `apple/Pendenz.xcodeproj` in Xcode 27 and run the `Pendenz` scheme on a simulator or on the Mac. The app runs on iOS 27, iPadOS 27 and macOS 27. It asks for the address of your server and a pairing code from it.
 
-For your own device, build with your team and a bundle ID of your own. The project derives the widget's ID and the app group from `PENDENZ_BUNDLE_ID`:
+For your own device, build with your team and a bundle ID of your own. The project derives the IDs of the widget and the share extension and the app group from `PENDENZ_BUNDLE_ID`:
 
 ```sh
 xcodebuild -project apple/Pendenz.xcodeproj -scheme Pendenz \
@@ -148,7 +149,7 @@ xcodebuild -project apple/Pendenz.xcodeproj -scheme Pendenz \
   DEVELOPMENT_TEAM=<your team ID> PENDENZ_BUNDLE_ID=com.example.pendenz build
 ```
 
-The entitlements for push and the app group need a paid Apple Developer membership. Register the app group `group.<your bundle ID>` in the developer portal and turn it on for the app's ID and the widget's ID (`<your bundle ID>.widgets`); Xcode registers the two IDs by itself. Builds for the Simulator need none of this.
+The entitlements for push and the app group need a paid Apple Developer membership. Register the app group `group.<your bundle ID>` in the developer portal and turn it on for the app's ID, the widget's ID (`<your bundle ID>.widgets`) and the share extension's ID (`<your bundle ID>.share`); Xcode registers the three IDs by itself. Builds for the Simulator need none of this.
 
 A build under another bundle ID gets no push from the public relay, which only sends to the app it holds keys for. It syncs when it opens, when it comes to the front and on pull to refresh, and reminders work as before because they are local.
 

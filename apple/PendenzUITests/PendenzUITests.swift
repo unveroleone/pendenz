@@ -1,7 +1,8 @@
 import XCTest
 
 // Flows that need a finger: swipes, drags, the notification prompt, typing a pairing code,
-// searching, putting back from the trash, deleting a project and the attachments of a note.
+// searching, putting back from the trash, deleting a project, the attachments of a note and
+// sharing a page from Safari.
 // They run against servers that `apple/uitest.sh` starts and seeds. Without its environment
 // every test is skipped.
 @MainActor
@@ -264,12 +265,68 @@ final class PendenzUITests: XCTestCase {
     }
 
     private func description(of title: String, on server: String) throws -> String? {
+        try items(titled: title, on: server).first?["description"] as? String
+    }
+
+    // A page shared from Safari waits in the app group and lands in the inbox, with its link,
+    // when the app comes to the front.
+    func testSharesALinkFromSafari() throws {
+        try XCTSkipIf(isSidebarLayout, "Runs on the iPhone layout.")
+        let server = try value("PENDENZ_LOCAL")
+        // Opened once, the app tells the extension which server it is paired with.
+        let app = try launch(tab: "tasks")
+        openInbox(app)
+
+        let nonce = UUID().uuidString.prefix(8)
+        let link = server + "/healthz?shared=\(nonce)"
+        let name = "Shared from Safari \(nonce)"
+        let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
+        try safari.open(XCTUnwrap(URL(string: link)))
+        // The share button is in the page menu of the bottom bar.
+        let menu = safari.buttons["MoreMenuButton"].firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 15))
+        menu.tap()
+        let share = safari.buttons["ShareButton"].firstMatch
+        XCTAssertTrue(share.waitForExistence(timeout: 5))
+        share.tap()
+        let pendenz = safari.cells["Pendenz"].firstMatch
+        XCTAssertTrue(pendenz.waitForExistence(timeout: 10), "Pendenz is offered in the share sheet.")
+        for _ in 0 ..< 3 where !pendenz.isHittable {
+            safari.collectionViews["activityCollectionView"].firstMatch.swipeLeft()
+        }
+        pendenz.tap()
+
+        // The extension's sheet is drawn inside Safari.
+        let title = safari.descendants(matching: .any)["share-title"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 10))
+        // The caret at the very end, then every character before it deleted.
+        title.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.9)).tap()
+        let typed = title.value as? String ?? ""
+        title.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: typed.count + 5) + name)
+        XCTAssertEqual(title.value as? String, name)
+        let add = safari.buttons["share-add"].firstMatch
+        add.tap()
+        XCTAssertTrue(add.waitForNonExistence(timeout: 10), "The sheet closes.")
+
+        app.activate()
+        XCTAssertTrue(row(app, name).waitForExistence(timeout: 15), "The share is in the inbox.")
+        var stored: [[String: Any]] = []
+        let deadline = Date.now.addingTimeInterval(15)
+        while stored.isEmpty, Date.now < deadline {
+            stored = try items(titled: name, on: server)
+            if stored.isEmpty { Thread.sleep(forTimeInterval: 0.5) }
+        }
+        XCTAssertEqual(stored.count, 1, "The server has the item once.")
+        XCTAssertEqual(stored.first?["source_url"] as? String, link, "Its link is the page.")
+    }
+
+    private func items(titled title: String, on server: String) throws -> [[String: Any]] {
         var url = URLComponents(string: server + "/api/items")!
         url.queryItems = [URLQueryItem(name: "q", value: title)]
         let data = try Data(contentsOf: url.url!)
         let body = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let items = body?["items"] as? [[String: Any]] ?? []
-        return items.first { $0["title"] as? String == title }?["description"] as? String
+        return items.filter { $0["title"] as? String == title }
     }
 
     func testPairsShowsDevicesAndUnpairs() throws {
