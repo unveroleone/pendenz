@@ -289,6 +289,13 @@ struct NoteRow: View {
                 if let edited = note.edited {
                     Text(Self.label(for: edited))
                 }
+                // Shown where the preview is: outside Locked Notes a locked note says nothing
+                // of what it holds.
+                let attachments = note.files.count + (store.waitingFiles[.note(note.id)]?.count ?? 0)
+                if !note.locked || showsLockedPreview && lock.isOpen, attachments > 0 {
+                    Label(attachments == 1 ? "1 attachment" : "\(attachments) attachments", systemImage: "paperclip")
+                        .labelStyle(.iconOnly)
+                }
                 // In Locked Notes every row is locked, so none says it.
                 if note.locked, !showsLockedPreview {
                     Image(systemName: lock.isOpen ? "lock.open.fill" : "lock.fill")
@@ -348,6 +355,9 @@ struct NoteEditorView: View {
     @State private var currentID: Int?
     // Why a note could not be locked, said in an alert.
     @State private var lockFailure: String?
+    // What the add menu of the attachments asks for, and what went wrong adding one.
+    @State private var attachmentRequest: AttachmentSource?
+    @State private var attachmentFailure: String?
     @FocusState private var isFocused: Bool
     private var lock: NoteLock { .shared }
 
@@ -361,6 +371,23 @@ struct NoteEditorView: View {
     // screen, and nothing in the menu may act on it.
     private var isGated: Bool {
         note?.locked == true && !lock.isOpen
+    }
+
+    // The note that attachments go to: one that exists, is not in the trash and whose text is
+    // on screen. A new note exists from its first character on, since the server needs text.
+    private var attachable: AttachmentHolder? {
+        guard let note, !note.trashed, !isGated else { return nil }
+        return .note(note.id)
+    }
+
+    private var attachmentRoom: Int {
+        guard let note else { return 0 }
+        return AttachmentFiles.perItem - store.files(of: .note(note.id)).count
+    }
+
+    private var hasAttachments: Bool {
+        guard let note else { return false }
+        return !store.files(of: .note(note.id)).isEmpty
     }
 
     private var isShowingLockFailure: Binding<Bool> {
@@ -402,9 +429,18 @@ struct NoteEditorView: View {
                         }
                     }
                     .accessibilityLabel("Note text")
+                if let note {
+                    // Keyed by the note, so no thumbnail or preview of another note stays.
+                    NoteAttachments(noteID: note.id, failure: $attachmentFailure)
+                        .id(note.id)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .modifier(AttachmentPickers(
+            holder: attachable, room: attachmentRoom, request: $attachmentRequest, failure: $attachmentFailure,
+        ))
+        .modifier(ItemAttachmentDrop(holder: attachable))
         .alert("This note was not locked", isPresented: isShowingLockFailure) {
             Button("OK") {}
         } message: {
@@ -413,6 +449,10 @@ struct NoteEditorView: View {
         .modifier(NoteTitle(title: showsTitle ? note.map(\.title) ?? "New Note" : nil))
         .toolbar { toolbar(note) }
         .onChange(of: navigation.noteID, initial: true) { _, id in open(id) }
+        .onChange(of: currentID.map(store.noteID)) {
+            attachmentFailure = nil
+            attachmentRequest = nil
+        }
         .onChange(of: navigation.isWritingNote, initial: true) { _, isWriting in
             if isWriting { isFocused = true }
         }
@@ -514,6 +554,15 @@ struct NoteEditorView: View {
 
     @ToolbarContentBuilder
     private func toolbar(_ note: Note?) -> some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            // Nothing of a locked note is offered while its lock is closed.
+            if !isGated {
+                AttachmentAddMenu(holder: attachable, request: $attachmentRequest, failure: $attachmentFailure) {
+                    Label("Add Attachment", systemImage: "paperclip")
+                }
+                .disabled(attachmentRoom <= 0)
+            }
+        }
         ToolbarItem(placement: .primaryAction) {
             Button(
                 note?.pinned == true ? "Unpin" : "Pin",
@@ -662,12 +711,14 @@ struct NoteEditorView: View {
     }
 
     // The note is left for another one, or the editor closes. A note without text goes to the
-    // trash, like a sheet of paper nobody wrote on.
+    // trash, like a sheet of paper nobody wrote on. One with attachments is not blank: it keeps
+    // the last text it had, which the server needs.
     private func leave() {
         guard isLoaded, let currentID, let note = store.note(currentID), !note.trashed else { return }
         // A locked note that the closing lock took off the screen keeps its last text: the
         // owner did not leave it.
         if isBlank, note.locked, !lock.isOpen { return }
+        if isBlank, hasAttachments { return }
         if isBlank {
             store.updateNote(currentID, NotePatch(trashed: true))
         } else {
@@ -700,11 +751,12 @@ struct NoteEditorView: View {
         if let currentID { store.updateNote(currentID, NotePatch(trashed: true)) }
     }
 
-    // Asks nothing either: the note only moves to the trash.
+    // Asks nothing either: the note only moves to the trash. A note with attachments stays,
+    // since they do not go with the text and would be left unseen in the trash.
     private func turnNoteIntoItem() {
         guard let note, let currentID, !isGated, let id = store.addItem(from: text, of: note) else { return }
         save()
-        store.updateNote(currentID, NotePatch(trashed: true))
+        if !hasAttachments { store.updateNote(currentID, NotePatch(trashed: true)) }
         navigation.itemID = id
     }
 }

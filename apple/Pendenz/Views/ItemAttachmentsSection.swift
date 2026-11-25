@@ -1,7 +1,5 @@
-import PhotosUI
 import QuickLook
 import SwiftUI
-import UniformTypeIdentifiers
 
 // What is attached to an item, in one place: its pictures as a row of thumbnails, then its files,
 // then one menu to add either. A photo from the library or the camera is scaled and loses its
@@ -11,11 +9,7 @@ struct ItemAttachmentsSection: View {
     @Environment(Store.self) private var store
     let item: Item
 
-    @State private var picked: [PhotosPickerItem] = []
-    @State private var isPickingPhotos = false
-    @State private var isPickingFile = false
-    @State private var isTakingPhoto = false
-    @State private var canPaste = false
+    @State private var request: AttachmentSource?
     @State private var preview: URL?
     @State private var failure: String?
 
@@ -58,74 +52,9 @@ struct ItemAttachmentsSection: View {
     }
 
     private func addMenu(room: Int) -> some View {
-        Menu {
-            Button("Photo Library", systemImage: "photo.on.rectangle") { isPickingPhotos = true }
-            #if os(iOS)
-            if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                Button("Take Photo", systemImage: "camera") { isTakingPhoto = true }
-            }
-            #endif
-            Button("Choose File", systemImage: "folder") { isPickingFile = true }
-            if canPaste {
-                Button("Paste", systemImage: "doc.on.clipboard") {
-                    Task { await addImage(Clipboard.image()) }
-                }
-            }
-        } label: {
+        AttachmentAddMenu(holder: .item(item.id), request: $request, failure: $failure) {
             Label("Add Attachment", systemImage: "plus")
         }
-        .onAppear { canPaste = Clipboard.hasImage }
-        .onReceive(NotificationCenter.default.publisher(for: Clipboard.changed)) { _ in
-            canPaste = Clipboard.hasImage
-        }
-        .photosPicker(
-            isPresented: $isPickingPhotos,
-            selection: $picked,
-            maxSelectionCount: room,
-            matching: .images,
-        )
-        .onChange(of: picked) { _, chosen in
-            guard !chosen.isEmpty else { return }
-            picked = []
-            Task {
-                for photo in chosen {
-                    await addImage(try? photo.loadTransferable(type: Data.self))
-                }
-            }
-        }
-        .fileImporter(
-            isPresented: $isPickingFile,
-            allowedContentTypes: [.item],
-            allowsMultipleSelection: true,
-        ) { result in
-            guard case .success(let chosen) = result else { return }
-            addFiles(Array(chosen.prefix(room)))
-        }
-        #if os(iOS)
-        .fullScreenCover(isPresented: $isTakingPhoto) {
-            CameraView { data in
-                Task { await addImage(data) }
-            }
-            .ignoresSafeArea()
-        }
-        #endif
-    }
-
-    private func addImage(_ data: Data?) async {
-        guard let data else {
-            failure = "That is not a picture Pendenz can read."
-            return
-        }
-        failure = await store.addImage(data, to: .item(item.id))
-    }
-
-    private func addFiles(_ chosen: [URL]) {
-        Task {
-            var problems: [String] = []
-            for url in chosen {
-                if let problem = await store.addFile(from: url, to: .item(item.id)) { problems.append(problem) }
-            }
-            failure = problems.isEmpty ? nil : problems.joined(separator: "\n")
-        }
+        .modifier(AttachmentPickers(holder: .item(item.id), room: room, request: $request, failure: $failure))
     }
 }

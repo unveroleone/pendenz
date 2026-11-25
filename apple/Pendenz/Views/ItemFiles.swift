@@ -117,10 +117,12 @@ struct ItemFileRow: View {
 // A picture is scaled and sent as a photo, anything else is kept byte for byte.
 struct ItemAttachmentDrop: ViewModifier {
     @Environment(Store.self) private var store
-    let holder: AttachmentHolder
+    // Missing while there is nothing to add to: a drop is then refused.
+    let holder: AttachmentHolder?
 
     func body(content: Content) -> some View {
         content.onDrop(of: [.image, .data, .package], isTargeted: nil) { providers in
+            guard let holder else { return false }
             let pictures = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }
             let files = providers.filter { provider in
                 !pictures.contains(provider) && ItemFileDrop.accepts(provider)

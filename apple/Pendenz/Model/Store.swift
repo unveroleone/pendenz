@@ -684,8 +684,9 @@ final class Store {
         disk.remove(key: entry.key)
         let isSaved = save()
         // A waiting file goes only once its entry is gone from the disk. An entry that came back
-        // after a restart would otherwise find no file.
-        if isSaved, let file = entry.write.upload?.file { attachments.discard(file) }
+        // after a restart would otherwise find no file. A closed store writes nothing, so after
+        // the pairing ended the file stays with its entry.
+        if isSaved, !isClosed, let file = entry.write.upload?.file { attachments.discard(file) }
         // The screens follow each confirmed change, not only the end of the sync.
         publish()
     }
