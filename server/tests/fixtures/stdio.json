@@ -5,9 +5,6 @@
       "jsonrpc": "2.0",
       "result": {
         "capabilities": {
-          "extensions": {
-            "io.modelcontextprotocol/skills": {}
-          },
           "resources": {},
           "tools": {}
         },
@@ -1541,6 +1538,28 @@
       "jsonrpc": "2.0"
     },
     "step": "telegram tools"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32601,
+        "message": "skills/list"
+      },
+      "id": 3,
+      "jsonrpc": "2.0"
+    },
+    "step": "telegram skills"
+  },
+  {
+    "answer": {
+      "error": {
+        "code": -32601,
+        "message": "resources/list"
+      },
+      "id": 4,
+      "jsonrpc": "2.0"
+    },
+    "step": "telegram resources"
   },
   {
     "answer": {

@@ -1445,6 +1445,10 @@ async fn hosted_tools() {
         );
     }
     t.add(
+        "2026 skill without tools",
+        post_2026(&bridge, "skills/get", None, json!({"uri": skill_uri})).await,
+    );
+    t.add(
         "2026 read without tools",
         post_2026(
             &bridge,
@@ -1631,6 +1635,16 @@ async fn stdio_server() {
     );
     t.add("telegram initialize", telegram.initialize().await);
     t.add("telegram tools", telegram.tool_names().await);
+    t.add(
+        "telegram skills",
+        telegram
+            .rpc("skills/list", Some(json!({"_meta": meta_2026()})))
+            .await,
+    );
+    t.add(
+        "telegram resources",
+        telegram.rpc("resources/list", None).await,
+    );
     drop(telegram);
     let mut sourced = StdioMcp::start(
         &server.url(),

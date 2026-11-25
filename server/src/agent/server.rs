@@ -73,16 +73,22 @@ impl Pendenz {
     }
 }
 
-// The skills ride on resources (SEP-2640): their files are read with resources/read.
-fn info(tools: bool) -> InitializeResult {
-    let capabilities = if tools {
-        ServerCapabilities::builder()
+// The skills ride on resources (SEP-2640): their files are read with resources/read. The
+// extension is declared only from protocol version 2026-07-28 on, through server/discover: rmcp
+// drops the resultType that skill results need for an older client, so the initialize of the
+// older versions offers the files as plain resources alone.
+fn info(tools: bool, skills: bool) -> InitializeResult {
+    let capabilities = match (tools, skills) {
+        (true, true) => ServerCapabilities::builder()
             .enable_resources()
             .enable_tools()
             .enable_skills()
-            .build()
-    } else {
-        ServerCapabilities::default()
+            .build(),
+        (true, false) => ServerCapabilities::builder()
+            .enable_resources()
+            .enable_tools()
+            .build(),
+        (false, _) => ServerCapabilities::default(),
     };
     let mut info = InitializeResult::new(capabilities);
     info.server_info = Implementation::new("pendenz", env!("CARGO_PKG_VERSION"));
@@ -94,7 +100,7 @@ impl ServerHandler for Pendenz {
     fn get_info(&self) -> InitializeResult {
         // What server/discover shows, without a caller: the tools and skills are there for a
         // token that may use them.
-        info(true)
+        info(true, true)
     }
 
     async fn initialize(
@@ -105,8 +111,8 @@ impl ServerHandler for Pendenz {
         let caller = self.caller(&context)?;
         context.peer.set_peer_info(request.clone());
         let mut result = self.negotiate_initialize(&request)?;
-        // A token whose scopes allow no tool is told there are none, and no skills either.
-        result.capabilities = info(!caller.offered().is_empty()).capabilities;
+        // A token whose scopes allow no tool is told there are none, and no resources either.
+        result.capabilities = info(!caller.offered().is_empty(), false).capabilities;
         Ok(result)
     }
 
@@ -200,7 +206,11 @@ impl ServerHandler for Pendenz {
     }
 }
 
-// SEP-2640 answers a skill or file the server does not have with invalid params.
+// SEP-2640 answers a skill or file the server does not have with invalid params, and the
+// specification of resources asks for the URI in the error's data.
 fn unknown(uri: &str) -> ErrorData {
-    ErrorData::invalid_params(format!("No skill or file at {uri}."), None)
+    ErrorData::invalid_params(
+        format!("No skill or file at {uri}."),
+        Some(serde_json::json!({"uri": uri})),
+    )
 }

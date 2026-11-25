@@ -5,9 +5,6 @@
       "jsonrpc": "2.0",
       "result": {
         "capabilities": {
-          "extensions": {
-            "io.modelcontextprotocol/skills": {}
-          },
           "resources": {},
           "tools": {}
         },
@@ -27,9 +24,6 @@
       "jsonrpc": "2.0",
       "result": {
         "capabilities": {
-          "extensions": {
-            "io.modelcontextprotocol/skills": {}
-          },
           "resources": {},
           "tools": {}
         },
@@ -5028,6 +5022,9 @@
       "body": {
         "error": {
           "code": -32602,
+          "data": {
+            "uri": "skill://pendenz/other/SKILL.md"
+          },
           "message": "No skill or file at skill://pendenz/other/SKILL.md."
         },
         "id": 1,
@@ -5069,6 +5066,9 @@
       "body": {
         "error": {
           "code": -32602,
+          "data": {
+            "uri": "skill://pendenz/agent-loop/other.md"
+          },
           "message": "No skill or file at skill://pendenz/agent-loop/other.md."
         },
         "id": 1,
@@ -5120,6 +5120,25 @@
       "status": 404
     },
     "step": "2026 resources/list without tools"
+  },
+  {
+    "answer": {
+      "body": {
+        "error": {
+          "code": -32601,
+          "message": "skills/get"
+        },
+        "id": 1,
+        "jsonrpc": "2.0"
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json",
+        "x-content-type-options": "nosniff"
+      },
+      "status": 404
+    },
+    "step": "2026 skill without tools"
   },
   {
     "answer": {
