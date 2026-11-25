@@ -477,6 +477,39 @@ async fn hosted_rate_limit() {
     t.finish();
 }
 
+// A skill entry with the digest and size of its files left out, since they change with every
+// edit of the text. check_file compares them with the bytes the server serves.
+fn skill_shape(result: &Value) -> Value {
+    let mut result = result.clone();
+    let strip = |skill: &mut Value| {
+        let files = skill.get_mut("resources").and_then(Value::as_array_mut);
+        for file in files.into_iter().flatten().filter_map(Value::as_object_mut) {
+            file.remove("digest");
+            file.remove("size");
+        }
+    };
+    if let Some(skills) = result.get_mut("skills").and_then(Value::as_array_mut) {
+        skills.iter_mut().for_each(strip);
+    }
+    if let Some(skill) = result.get_mut("skill") {
+        strip(skill);
+    }
+    result
+}
+
+// The check a client makes: the bytes read match the size and digest of the manifest.
+fn check_file(file: &Value, contents: &Value) {
+    use sha2::{Digest, Sha256};
+    let text = contents["text"].as_str().expect("the file as text");
+    assert_eq!(file["uri"], contents["uri"]);
+    assert_eq!(file["size"], json!(text.len()), "size");
+    let digest = Sha256::digest(text.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    assert_eq!(file["digest"], json!(format!("sha256:{digest}")), "digest");
+}
+
 #[tokio::test]
 async fn hosted_tools() {
     let server = Server::start().await;
@@ -1343,6 +1376,84 @@ async fn hosted_tools() {
             .map(|tools| json!(tools.iter().map(|t| t["name"].clone()).collect::<Vec<_>>()))
             .unwrap_or(Value::Null),
     );
+    // The skills extension: the skill, its file as a resource, and nothing for a token that may
+    // use no tool.
+    let skill_uri = "skill://pendenz/agent-loop/SKILL.md";
+    let listed = post_2026(&bot, "skills/list", None, json!({})).await;
+    t.add("2026 skills", skill_shape(&listed["body"]["result"]));
+    t.add(
+        "2026 skill",
+        skill_shape(
+            &post_2026(&bot, "skills/get", None, json!({"uri": skill_uri})).await["body"]["result"],
+        ),
+    );
+    t.add(
+        "2026 unknown skill",
+        post_2026(
+            &bot,
+            "skills/get",
+            None,
+            json!({"uri": "skill://pendenz/other/SKILL.md"}),
+        )
+        .await,
+    );
+    t.add(
+        "2026 resources",
+        post_2026(&reader, "resources/list", None, json!({})).await["body"]["result"]["resources"]
+            .as_array()
+            .map(|list| {
+                json!(
+                    list.iter()
+                        .map(|r| json!({"uri": r["uri"], "name": r["name"], "mimeType": r["mimeType"]}))
+                        .collect::<Vec<_>>()
+                )
+            })
+            .unwrap_or(Value::Null),
+    );
+    let read = post_2026(
+        &writer,
+        "resources/read",
+        Some(skill_uri),
+        json!({"uri": skill_uri}),
+    )
+    .await;
+    let file = &listed["body"]["result"]["skills"][0]["resources"][0];
+    check_file(file, &read["body"]["result"]["contents"][0]);
+    t.add(
+        "2026 read the skill",
+        json!({
+            "uri": read["body"]["result"]["contents"][0]["uri"],
+            "mimeType": read["body"]["result"]["contents"][0]["mimeType"],
+            "starts": read["body"]["result"]["contents"][0]["text"].as_str().map(|text| text.lines().take(3).collect::<Vec<_>>()),
+        }),
+    );
+    t.add(
+        "2026 read an unknown file",
+        post_2026(
+            &bot,
+            "resources/read",
+            Some("skill://pendenz/agent-loop/other.md"),
+            json!({"uri": "skill://pendenz/agent-loop/other.md"}),
+        )
+        .await,
+    );
+    let bridge = server.hosted(&server.token("telegram-bridge", "telegram"));
+    for method in ["skills/list", "resources/list"] {
+        t.add(
+            &format!("2026 {method} without tools"),
+            post_2026(&bridge, method, None, json!({})).await,
+        );
+    }
+    t.add(
+        "2026 read without tools",
+        post_2026(
+            &bridge,
+            "resources/read",
+            Some(skill_uri),
+            json!({"uri": skill_uri}),
+        )
+        .await,
+    );
     t.add(
         "2026 tool call",
         post_2026(
@@ -1420,6 +1531,20 @@ async fn stdio_server() {
         "discover",
         mcp.rpc("server/discover", Some(json!({"_meta": meta_2026()})))
             .await,
+    );
+    let listed = mcp
+        .rpc("skills/list", Some(json!({"_meta": meta_2026()})))
+        .await;
+    t.add("skills", skill_shape(&listed["result"]));
+    let read = mcp
+        .rpc(
+            "resources/read",
+            Some(json!({"_meta": meta_2026(), "uri": "skill://pendenz/agent-loop/SKILL.md"})),
+        )
+        .await;
+    check_file(
+        &listed["result"]["skills"][0]["resources"][0],
+        &read["result"]["contents"][0],
     );
     t.add(
         "create item",
