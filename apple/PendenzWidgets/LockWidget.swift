@@ -170,12 +170,23 @@ private struct LockWidgetRow: View {
         item.due.map { $0.day < content.today } ?? false
     }
 
+    // The date goes first when the title does not fit beside it: the overdue icon still
+    // says what matters, and a title cut to a few letters says nothing.
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            line(showsDue: true)
+            line(showsDue: false)
+        }
+        .font(.footnote)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func line(showsDue: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 3) {
             // Overdue is said by the icon, since the lock screen draws in one color.
             if isOverdue {
                 Image(systemName: "exclamationmark.circle")
-                    .font(.caption)
+                    .font(.caption2)
                     .accessibilityLabel("Overdue")
             }
             if item.priority >= 3 {
@@ -186,16 +197,13 @@ private struct LockWidgetRow: View {
             Text(item.title)
                 .lineLimit(1)
             Spacer(minLength: 0)
-            if let due {
+            if showsDue, let due {
                 Text(due)
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .layoutPriority(1)
             }
         }
-        .font(.subheadline)
-        .accessibilityElement(children: .combine)
     }
 
     // Reminders holds what is due by today, so a row there names only its time, or its
