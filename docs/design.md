@@ -439,6 +439,14 @@ The control "New Item" for Control Center, the lock screen and the Action button
 
 `SpotlightFeed` ([`SpotlightFeed.swift`](../apple/Pendenz/Intents/SpotlightFeed.swift)) indexes the open items and the notes on the device and runs every call to the index in one queue. It sends only what changed, two seconds after the last change. A locked note is indexed by its title alone, and a lock takes the text out of the index at once. Until a launch has synced, only locks are passed on, so a note locked on another device does not get its old text indexed. The index is emptied when the pairing ends.
 
+### Quick capture on the Mac
+
+The Mac app has an item in the menu bar and a global keyboard shortcut (⌃⌥P by default) that open a small panel with quick add for the inbox ([`MenuBarCapture.swift`](../apple/Pendenz/Views/MenuBarCapture.swift)). It is the same quick add as in a window, so the item goes through the outbox, and a `#project` in the text puts it in that project. Return adds the item and closes the panel; Escape or a click elsewhere closes it and keeps the text for the next time.
+
+- The shortcut is registered with the Carbon event manager (`RegisterEventHotKey`, [`HotKey.swift`](../apple/Pendenz/Model/HotKey.swift)). That works in the App Sandbox and needs no permission. A global event monitor of AppKit would need Accessibility and could not keep the key from the app in front. The shortcut is asked for exclusively, so an app that holds it exclusively makes it fail, and the setting says so.
+- The panel is an `NSPanel` that takes the keyboard without making Pendenz the active app. The windows of Pendenz stay where they are, and the app that was in front gets the keyboard back when the panel closes. SwiftUI's `MenuBarExtra` was not used, because nothing can open it from code.
+- The menu bar item and the shortcut are set apart in the General settings: the shortcut also works without the item, and the panel then opens at the top of the screen. The app has to be running; it does not start at login by itself.
+
 ### Conventions in the interface
 
 - The app is black and white. The tint is the label color, and color is kept for state, such as red for overdue. Liquid Glass takes its color from what is behind it, so color in the chrome would carry nothing.

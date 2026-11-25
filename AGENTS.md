@@ -177,6 +177,12 @@ The notes are for the person who updates: what they will notice and what they ha
 - The menu of the app's icon is `UIApplicationShortcutItems` in `Config/Info.plist`, and the type of each entry is a case of `QuickActions.Action`. The system hands a chosen action to the scene delegate only, so the app delegate names `SceneDelegate` for every scene. On the sidebar layout quick add waits half a second first: a popover that opens before its toolbar button exists crashes.
 - To try an action without a finger, add a temporary function that sets the intent's parameters and calls `perform()`, call it from a `.task` in `RootView` behind a launch argument, and write what it finds to `Documents/probe.txt`. `Metadata.appintents/extract.actionsdata` in the built app lists the actions, entities and phrases the system will see. Remove the hook before committing.
 
+### Quick capture on the Mac
+
+- The menu bar item, the global shortcut and their panel are `MenuBarCapture` (`Views/MenuBarCapture.swift`), made by the Mac app delegate and alive as long as the app; the shortcut is `HotKey` (`Model/HotKey.swift`, Carbon, no permission). The panel shows `QuickAddView` for the inbox, so it writes through the outbox like quick add in a window. Keep it a non-activating panel: activating the app would bring its windows in front of the app the person was in.
+- The menu bar icon is `MenuBarIcon` in the asset catalog, drawn by `swift apple/icon/menubar.swift` from the shapes of the app icon. Draw it again when the icon changes.
+- To try it, launch a Mac build with `-apiURL`, click the item in the menu bar or press the shortcut. A synthetic key press (a `CGEvent` posted to the HID tap) reaches the shortcut too, but it goes to whatever has the keyboard when the panel is not open, so make a harmless app the front one first.
+
 ### Look and feel
 
 - The app is black and white. Color is kept for state: red for overdue, one more for the agent later.
