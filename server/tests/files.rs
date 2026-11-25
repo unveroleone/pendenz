@@ -578,6 +578,16 @@ async fn a_note_holds_files_like_an_item() {
     .await;
     assert_eq!(status, 200, "{body}");
     assert_eq!(body["files"], json!([]));
+    // A retry of the removal, whose answer got lost, gets the note as it is, not a 404.
+    let (status, again) = delete(
+        &server,
+        &server.owner,
+        &format!("/notes/{id}/files/{file}"),
+        "k2",
+    )
+    .await;
+    assert_eq!(status, 200, "{again}");
+    assert_eq!(again["version"], body["version"]);
     assert_eq!(
         get(&server, &server.owner, &format!("/notes/{id}/files/{file}"))
             .await
@@ -585,7 +595,7 @@ async fn a_note_holds_files_like_an_item() {
         404
     );
     let actions = note_actions(&server, id).await;
-    assert_eq!(actions[..2], ["file_removed", "file_added"]);
+    assert_eq!(actions, ["file_removed", "file_added", "created"]);
 }
 
 #[tokio::test]
