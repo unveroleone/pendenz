@@ -193,6 +193,7 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                SharedDropsIntake.shared.start()
                 Task { await agents.refresh() }
                 Task {
                     await store.sync()

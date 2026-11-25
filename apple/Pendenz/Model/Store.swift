@@ -776,6 +776,65 @@ final class Store {
         return id
     }
 
+    // A share from another app (`SharedDrops`): the item, on top of the inbox, and its pictures,
+    // already scaled. They go into the outbox in one save, so a share is never queued in part,
+    // and the create's key is the drop's, so `hasShared` finds it. False when nothing was
+    // queued; the drop then stays and is tried again.
+    func addShared(_ drop: SharedDrop, pictures: [(jpeg: Data, width: Int, height: Int)]) -> Bool {
+        guard !isClosed, !hasShared(drop) else { return false }
+        var item = NewItem(title: drop.title, description: drop.description, createdVia: "share")
+        item.sourceUrl = drop.link
+        item.position = min((visible.values.map(\.position).max() ?? 0) + 1, Self.positionLimit)
+        let waiting = outbox.compactMap { entry -> Int? in
+            if case .create(let id, _) = entry.write { id } else { nil }
+        }
+        let id = Self.localID(below: waiting + Array(serverIDs.keys))
+        var files: [PendingFile] = []
+        for picture in pictures.prefix(AttachmentFiles.perItem) {
+            let file = PendingFile(
+                id: UUID().uuidString, name: Pictures.sentName, mime: "image/jpeg", bytes: picture.jpeg.count,
+                width: picture.width, height: picture.height,
+            )
+            // The file first: an entry in the outbox must never name a file that is not there.
+            guard attachments.keep(picture.jpeg, for: file) else {
+                files.forEach(attachments.discard)
+                reportStorageProblem()
+                return false
+            }
+            files.append(file)
+        }
+        let order = outbox.last?.order ?? 0
+        let entries = [PendingEntry(
+            key: drop.key,
+            order: order + 1,
+            sendAfter: .now,
+            write: .create(localID: id, item: item),
+        )]
+            + files.enumerated().map { index, file in
+                PendingEntry(
+                    key: UUID().uuidString, order: order + 2 + index, sendAfter: .now,
+                    write: .addFile(itemID: id, file: file),
+                )
+            }
+        entries.forEach(disk.put)
+        guard disk.commit() else {
+            disk.rollback()
+            files.forEach(attachments.discard)
+            reportStorageProblem()
+            return false
+        }
+        outbox.append(contentsOf: entries)
+        publish()
+        Task { await sync() }
+        return true
+    }
+
+    // Whether a share is in the outbox already: it was queued, and the app ended before its
+    // drop was deleted.
+    func hasShared(_ drop: SharedDrop) -> Bool {
+        outbox.contains { $0.key == drop.key }
+    }
+
     // A local ID that was not used since launch. One that the server has already answered
     // still leads to that row, so it cannot name a new one.
     private static func localID(below used: [Int]) -> Int {

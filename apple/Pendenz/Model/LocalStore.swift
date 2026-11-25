@@ -395,6 +395,12 @@ final class LocalStore {
         }
     }
 
+    // Forgets what was put since the last commit, after a commit that failed.
+    func rollback() {
+        guard !isClosed else { return }
+        context.rollback()
+    }
+
     private func state() -> StoredState {
         if let state = try? context.fetch(FetchDescriptor<StoredState>()).first {
             return state

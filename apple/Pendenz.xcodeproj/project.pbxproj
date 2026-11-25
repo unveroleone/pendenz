@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		A10000000000000000000081 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = A10000000000000000000080 /* Sparkle */; };
 		A1000000000000000000002A /* PendenzWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000D /* PendenzWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A16200000000000000000001 /* PendenzShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A16200000000000000000002 /* PendenzShare.appex */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -18,6 +19,7 @@
 			dstSubfolder = PlugIns;
 			files = (
 				A1000000000000000000002A /* PendenzWidgets.appex in Embed Foundation Extensions */,
+				A16200000000000000000001 /* PendenzShare.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 		};
@@ -28,6 +30,7 @@
 		A1000000000000000000000B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1000000000000000000000C /* PendenzUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PendenzUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000000000000000000000D /* PendenzWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PendenzWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A16200000000000000000002 /* PendenzShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PendenzShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,6 +47,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = A10000000000000000000042;
 			remoteInfo = PendenzWidgets;
+		};
+		A16200000000000000000003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A16200000000000000000010;
+			remoteInfo = PendenzShare;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -68,6 +78,16 @@
 			path = Shared;
 			sourceTree = "<group>";
 		};
+		A16200000000000000000004 /* PendenzShare */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PendenzShare;
+			sourceTree = "<group>";
+		};
+		A16200000000000000000005 /* ShareDrops */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ShareDrops;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,6 +107,11 @@
 			files = (
 			);
 		};
+		A16200000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -96,6 +121,8 @@
 				A10000000000000000000010 /* Pendenz */,
 				A10000000000000000000012 /* PendenzWidgets */,
 				A10000000000000000000013 /* Shared */,
+				A16200000000000000000004 /* PendenzShare */,
+				A16200000000000000000005 /* ShareDrops */,
 				A10000000000000000000011 /* PendenzUITests */,
 				A10000000000000000000032 /* Config */,
 				A10000000000000000000031 /* Products */,
@@ -108,6 +135,7 @@
 				A1000000000000000000000A /* Pendenz.app */,
 				A1000000000000000000000C /* PendenzUITests.xctest */,
 				A1000000000000000000000D /* PendenzWidgets.appex */,
+				A16200000000000000000002 /* PendenzShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -136,10 +164,12 @@
 			);
 			dependencies = (
 				A10000000000000000000073 /* PBXTargetDependency */,
+				A16200000000000000000011 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A10000000000000000000010 /* Pendenz */,
 				A10000000000000000000013 /* Shared */,
+				A16200000000000000000005 /* ShareDrops */,
 			);
 			name = Pendenz;
 			packageProductDependencies = (
@@ -195,6 +225,29 @@
 			productReference = A1000000000000000000000D /* PendenzWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		A16200000000000000000010 /* PendenzShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A16200000000000000000014 /* Build configuration list for PBXNativeTarget "PendenzShare" */;
+			buildPhases = (
+				A16200000000000000000008 /* Sources */,
+				A16200000000000000000006 /* Frameworks */,
+				A16200000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A16200000000000000000004 /* PendenzShare */,
+				A16200000000000000000005 /* ShareDrops */,
+			);
+			name = PendenzShare;
+			packageProductDependencies = (
+			);
+			productName = PendenzShare;
+			productReference = A16200000000000000000002 /* PendenzShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -213,6 +266,9 @@
 						TestTargetID = A10000000000000000000040;
 					};
 					A10000000000000000000042 = {
+						CreatedOnToolsVersion = 27.2;
+					};
+					A16200000000000000000010 = {
 						CreatedOnToolsVersion = 27.2;
 					};
 				};
@@ -237,6 +293,7 @@
 				A10000000000000000000040 /* Pendenz */,
 				A10000000000000000000041 /* PendenzUITests */,
 				A10000000000000000000042 /* PendenzWidgets */,
+				A16200000000000000000010 /* PendenzShare */,
 			);
 		};
 /* End PBXProject section */
@@ -253,6 +310,11 @@
 			);
 		};
 		A10000000000000000000028 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		A16200000000000000000007 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -275,6 +337,11 @@
 			files = (
 			);
 		};
+		A16200000000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -287,6 +354,12 @@
 			isa = PBXTargetDependency;
 			target = A10000000000000000000042 /* PendenzWidgets */;
 			targetProxy = A10000000000000000000072 /* PBXContainerItemProxy */;
+		};
+		A16200000000000000000011 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilters = (ios, );
+			target = A16200000000000000000010 /* PendenzShare */;
+			targetProxy = A16200000000000000000003 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -555,6 +628,60 @@
 			};
 			name = Release;
 		};
+		A16200000000000000000012 /* Debug configuration for PBXNativeTarget "PendenzShare" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/PendenzShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/PendenzShare-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Pendenz;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(PENDENZ_BUNDLE_ID).share";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A16200000000000000000013 /* Release configuration for PBXNativeTarget "PendenzShare" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/PendenzShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/PendenzShare-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Pendenz;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(PENDENZ_BUNDLE_ID).share";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -587,6 +714,14 @@
 			buildConfigurations = (
 				A10000000000000000000056 /* Debug configuration for PBXNativeTarget "PendenzWidgets" */,
 				A10000000000000000000057 /* Release configuration for PBXNativeTarget "PendenzWidgets" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		A16200000000000000000014 /* Build configuration list for PBXNativeTarget "PendenzShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A16200000000000000000012 /* Debug configuration for PBXNativeTarget "PendenzShare" */,
+				A16200000000000000000013 /* Release configuration for PBXNativeTarget "PendenzShare" */,
 			);
 			defaultConfigurationName = Release;
 		};

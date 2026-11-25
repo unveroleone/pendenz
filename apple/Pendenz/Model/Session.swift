@@ -75,6 +75,8 @@ final class Session {
         ControlActions.newItem = { QuickActions.shared.chosen = .newItem }
         Push.shared.onToken = { [weak self] in self?.registerForPush() }
         Push.shared.onPush = { [weak self] in await self?.pushed() ?? .noData }
+        SharedDropsIntake.shared.take = { [weak self] in await self?.takeSharedDrops() }
+        SharedDropsIntake.shared.start()
     }
 
     // MARK: Push
@@ -212,9 +214,12 @@ final class Session {
             Push.shared.isWanted = false
             WidgetFeed.shared.clear()
             SpotlightFeed.shared.clear()
+            SharedDrops.setPairing(nil)
             return
         }
         Reminders.shared.server = connection.server.absoluteString
+        // The share extension adds only while the app is paired, and only for this server.
+        SharedDrops.setPairing(SharedPairing(server: connection.server.absoluteString))
         // The development server from `-apiURL` knows no device to send a push to.
         Push.shared.isWanted = connection.token != nil
         let store = Store(api: api, disk: LocalStore(server: connection.server))
@@ -276,6 +281,7 @@ final class Session {
         notice = nil
         self.connection = connection
         openStore()
+        SharedDropsIntake.shared.start()
     }
 
     // Removes everything of this pairing from the device, then takes the device off the server.
@@ -284,6 +290,8 @@ final class Session {
         guard let connection, let api, connection.token != nil else { return }
         store?.erase()
         agents?.erase()
+        // Shares that wait for the outbox go with it.
+        SharedDrops.removeAll()
         close()
         var isRevoked = false
         if let id = connection.deviceID {
@@ -322,6 +330,9 @@ final class Session {
         // The widgets and Spotlight show nothing of a pairing that has ended.
         WidgetFeed.shared.clear()
         SpotlightFeed.shared.clear()
+        // A revoked device keeps its waiting shares, as it keeps its outbox, for a pairing with
+        // the same server. Nothing new is shared until then.
+        SharedDrops.setPairing(nil)
         Reminders.shared.server = nil
         // The server drops the push token with the device. A push that still arrives finds no
         // store and does nothing.
