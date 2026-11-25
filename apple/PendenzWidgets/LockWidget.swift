@@ -34,6 +34,12 @@ struct LockWidgetView: View {
         .widgetURL(WidgetLink.list(content.list).url)
     }
 
+    // Titles of items and projects are hidden where the lock screen's privacy settings ask
+    // for it; the count and the names of the fixed lists are not.
+    private var isProject: Bool {
+        if case .project = content.list { true } else { false }
+    }
+
     private var hasRows: Bool {
         content.state == .rows && !content.rows.isEmpty
     }
@@ -76,6 +82,7 @@ struct LockWidgetView: View {
                     .accessibilityHidden(true)
                 Text(content.title)
                     .lineLimit(1)
+                    .privacySensitive(isProject)
                 Spacer(minLength: 4)
                 if content.state == .rows {
                     Text(countText)
@@ -92,6 +99,7 @@ struct LockWidgetView: View {
                     rows(2)
                     rows(1)
                 }
+                .privacySensitive()
             } else {
                 Text(message)
                     .font(.subheadline)
@@ -117,6 +125,7 @@ struct LockWidgetView: View {
         Label {
             if hasRows, let next = content.rows.first {
                 Text("\(countText) · \(next.title)")
+                    .privacySensitive()
             } else {
                 Text(message)
             }
