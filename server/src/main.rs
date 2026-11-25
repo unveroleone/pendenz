@@ -568,6 +568,14 @@ async fn main() -> anyhow::Result<()> {
         .route("/projects/{id}", patch(items::write).delete(items::write))
         .route("/notes", get(notes::list).post(items::write))
         .route("/notes/{id}", get(notes::detail).patch(items::write))
+        .route(
+            "/notes/{id}/files",
+            post(files::upload).layer(DefaultBodyLimit::disable()),
+        )
+        .route(
+            "/notes/{id}/files/{file}",
+            get(files::download_from_note).delete(items::write),
+        )
         .route("/devices", get(devices::list))
         .route("/devices/{id}", delete(devices::revoke))
         .route("/pairing-codes", post(devices::create_code))

@@ -253,10 +253,12 @@ nonisolated struct APIClient: Sendable {
 
     // Sends a file as it is, from the disk: the body is the bytes, the name and the upload ID
     // travel in headers. A file can be large, so it is never read into memory. Answers with the
-    // item, which lists the new file under the upload ID.
+    // item or the note, which lists the new file under the upload ID.
     @concurrent
-    func addFile(_ source: URL, _ file: PendingFile, to id: Int, key: String) async throws -> Item {
-        var request = URLRequest(url: baseURL.appending(path: "api/items/\(id)/files"))
+    func addFile<Holder: Decodable & Sendable>(
+        _ source: URL, _ file: PendingFile, to holder: AttachmentHolder, key: String,
+    ) async throws -> Holder {
+        var request = URLRequest(url: baseURL.appending(path: "\(holder.path)/files"))
         request.httpMethod = "POST"
         request.setValue(file.mime, forHTTPHeaderField: "Content-Type")
         request.setValue(key, forHTTPHeaderField: "Idempotency-Key")
@@ -266,12 +268,14 @@ nonisolated struct APIClient: Sendable {
         // moving is not cut off.
         let (data, response) = try await Self.session.upload(for: authorized(request), fromFile: source)
         _ = try check(request, response, data)
-        return try Self.decoder.decode(Item.self, from: data)
+        return try Self.decoder.decode(Holder.self, from: data)
     }
 
     @concurrent
-    func removeFile(_ file: Int, from id: Int, key: String) async throws -> Item {
-        var request = URLRequest(url: baseURL.appending(path: "api/items/\(id)/files/\(file)"))
+    func removeFile<Holder: Decodable & Sendable>(
+        _ file: Int, from holder: AttachmentHolder, key: String,
+    ) async throws -> Holder {
+        var request = URLRequest(url: baseURL.appending(path: "\(holder.path)/files/\(file)"))
         request.httpMethod = "DELETE"
         request.setValue(key, forHTTPHeaderField: "Idempotency-Key")
         return try await send(request)
@@ -280,8 +284,8 @@ nonisolated struct APIClient: Sendable {
     // The bytes of one file, written to a file of the caller's: a temporary one that the caller
     // moves or removes.
     @concurrent
-    func file(_ file: Int, of id: Int) async throws -> URL {
-        let request = URLRequest(url: baseURL.appending(path: "api/items/\(id)/files/\(file)"))
+    func file(_ file: Int, of holder: AttachmentHolder) async throws -> URL {
+        let request = URLRequest(url: baseURL.appending(path: "\(holder.path)/files/\(file)"))
         let (download, response) = try await Self.session.download(for: authorized(request))
         // The system removes its own file once this returns, so it is moved first.
         let kept = FileManager.default.temporaryDirectory.appending(path: "Download-\(UUID().uuidString)")

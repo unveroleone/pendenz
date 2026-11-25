@@ -64,7 +64,7 @@ The inbox and each project have a manual order through `position` on the item, h
 
 A note is context. An item is something to do. Notes do not have a status, a date or a reminder, and agents do not pick up work from them.
 
-A note is a plain markdown text of up to 100,000 characters, stored as typed (only `\r\n` becomes `\n`). It has no title field: the first line is the title. It can belong to a project, be pinned, be hidden from agents and be locked. There are no folders and no rich text. The app shows the markdown as typed and does not render it.
+A note is a plain markdown text of up to 100,000 characters, stored as typed (only `\r\n` becomes `\n`). It has no title field: the first line is the title. It can belong to a project, be pinned, be hidden from agents and be locked, and it can carry pictures and files as an item does (see "Files"). There are no folders and no rich text. The app shows the markdown as typed and does not render it.
 
 A note can be turned into an item in the app, as a whole or from selected text. The first line is read the way quick add reads it and becomes the title.
 
@@ -76,7 +76,7 @@ These are three different things, and none of them deletes anything:
 - **Archived** means the owner decided not to do it.
 - **Trashed** is for mistakes and duplicates. Everything in the trash can be put back.
 
-Nothing is deleted for good and the trash is never emptied. The server keeps trashed rows, so a device that was offline for weeks still learns that a row went to the trash. Files on items are the exception, see "Files".
+Nothing is deleted for good and the trash is never emptied. The server keeps trashed rows, so a device that was offline for weeks still learns that a row went to the trash. Files are the exception, see "Files".
 
 ## The server
 
@@ -86,9 +86,9 @@ Nothing is deleted for good and the trash is never emptied. The server keeps tra
 |---|---|
 | `items` | Items, with the checklist, tags and file list as JSON columns |
 | `comments` | Progress notes on an item, mostly from agents, including deleted ones (`deleted = 1`) |
-| `notes` | Notes |
+| `notes` | Notes, with the file list as a JSON column |
 | `projects` | Projects, including deleted ones (`deleted = 1`) |
-| `item_files` | The bytes of files, pictures among them, one row per file |
+| `item_files`, `note_files` | The bytes of the files on items and on notes, pictures among them, one row per file |
 | `server_settings` | One row: the settings the owner changes in the app (the largest file, the price of a kWh) |
 | `activity` | The append-only history of every change |
 | `actors` | The owner and the agents |
@@ -186,7 +186,7 @@ The app keeps the comments it gets from the changes feed on disk and removes a d
 
 ### Files
 
-An item can carry up to 40 files of any kind, pictures among them, kept byte for byte under their name. The metadata (`id`, `name`, `mime`, `bytes`, `sha256`, `upload_id`, and `width` and `height` for a picture) is a JSON list on the item row, the only copy, so every read of an item carries it without a join. No PATCH can write it. The bytes are in `item_files` in the same database, so the backup stays one file. The code is in [`files.rs`](../server/src/files.rs).
+An item or a note can carry up to 40 files of any kind, pictures among them, kept byte for byte under their name. The metadata (`id`, `name`, `mime`, `bytes`, `sha256`, `upload_id`, and `width` and `height` for a picture) is a JSON list on the item or note row, the only copy, so every read carries it without a join. No PATCH can write it. The bytes are in `item_files` and `note_files` in the same database, so the backup stays one file. The code is in [`files.rs`](../server/src/files.rs), where a `Holder` is the item or the note a route is about. The routes below are written for items; the same three exist for notes under `/api/notes/<id>/files`, with the same rules and scopes. A file's ID is unique among the files of its kind only, and is always looked up together with its item or note.
 
 - `POST /api/items/<id>/files` takes the file itself as the body, not JSON: base64 would make it a third larger and hold it twice. The type is the `Content-Type` (anything that is not a plain `type/subtype` is stored as `application/octet-stream`), the name comes percent-encoded in `Pendenz-File-Name`, and `Pendenz-Upload-Id` is an optional name of the sender's own for this upload. A name with a slash, a backslash or a control character, `.`, `..` or more than 255 bytes is refused.
 - The body is read and hashed before the writer lock, which is never held while bytes still arrive, and at most two uploads are read into memory at once. The upload route of 0.2.0 counts against the same two, because its JSON body is read before its handler runs. Then it goes through the same writer as every other change (`items::commit`). The fingerprint covers the hash, the name, the type and the upload ID.
@@ -196,9 +196,11 @@ An item can carry up to 40 files of any kind, pictures among them, kept byte for
 - `GET /api/items/<id>/files/<file>` returns the bytes with the stored type as a download (`Content-Disposition: attachment`), with `nosniff` and `Content-Security-Policy: sandbox`, so a web page among the files is never run in a browser. It works for a trashed item too. At most four downloads hold a file in memory at once. The permit belongs to the file's bytes and goes with the last of them, after it is sent or the client goes away, so many slow readers cannot fill the memory.
 - `DELETE /api/items/<id>/files/<file>` removes the file for good. Backups made before keep it. A trashed item takes no new file and loses none.
 
-All three check the item with the hidden filter and look the file up by its ID and the item's ID together. A file must never be found by its ID alone, or an agent could reach the file of a hidden item through an item it may see.
+All three check the item or note with the hidden filter and look the file up by its ID and the item's or note's ID together. A file must never be found by its ID alone, or an agent could reach the file of a hidden item or note through one it may see. The lock of a note does not change this, as it changes no other access.
 
 The app scales a photo (from the library, the camera, the clipboard or a dropped picture) to 2048 pixels on its long side and writes it as JPEG before it is queued. That also drops the EXIF data, so no location reaches the server or an agent. A chosen file is kept as it is, even when it is a picture. The Attachments section shows the pictures as thumbnails, then the other files, then one menu to add either. A list row marks both with one paperclip.
+
+A note shows its attachments in a row under the text, pictures first, that is there only while it has some, and the paperclip in its toolbar offers the same menu. Files can be added once the note has its first character, because the server needs text for a note, and a note that holds files is not trashed when its text is emptied. A locked note shows them only while its lock is open, and its row says it has any only in Locked Notes. Turning a note into an item takes the text along and not the files, so a note with attachments stays where it is instead of going to the trash.
 
 Images and files were two lists until 0.3.0 (`items.images` and `item_images` beside the files). Migration [`0008_merge_attachments.sql`](../server/migrations/0008_merge_attachments.sql) made one list of them: the images kept their IDs and became files named `Image.jpg` or `Image.png`, and the files moved up by the highest image ID ever given, so no two share an ID.
 
@@ -310,7 +312,7 @@ The decision rests on the refusing answer's own header, not on a version seen ea
 
 ### Local IDs
 
-An item or note added without a connection gets an ID below zero until the server answers. A local ID is never reused within a launch: `serverIDs` and `noteServerIDs` keep leading the old ID to the row it became, so a change queued against the local ID reaches the right row. A file added to such an item follows it to its server ID.
+An item or note added without a connection gets an ID below zero until the server answers. A local ID is never reused within a launch: `serverIDs` and `noteServerIDs` keep leading the old ID to the row it became, so a change queued against the local ID reaches the right row. A file added to such an item or note follows it to its server ID.
 
 Anything that may outlive the launch only uses IDs above zero: widget rows, Shortcuts entities, notification actions. A local ID means another row after the next launch.
 
@@ -379,6 +381,7 @@ The door checks the token before it counts anything. The rate limit is then 180 
 Some choices in them:
 
 - `changes` leaves notes out. Notes are context, not work to pick up, and they can be long. An agent finds them with `search_notes`.
+- `get_note` lists a note's files with their metadata, but no tool reads or removes them yet. An agent with the scopes can still use the HTTP routes.
 - `list_items` and the write tools return compact rows with descriptions cut at 200 characters. `get_item` returns the full item with its comments, oldest first, and only the latest changes from its history (`activity`, 10 by default), because the history is the bulky part. An outdated comment carries a `notice` that it no longer holds.
 - `add_item_file` exists only over stdio, where a path means a file next to the agent. The hosted server would have to fetch an address or take megabytes of base64 from a model.
 - `get_item_file` reads the item's list first and fetches the bytes only for what it can show, so a large file is never pulled through the hosted endpoint.

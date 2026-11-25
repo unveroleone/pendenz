@@ -60,7 +60,7 @@ Pendenz is a private app for the things you still have to do. You write an item 
 - **Reminders and tasks.** One kind of item. With a date it appears in Reminders and notifies you on the device, with the actions Done, In 1 Hour and Tomorrow. Without a project it sits in the inbox.
 - **Quick add.** Type "Call the dentist tomorrow 9:00 #health" and the date and the project are set. Repeats work the same way, in English and German.
 - **Notes.** Plain markdown, grouped in the same projects as the items. A note can be turned into an item, and a locked note is kept in Locked Notes, behind Face ID or Touch ID.
-- **Projects and images.** A project has a name and an icon, and each list keeps its own order. An item can carry images.
+- **Projects and images.** A project has a name and an icon, and each list keeps its own order. Items and notes can carry images and files.
 - **Offline.** Every change is written to a local store first and sent when the server is reachable.
 - **Sync by push.** After a change the server asks your other devices to sync with a silent push.
 - **Widgets.** One list widget in three sizes for the home screen and the Mac desktop, set to Reminders, the inbox, a project or all open items. Every row has a tick that completes the item without opening the app. On the lock screen of iPhone and iPad, a smaller widget shows how many items the list has and the next one.

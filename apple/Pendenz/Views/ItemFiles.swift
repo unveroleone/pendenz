@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 struct ItemFileRow: View {
     @Environment(Store.self) private var store
     let file: ShownFile
-    let itemID: Int
+    let holder: AttachmentHolder
     @Binding var failure: String?
     let onOpen: (URL) -> Void
 
@@ -59,10 +59,10 @@ struct ItemFileRow: View {
         }
         // A removed file does not come back, so this asks.
         .alert("Remove “\(file.name)”?", isPresented: $isAskingToRemove) {
-            Button("Remove", role: .destructive) { store.removeFile(file, from: itemID) }
+            Button("Remove", role: .destructive) { store.removeFile(file, from: holder) }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("It is removed from the item on every device.")
+            Text("It is removed from the \(holder.noun) on every device.")
         }
     }
 
@@ -88,7 +88,7 @@ struct ItemFileRow: View {
     private func load() async -> URL? {
         isLoading = true
         defer { isLoading = false }
-        guard let url = await store.file(file, of: itemID) else {
+        guard let url = await store.file(file, of: holder) else {
             failure = "“\(file.name)” could not be loaded. Try again when the server can be reached."
             return nil
         }
@@ -113,14 +113,16 @@ struct ItemFileRow: View {
     }
 }
 
-// Lets pictures and files be dropped onto an item's detail from another app or window. A picture
-// is scaled and sent as a photo, anything else is kept byte for byte.
+// Lets pictures and files be dropped onto an item's detail or a note from another app or window.
+// A picture is scaled and sent as a photo, anything else is kept byte for byte.
 struct ItemAttachmentDrop: ViewModifier {
     @Environment(Store.self) private var store
-    let itemID: Int
+    // Missing while there is nothing to add to: a drop is then refused.
+    let holder: AttachmentHolder?
 
     func body(content: Content) -> some View {
         content.onDrop(of: [.image, .data, .package], isTargeted: nil) { providers in
+            guard let holder else { return false }
             let pictures = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }
             let files = providers.filter { provider in
                 !pictures.contains(provider) && ItemFileDrop.accepts(provider)
@@ -129,27 +131,27 @@ struct ItemAttachmentDrop: ViewModifier {
                 _ = provider.loadDataRepresentation(for: .image) { data, _ in
                     guard let data else { return }
                     Task { @MainActor in
-                        if let problem = await store.addImage(data, to: itemID) { store.rejection = problem }
+                        if let problem = await store.addImage(data, to: holder) { store.rejection = problem }
                     }
                 }
             }
             for provider in files {
-                ItemFileDrop.add(provider, to: itemID, in: store)
+                ItemFileDrop.add(provider, to: holder, in: store)
             }
             return !pictures.isEmpty || !files.isEmpty
         }
     }
 }
 
-// A file dropped onto an item's detail, which is not a picture. The system lends the dropped
+// A file dropped onto an item's detail or a note, which is not a picture. The system lends the dropped
 // file only while it is handed over, so it is copied aside at once and added from there.
 private enum ItemFileDrop {
-    // Whether a dropped thing is a file to add, and not text or a link dropped onto the detail.
+    // Whether a dropped thing is a file to add, and not text or a link dropped onto the screen.
     static func accepts(_ provider: NSItemProvider) -> Bool {
         provider.suggestedName != nil && dataType(of: provider) != nil
     }
 
-    static func add(_ provider: NSItemProvider, to itemID: Int, in store: Store) {
+    static func add(_ provider: NSItemProvider, to holder: AttachmentHolder, in store: Store) {
         guard let type = dataType(of: provider) else { return }
         let name = provider.suggestedName
         _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, _ in
@@ -169,7 +171,7 @@ private enum ItemFileDrop {
                 return
             }
             Task { @MainActor in
-                if let problem = await store.addFile(from: staged, to: itemID) { store.rejection = problem }
+                if let problem = await store.addFile(from: staged, to: holder) { store.rejection = problem }
                 try? FileManager.default.removeItem(at: folder)
             }
         }

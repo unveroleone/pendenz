@@ -112,6 +112,23 @@ case "$search_id" in
     exit 1
     ;;
 esac
+# A note with a picture and a file, for the attachments. Its ID goes to the test.
+noted="$(curl -fs -X POST "$local_url/api/notes" -H 'Content-Type: application/json' \
+    -H 'Idempotency-Key: seed-attachments' -d '{"body": "Attachments\nA picture and a file"}')"
+note_id="$(printf '%s' "$noted" | sed 's/.*[{,]"id":\([0-9]*\).*/\1/')"
+case "$note_id" in
+'' | *[!0-9]*)
+    echo "The note with attachments was not seeded: $noted" >&2
+    exit 1
+    ;;
+esac
+# A blue square of 16 by 16 pixels.
+printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR42mOI6jlBEmIY1TCqYfhqAAArnq4QbIHYuAAAAABJRU5ErkJggg==' |
+    base64 -D | curl -fs -X POST "$local_url/api/notes/$note_id/files" -H 'Content-Type: image/png' \
+    -H 'Pendenz-File-Name: Square.png' -H 'Idempotency-Key: seed-picture' --data-binary @- >/dev/null
+printf 'Bring the spare key.\n' | curl -fs -X POST "$local_url/api/notes/$note_id/files" \
+    -H 'Content-Type: text/plain' -H 'Pendenz-File-Name: Reminder.txt' -H 'Idempotency-Key: seed-file' \
+    --data-binary @- >/dev/null
 n=0
 for title in "Drag A" "Drag B" "Drag C" "Swipe left" "Swipe right"; do
     n=$((n + 1))
@@ -146,5 +163,5 @@ if [ -n "$frames" ]; then
 fi
 
 TEST_RUNNER_PENDENZ_LOCAL="$local_url" TEST_RUNNER_PENDENZ_PAIRED="$paired_url" TEST_RUNNER_PENDENZ_CODE="$code" \
-    TEST_RUNNER_PENDENZ_SEARCH_ID="$search_id" \
+    TEST_RUNNER_PENDENZ_SEARCH_ID="$search_id" TEST_RUNNER_PENDENZ_NOTE_ID="$note_id" \
     xcodebuild "$@"
