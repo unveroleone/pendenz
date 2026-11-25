@@ -77,9 +77,11 @@ final class MenuBarCapture: NSObject {
         toggle()
     }
 
-    // Whether the pointer is on the menu bar item, where a press closes the panel.
-    private var isPointerOnItem: Bool {
-        guard let button = statusItem?.button, let window = button.window else { return false }
+    // Whether the mouse button is down on the menu bar item, a press that closes the panel. Not
+    // the pointer alone: it may rest there while the panel loses the keyboard to Command-Tab.
+    private var isPressingItem: Bool {
+        guard NSEvent.pressedMouseButtons & 1 == 1, let button = statusItem?.button, let window = button.window
+        else { return false }
         let frame = window.convertToScreen(button.convert(button.bounds, to: nil))
         return frame.contains(NSEvent.mouseLocation)
     }
@@ -108,7 +110,7 @@ final class MenuBarCapture: NSObject {
         // Also called when the panel closes itself. Then it is no longer visible.
         panel.onResign = { [weak self, weak panel] in
             guard let self, panel?.isVisible == true else { return }
-            closedByItemAt = isPointerOnItem ? .now : nil
+            closedByItemAt = isPressingItem ? .now : nil
             close()
         }
         panel.onCancel = { [weak self] in self?.close() }
