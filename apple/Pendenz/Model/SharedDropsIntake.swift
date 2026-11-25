@@ -60,7 +60,6 @@ extension Session {
             var unread = 0
             for name in drop.pictures {
                 guard let url = SharedDrops.picture(name, of: drop) else { return }
-                // The read is retried at the next intake; newer shares go on meanwhile.
                 let data: Data
                 do {
                     data = try Data(contentsOf: url)
@@ -68,7 +67,8 @@ extension Session {
                     unread += 1
                     continue
                 } catch {
-                    // Perhaps only for now, such as while the device is locked. The drop waits.
+                    // Perhaps only for now, such as while the device is locked. The drop waits
+                    // for the next intake, and newer shares go on meanwhile.
                     continue drops
                 }
                 if let scaled = await Pictures.scaled(data) {
