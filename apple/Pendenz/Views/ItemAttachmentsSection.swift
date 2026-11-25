@@ -30,7 +30,8 @@ struct ItemAttachmentsSection: View {
                     HStack(spacing: 8) {
                         ForEach(Array(pictures.enumerated()), id: \.element.id) { index, picture in
                             ItemImageTile(
-                                image: picture, itemID: item.id, label: "Image \(index + 1) of \(pictures.count)",
+                                image: picture, holder: .item(item.id),
+                                label: "Image \(index + 1) of \(pictures.count)",
                             ) { preview = $0 }
                         }
                     }
@@ -39,7 +40,7 @@ struct ItemAttachmentsSection: View {
                 .scrollIndicators(.hidden)
             }
             ForEach(files) { file in
-                ItemFileRow(file: file, itemID: item.id, failure: $failure) { preview = $0 }
+                ItemFileRow(file: file, holder: .item(item.id), failure: $failure) { preview = $0 }
             }
             if room > 0 {
                 addMenu(room: room)
@@ -115,14 +116,14 @@ struct ItemAttachmentsSection: View {
             failure = "That is not a picture Pendenz can read."
             return
         }
-        failure = await store.addImage(data, to: item.id)
+        failure = await store.addImage(data, to: .item(item.id))
     }
 
     private func addFiles(_ chosen: [URL]) {
         Task {
             var problems: [String] = []
             for url in chosen {
-                if let problem = await store.addFile(from: url, to: item.id) { problems.append(problem) }
+                if let problem = await store.addFile(from: url, to: .item(item.id)) { problems.append(problem) }
             }
             failure = problems.isEmpty ? nil : problems.joined(separator: "\n")
         }

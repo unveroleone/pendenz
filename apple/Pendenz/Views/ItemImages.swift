@@ -7,7 +7,7 @@ struct ItemImageTile: View {
     @Environment(Store.self) private var store
     @Environment(\.displayScale) private var displayScale
     let image: ShownFile
-    let itemID: Int
+    let holder: AttachmentHolder
     let label: String
     let onOpen: (URL) -> Void
 
@@ -63,10 +63,10 @@ struct ItemImageTile: View {
         }
         // A removed image does not come back, so this asks.
         .alert("Remove this image?", isPresented: $isAskingToRemove) {
-            Button("Remove", role: .destructive) { store.removeFile(image, from: itemID) }
+            Button("Remove", role: .destructive) { store.removeFile(image, from: holder) }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("It is removed from the item on every device.")
+            Text("It is removed from the \(holder.noun) on every device.")
         }
         .task(id: attempts) { await load() }
     }
@@ -78,7 +78,7 @@ struct ItemImageTile: View {
 
     private func load() async {
         hasFailed = false
-        guard let source = await store.file(image, of: itemID) else {
+        guard let source = await store.file(image, of: holder) else {
             hasFailed = true
             return
         }
