@@ -10,7 +10,7 @@ What is planned and not built yet, roughly in order. Each entry gets a GitHub is
 
 ## The app as it is
 
-- **A share extension**, to send a link, text or image from another app to the inbox.
+- **The share menu on the Mac.** iPhone and iPad have a share extension.
 - **A lock screen widget**, next to the list widget.
 - **Menu bar capture on the Mac**, with a global hotkey.
 - **Images in notes and in quick add.** Items can carry images already.

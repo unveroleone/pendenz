@@ -7,7 +7,7 @@ This document explains how Pendenz is built and why. It is for people who host t
 Pendenz has four parts:
 
 - **The server** ([`server/`](../server)): Rust with Axum, and one SQLite database through sqlx. It holds every item, note and project, and it is the only place that decides who may see what.
-- **The apps** ([`apple/`](../apple)): one SwiftUI project for iPhone, iPad and a native Mac app (not Catalyst), plus a widget extension. They keep a local copy of the data and work without a connection.
+- **The apps** ([`apple/`](../apple)): one SwiftUI project for iPhone, iPad and a native Mac app (not Catalyst), plus a widget extension and a share extension. They keep a local copy of the data and work without a connection.
 - **The agent tools** ([`server/src/agent/`](../server/src/agent)): part of the same Rust binary. A hosted MCP endpoint at `/mcp`, an MCP server over stdio (`pendenz mcp`) and a CLI. All three reach the data only through the API, with the agent's own token.
 - **The push relay** ([`relay/`](../relay)): a Cloudflare Worker that holds the APNs key and can send one thing, a silent "sync now" push.
 
@@ -422,6 +422,17 @@ The widget extension ([`PendenzWidgets/`](../apple/PendenzWidgets)) holds no tok
 The tick on a widget row is `CompleteItemIntent`, which runs in the app's process (`allowedExecutionTargets` is `.main`) and goes through the outbox. It carries the due date its row showed. For a repeating item the app syncs first and completes it only if that is still the item's date, because completing moves such an item on and a widget can be behind.
 
 Code that both targets use lives in `apple/Shared/`.
+
+### Share extension
+
+The share extension ([`PendenzShare/`](../apple/PendenzShare)) adds a link, a text or up to ten images from another app's share menu to the inbox, as one item. It runs on the iPhone and the iPad; the Mac app has none yet. Like the widgets it holds no token and makes no request. It leaves a drop in the app group's folder, and the app moves the drop into its outbox. A share then travels the way every change made in the app does, also without a connection.
+
+- **What becomes the item.** A text's first line is the title and the whole text the description, when it says more than that line. A web link is the item's link (`source_url`), titled by the text that came with it, the page's title or else its host; a link over 2,000 characters is not kept. Images are attached as files, titled "Image" or "3 Images" when no text came along. The title can be changed in the sheet. The item is made with `created_via` `share`.
+- **Pictures stay files in the extension.** An extension has little memory, so it copies each picture byte for byte (at most 50 MB each) and draws only a small preview. The app scales them as it scales every photo, to 2048 pixels without EXIF data.
+- **The drop** ([`SharedDrop.swift`](../apple/ShareDrops/SharedDrop.swift)) is a folder `Shared/<uuid>` with `drop.json` and the pictures. It is put together under a name with a leading dot and renamed when it is complete, so the app never reads half a drop. The drop names the server the device was paired with; `Session` keeps that in `Pairing.json` (the address, no token) while the app is paired, and the sheet offers nothing without it.
+- **The intake** ([`SharedDropsIntake.swift`](../apple/Pendenz/Model/SharedDropsIntake.swift)) runs at launch, each time the app comes to the front, and when the extension posts a Darwin notification after a share, which reaches an app that is open next to the sharing app on an iPad. The item and its pictures go into the outbox in one save (`Store.addShared`), and the drop is deleted in the same turn of the main actor, before the sync can send anything. The create's idempotency key is `share-<uuid>`, so a drop that is found again after a crash between the save and the delete is only deleted. A drop that cannot be saved stays and is tried again.
+- **Pairing.** A drop for another server is deleted. Unpairing deletes the waiting drops with the outbox. A revoked device keeps them, as it keeps its outbox, for a new pairing with the same server.
+- **The cost.** The extension sends nothing itself, so on an iPhone a share waits until Pendenz next opens or comes to the front. The sheet says so.
 
 ### App Intents and Siri
 
