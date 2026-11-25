@@ -40,10 +40,9 @@ final class Share {
 
     private let id = UUID().uuidString
     private var pairing: SharedPairing?
-    private var description: String?
 
     var canAdd: Bool {
-        phase == .ready && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        [.ready, .failed].contains(phase) && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: Reading
@@ -97,21 +96,18 @@ final class Share {
                 kept.append(text)
             }
         }
-        link = links.first { $0.absoluteString.count <= SharedDrops.linkLimit }
+        // The server counts the link in bytes.
+        link = links.first { $0.absoluteString.utf8.count <= SharedDrops.linkLimit }
         if link == nil, !links.isEmpty {
             notice = "The link is too long to keep. A link can have up to 2,000 characters."
         }
-        let text = kept.joined(separator: "\n\n")
+        // Cut here already: the sheet keeps it in memory, and the description holds no more.
+        let text = kept.joined(separator: "\n\n").cutToServerLength(SharedDrops.descriptionLimit)
         self.text = text.isEmpty ? nil : text
 
         if let text = self.text {
             let line = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
-            let shortened = line.trimmingCharacters(in: .whitespaces).cutToServerLength(SharedDrops.titleLimit)
-            title = shortened
-            // The description keeps whatever the title does not show.
-            if shortened != text {
-                description = text.cutToServerLength(SharedDrops.descriptionLimit)
-            }
+            title = line.trimmingCharacters(in: .whitespaces).cutToServerLength(SharedDrops.titleLimit)
         } else if let link {
             let page = pageTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             title = page.isEmpty ? (link.host() ?? link.absoluteString) : page
@@ -135,17 +131,22 @@ final class Share {
     // Leaves the drop for the app. False when it could not be written; the sheet then says so.
     func save() -> Bool {
         guard canAdd, let pairing else { return false }
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        // The description keeps the text whenever the title does not say all of it: a text of
+        // several lines, a long line that was cut, or a title that was changed.
+        let description = text.flatMap { $0 == title ? nil : $0 }
         let drop = SharedDrop(
             id: id,
             server: pairing.server,
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            title: title,
             description: description,
             link: link?.absoluteString,
             pictures: pictures.map(\.id),
             createdAt: .now,
         )
         guard SharedDrops.finish(drop) else {
-            phase = .failed
+            // Unpaired while the sheet was open: there is no inbox to add to any more.
+            phase = SharedDrops.pairing()?.server == pairing.server ? .failed : .unpaired
             return false
         }
         SharedDrops.announce()
@@ -170,7 +171,7 @@ final class Share {
         let url: URL? = await withCheckedContinuation { continuation in
             _ = provider.loadObject(ofClass: URL.self) { url, _ in continuation.resume(returning: url) }
         }
-        guard let url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+        guard let url, ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host() != nil else { return nil }
         return url
     }
 

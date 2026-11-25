@@ -1,7 +1,7 @@
 import XCTest
 
 // Flows that need a finger: swipes, drags, the notification prompt, typing a pairing code,
-// searching, putting back from the trash and deleting a project.
+// searching, putting back from the trash, deleting a project and sharing a page from Safari.
 // They run against servers that `apple/uitest.sh` starts and seeds. Without its environment
 // every test is skipped.
 @MainActor
@@ -217,12 +217,63 @@ final class PendenzUITests: XCTestCase {
     }
 
     private func description(of title: String, on server: String) throws -> String? {
+        try field("description", of: title, on: server)
+    }
+
+    // A page shared from Safari waits in the app group and lands in the inbox, with its link,
+    // when the app comes to the front.
+    func testSharesALinkFromSafari() throws {
+        try XCTSkipIf(isSidebarLayout, "Runs on the iPhone layout.")
+        let server = try value("PENDENZ_LOCAL")
+        // Opened once, the app tells the extension which server it is paired with.
+        let app = try launch(tab: "tasks")
+        openInbox(app)
+
+        let link = server + "/healthz?shared=\(UUID().uuidString.prefix(8))"
+        let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
+        try safari.open(XCTUnwrap(URL(string: link)))
+        // The share button is in the page menu of the bottom bar.
+        let menu = safari.buttons["MoreMenuButton"].firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 15))
+        menu.tap()
+        let share = safari.buttons["ShareButton"].firstMatch
+        XCTAssertTrue(share.waitForExistence(timeout: 5))
+        share.tap()
+        let pendenz = safari.cells["Pendenz"].firstMatch
+        XCTAssertTrue(pendenz.waitForExistence(timeout: 10), "Pendenz is offered in the share sheet.")
+        for _ in 0 ..< 3 where !pendenz.isHittable {
+            safari.collectionViews["activityCollectionView"].firstMatch.swipeLeft()
+        }
+        pendenz.tap()
+
+        // The extension's sheet is drawn inside Safari.
+        let title = safari.descendants(matching: .any)["share-title"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 10))
+        title.tap()
+        let typed = title.value as? String ?? ""
+        title.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: typed.count) + "Shared from Safari")
+        let add = safari.buttons["share-add"].firstMatch
+        add.tap()
+        XCTAssertTrue(add.waitForNonExistence(timeout: 10), "The sheet closes.")
+
+        app.activate()
+        XCTAssertTrue(row(app, "Shared from Safari").waitForExistence(timeout: 15), "The share is in the inbox.")
+        var stored: String?
+        let deadline = Date.now.addingTimeInterval(15)
+        while stored != link, Date.now < deadline {
+            stored = try field("source_url", of: "Shared from Safari", on: server)
+            if stored != link { Thread.sleep(forTimeInterval: 0.5) }
+        }
+        XCTAssertEqual(stored, link, "The server has the item with the page as its link.")
+    }
+
+    private func field(_ name: String, of title: String, on server: String) throws -> String? {
         var url = URLComponents(string: server + "/api/items")!
         url.queryItems = [URLQueryItem(name: "q", value: title)]
         let data = try Data(contentsOf: url.url!)
         let body = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let items = body?["items"] as? [[String: Any]] ?? []
-        return items.first { $0["title"] as? String == title }?["description"] as? String
+        return items.first { $0["title"] as? String == title }?[name] as? String
     }
 
     func testPairsShowsDevicesAndUnpairs() throws {

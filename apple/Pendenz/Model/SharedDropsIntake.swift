@@ -51,17 +51,25 @@ extension Session {
                 SharedDrops.remove(drop)
                 continue
             }
-            if store.hasShared(drop) {
+            if store.hasShared(drop) || SharedDrops.isQueued(drop) {
                 SharedDrops.remove(drop)
                 continue
             }
             var pictures: [(jpeg: Data, width: Int, height: Int)] = []
             var unread = 0
             for name in drop.pictures {
-                if let url = SharedDrops.picture(name, of: drop),
-                   let data = try? Data(contentsOf: url),
-                   let scaled = await Pictures.scaled(data)
-                {
+                guard let url = SharedDrops.picture(name, of: drop) else { return }
+                let data: Data
+                do {
+                    data = try Data(contentsOf: url)
+                } catch CocoaError.fileReadNoSuchFile {
+                    unread += 1
+                    continue
+                } catch {
+                    // Perhaps only for now, such as while the device is locked. The drop waits.
+                    return
+                }
+                if let scaled = await Pictures.scaled(data) {
                     pictures.append(scaled)
                 } else {
                     unread += 1

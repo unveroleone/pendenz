@@ -395,10 +395,14 @@ final class LocalStore {
         }
     }
 
-    // Forgets what was put since the last commit, after a commit that failed.
-    func rollback() {
+    // Takes back entries that were put but could not be committed.
+    func unput(keys: [String]) {
         guard !isClosed else { return }
-        context.rollback()
+        let rows = (
+            try? context.fetch(FetchDescriptor<StoredWrite>(predicate: #Predicate { keys.contains($0.key) })),
+        ) ??
+            []
+        rows.forEach(context.delete)
     }
 
     private func state() -> StoredState {

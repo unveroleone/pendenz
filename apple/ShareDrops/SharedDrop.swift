@@ -100,9 +100,12 @@ nonisolated enum SharedDrops {
     }
 
     // Writes the drop into its draft folder and moves the folder into place in one step, so the
-    // app never sees half a drop.
+    // app never sees half a drop. The draft folder has to be there still: unpairing removes it,
+    // and a drop must not come back without its pictures.
     static func finish(_ drop: SharedDrop) -> Bool {
-        guard let folder, let draft = draftFolder(for: drop.id),
+        guard let folder, pairing()?.server == drop.server else { return false }
+        let draft = folder.appending(path: ".\(drop.id)", directoryHint: .isDirectory)
+        guard FileManager.default.fileExists(atPath: draft.path(percentEncoded: false)),
               let data = try? JSONEncoder().encode(drop),
               (try? data.write(to: draft.appending(path: "drop.json"), options: .atomic)) != nil
         else { return false }
@@ -153,10 +156,28 @@ nonisolated enum SharedDrops {
         folder?.appending(path: drop.id, directoryHint: .isDirectory).appending(path: name)
     }
 
+    // Removes a drop that is queued or not wanted. A drop whose folder could not be removed
+    // keeps a receipt, so it is not queued a second time after its item was sent.
     static func remove(_ drop: SharedDrop) {
         guard let folder else { return }
-        try? FileManager.default.removeItem(at: folder.appending(path: drop.id, directoryHint: .isDirectory))
+        var receipts = Set(UserDefaults.standard.stringArray(forKey: receiptsKey) ?? [])
+        do {
+            try FileManager.default.removeItem(at: folder.appending(path: drop.id, directoryHint: .isDirectory))
+            guard receipts.remove(drop.id) != nil else { return }
+        } catch CocoaError.fileNoSuchFile {
+            guard receipts.remove(drop.id) != nil else { return }
+        } catch {
+            receipts.insert(drop.id)
+        }
+        UserDefaults.standard.set(Array(receipts), forKey: receiptsKey)
     }
+
+    // Whether this drop was queued already and only its folder is left.
+    static func isQueued(_ drop: SharedDrop) -> Bool {
+        UserDefaults.standard.stringArray(forKey: receiptsKey)?.contains(drop.id) == true
+    }
+
+    private static let receiptsKey = "queuedShares"
 
     // Every drop and draft: the device was unpaired.
     static func removeAll() {

@@ -290,7 +290,9 @@ final class Session {
         guard let connection, let api, connection.token != nil else { return }
         store?.erase()
         agents?.erase()
-        // Shares that wait for the outbox go with it.
+        // Shares that wait for the outbox go with it. The pairing first, so the share sheet
+        // cannot leave a new one in between.
+        SharedDrops.setPairing(nil)
         SharedDrops.removeAll()
         close()
         var isRevoked = false

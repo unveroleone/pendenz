@@ -6,8 +6,6 @@ struct ShareView: View {
     let onCancel: () -> Void
     let onAdd: () -> Void
 
-    @FocusState private var isTitleFocused: Bool
-
     var body: some View {
         NavigationStack {
             content
@@ -55,7 +53,7 @@ struct ShareView: View {
             Section {
                 TextField("Title", text: Bindable(share).title, axis: .vertical)
                     .lineLimit(1 ... 4)
-                    .focused($isTitleFocused)
+                    .accessibilityLabel("Title")
                     .accessibilityIdentifier("share-title")
             }
             if share.link != nil || share.text != nil || !share.pictures.isEmpty {

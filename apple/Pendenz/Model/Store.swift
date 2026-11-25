@@ -818,7 +818,8 @@ final class Store {
             }
         entries.forEach(disk.put)
         guard disk.commit() else {
-            disk.rollback()
+            // Only these entries: other changes that wait for a save stay as they are.
+            disk.unput(keys: entries.map(\.key))
             files.forEach(attachments.discard)
             reportStorageProblem()
             return false
