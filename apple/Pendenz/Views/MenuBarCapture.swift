@@ -29,9 +29,9 @@ final class MenuBarCapture: NSObject {
     @ObservationIgnored private var session: Session?
     @ObservationIgnored private var statusItem: NSStatusItem?
     @ObservationIgnored private var panel: CapturePanel?
-    // When the panel last closed because something else took the keyboard. A click on the menu
-    // bar item does that first, and must then not open it again at once.
-    @ObservationIgnored private var closedByClickAt: Date?
+    // When a press on the menu bar item took the keyboard from the open panel and closed it. The
+    // click that follows on the same item must then not open it again.
+    @ObservationIgnored private var closedByItemAt: Date?
 
     override private init() {
         let defaults = UserDefaults.standard
@@ -70,8 +70,18 @@ final class MenuBarCapture: NSObject {
     }
 
     @objc private func clicked() {
-        if let closedByClickAt, Date.now.timeIntervalSince(closedByClickAt) < 0.3 { return }
+        if let closedByItemAt, Date.now.timeIntervalSince(closedByItemAt) < 2 {
+            self.closedByItemAt = nil
+            return
+        }
         toggle()
+    }
+
+    // Whether the pointer is on the menu bar item, where a press closes the panel.
+    private var isPointerOnItem: Bool {
+        guard let button = statusItem?.button, let window = button.window else { return false }
+        let frame = window.convertToScreen(button.convert(button.bounds, to: nil))
+        return frame.contains(NSEvent.mouseLocation)
     }
 
     func toggle() {
@@ -98,7 +108,7 @@ final class MenuBarCapture: NSObject {
         // Also called when the panel closes itself. Then it is no longer visible.
         panel.onResign = { [weak self, weak panel] in
             guard let self, panel?.isVisible == true else { return }
-            closedByClickAt = .now
+            closedByItemAt = isPointerOnItem ? .now : nil
             close()
         }
         panel.onCancel = { [weak self] in self?.close() }

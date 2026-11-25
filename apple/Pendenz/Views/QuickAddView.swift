@@ -128,7 +128,9 @@ struct QuickAddView: View {
     }
 
     private func save(_ parsed: QuickAddParser.Result) {
-        guard !parsed.title.isEmpty else { return }
+        // A store that was just closed (unpaired, or another server) would drop the item, and the
+        // text has to stay. The view gets the new store a moment later.
+        guard !parsed.title.isEmpty, !store.isClosed else { return }
         store.add(store.newItem(parsed, hidden: false, in: place))
         title = ""
         ignored = []

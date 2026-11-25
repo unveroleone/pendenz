@@ -46,6 +46,9 @@ enum HotKey {
     // Called on the main thread when the shortcut is pressed.
     static var pressed: () -> Void = {}
 
+    // Tells this app's shortcut apart from another hot key event on the same target.
+    fileprivate static let ourID = EventHotKeyID(signature: OSType(0x5044_4E5A), id: 1)
+    fileprivate static var isRegistered: Bool { registered != nil }
     private static var registered: EventHotKeyRef?
     private static var handler: EventHandlerRef?
 
@@ -57,10 +60,9 @@ enum HotKey {
         if let failure = installHandler() { return failure }
         // Exclusive, because Carbon otherwise shares a shortcut, and the key would then also
         // reach another app that has it.
-        let id = EventHotKeyID(signature: OSType(0x5044_4E5A), id: 1)
         var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(
-            keyCode, shortcut.modifiers, id, GetEventDispatcherTarget(), OptionBits(kEventHotKeyExclusive), &ref,
+            keyCode, shortcut.modifiers, ourID, GetEventDispatcherTarget(), OptionBits(kEventHotKeyExclusive), &ref,
         )
         switch status {
         case noErr:
@@ -86,10 +88,24 @@ enum HotKey {
     }
 }
 
-// The Carbon event manager calls this on the main thread. There is one shortcut, so the event
-// needs no further look.
-private nonisolated func hotKeyPressed(_: EventHandlerCallRef?, _: EventRef?, _: UnsafeMutableRawPointer?) -> OSStatus {
-    MainActor.assumeIsolated { HotKey.pressed() }
-    return noErr
+// The Carbon event manager calls this on the main thread. Any other hot key event is passed on.
+private nonisolated func hotKeyPressed(
+    _: EventHandlerCallRef?,
+    _ event: EventRef?,
+    _: UnsafeMutableRawPointer?,
+) -> OSStatus {
+    var id = EventHotKeyID()
+    let status = GetEventParameter(
+        event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil,
+        MemoryLayout<EventHotKeyID>.size, nil, &id,
+    )
+    guard status == noErr else { return OSStatus(eventNotHandledErr) }
+    return MainActor.assumeIsolated {
+        guard HotKey.isRegistered, id.signature == HotKey.ourID.signature, id.id == HotKey.ourID.id else {
+            return OSStatus(eventNotHandledErr)
+        }
+        HotKey.pressed()
+        return noErr
+    }
 }
 #endif

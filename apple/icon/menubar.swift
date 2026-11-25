@@ -118,9 +118,6 @@ func pdf() -> Data {
 let here = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
 let set = here.appending(path: "../Pendenz/Assets.xcassets/MenuBarIcon.imageset").standardized
 try FileManager.default.createDirectory(at: set, withIntermediateDirectories: true)
-for old in try FileManager.default.contentsOfDirectory(atPath: set.path) {
-    try FileManager.default.removeItem(at: set.appending(path: old))
-}
 try pdf().write(to: set.appending(path: "MenuBarIcon.pdf"))
 let contents = """
 {
