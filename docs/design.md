@@ -419,6 +419,8 @@ Several system features start the app in the background with no window: a notifi
 
 The widget extension ([`PendenzWidgets/`](../apple/PendenzWidgets)) holds no token and makes no request. It reads one file, `Widgets.json` in the app group's folder (`WidgetFile` in [`Shared/`](../apple/Shared)). The app writes it at the end of each store update and when an order changes, and asks the widgets to draw again only when the content changed, because reloads count against a daily budget. A widget is therefore as fresh as the app's last sync. The file is removed when the pairing ends.
 
+The lock screen widget (`LockWidget`, iPhone and iPad only, since the Mac has no lock screen families) uses the list widget's setting and timeline, so both draw the same rows from the same file. It shows the count and the next items and has no tick: a tap opens the list.
+
 The tick on a widget row is `CompleteItemIntent`, which runs in the app's process (`allowedExecutionTargets` is `.main`) and goes through the outbox. It carries the due date its row showed. For a repeating item the app syncs first and completes it only if that is still the item's date, because completing moves such an item on and a widget can be behind.
 
 Code that both targets use lives in `apple/Shared/`.

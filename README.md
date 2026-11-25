@@ -63,7 +63,7 @@ Pendenz is a private app for the things you still have to do. You write an item 
 - **Projects and images.** A project has a name and an icon, and each list keeps its own order. An item can carry images.
 - **Offline.** Every change is written to a local store first and sent when the server is reachable.
 - **Sync by push.** After a change the server asks your other devices to sync with a silent push.
-- **Widget.** One list widget in three sizes for the home screen and the Mac desktop, set to Reminders, the inbox, a project or all open items. Every row has a tick that completes the item without opening the app.
+- **Widgets.** One list widget in three sizes for the home screen and the Mac desktop, set to Reminders, the inbox, a project or all open items. Every row has a tick that completes the item without opening the app. On the lock screen of iPhone and iPad, a smaller widget shows how many items the list has and the next one.
 - **Siri, Shortcuts and Spotlight.** "Add to Pendenz" works without setup, and Shortcuts can add, complete, find and open items and notes. Spotlight finds the open items and the notes on the device, a locked note by its title alone. A New Item control goes into Control Center, on the lock screen or on the Action button.
 - **Agents.** The MCP server and the CLI can do what the app can do with items, notes and projects. An item or note you hide does not exist for an agent.
 - **Agents screen.** What waits for you, what your agents work on, their plan limits and spend, their scheduled jobs and the load of the machine they run on. An agent's machine sends it with `pendenz report`, which reads Hermes Agent and Claude Code by itself. Connect a machine from Settings with a one-time code.

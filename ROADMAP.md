@@ -11,7 +11,6 @@ What is planned and not built yet, roughly in order. Each entry gets a GitHub is
 ## The app as it is
 
 - **A share extension**, to send a link, text or image from another app to the inbox.
-- **A lock screen widget**, next to the list widget.
 - **Menu bar capture on the Mac**, with a global hotkey.
 - **Images in notes and in quick add.** Items can carry images already.
 - **A reminder at the due time for a device that has not synced it.** A reminder made on another device shortly before it is due can come late today, because each device schedules its own.
