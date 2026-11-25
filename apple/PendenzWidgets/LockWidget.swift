@@ -76,7 +76,7 @@ struct LockWidgetView: View {
 
     // The count on the left, the next items beside it, as many as fit.
     private var rectangular: some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .center, spacing: 6) {
             countMark
                 .frame(minWidth: 24)
             Group {
@@ -170,14 +170,10 @@ private struct LockWidgetRow: View {
         .accessibilityElement(children: .combine)
     }
 
+    // Every title starts at the same edge, so the marks come after it, as in the small home
+    // screen widget.
     private func line(showsDue: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 3) {
-            // Overdue is said by the icon, since the lock screen draws in one color.
-            if isOverdue {
-                Image(systemName: "exclamationmark.circle")
-                    .font(.caption2)
-                    .accessibilityLabel("Overdue")
-            }
             if item.priority >= 3 {
                 Text(item.priority == 4 ? "!!" : "!")
                     .bold()
@@ -191,6 +187,12 @@ private struct LockWidgetRow: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+            }
+            // Overdue is said by the icon, since the lock screen draws in one color.
+            if isOverdue {
+                Image(systemName: "exclamationmark.circle")
+                    .font(.caption2)
+                    .accessibilityLabel("Overdue")
             }
         }
     }
