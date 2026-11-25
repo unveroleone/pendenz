@@ -176,12 +176,25 @@ impl Server {
         &self,
         token: &str,
         item: i64,
+        file: (&str, &str, Vec<u8>),
+        key: &str,
+        upload_id: Option<&str>,
+    ) -> reqwest::Response {
+        self.upload_to(token, &format!("/items/{item}"), file, key, upload_id)
+            .await
+    }
+
+    // The same upload to whatever holds files: `/items/<id>` or `/notes/<id>`.
+    pub async fn upload_to(
+        &self,
+        token: &str,
+        holder: &str,
         (name, mime, data): (&str, &str, Vec<u8>),
         key: &str,
         upload_id: Option<&str>,
     ) -> reqwest::Response {
         let mut request = reqwest::Client::new()
-            .post(format!("{}/api/items/{item}/files", self.url()))
+            .post(format!("{}/api{holder}/files", self.url()))
             .bearer_auth(token)
             .header("Idempotency-Key", key)
             .header("Content-Type", mime)

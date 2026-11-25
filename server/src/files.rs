@@ -4,6 +4,7 @@ use crate::{
     error::{ApiError, Result},
     items::{self, About, Payload, Written, item_id, next_seq, record, visible_item},
     model::{FileRef, Item},
+    notes::{Note, visible_note},
     settings::{self, FILE_CEILING_MB, MB},
 };
 use axum::{
@@ -18,7 +19,8 @@ use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode
 use serde_json::{Map, Value, json};
 use sqlx::SqliteConnection;
 
-const PER_ITEM: usize = 40;
+// The most files an item or a note holds.
+const PER_HOLDER: usize = 40;
 // A small file can announce a huge picture, and whoever shows it needs the memory for it. A
 // picture above this is kept as a file without a size.
 pub(crate) const PIXEL_LIMIT: u64 = 40_000_000;
@@ -156,7 +158,8 @@ fn upload_id(headers: &HeaderMap) -> Result<Option<String>> {
     }
 }
 
-// `POST /api/items/<id>/files`. The body is the file itself, not JSON: base64 would make it a
+// `POST /api/items/<id>/files` and `POST /api/notes/<id>/files`, told apart by the path when
+// the writer files the upload. The body is the file itself, not JSON: base64 would make it a
 // third larger and hold it twice. It is read and hashed before the writer lock, which is never
 // held while bytes still arrive, and then handed to the same writer as every other change.
 pub async fn upload(
@@ -240,56 +243,132 @@ pub async fn upload(
     .await
 }
 
-// The item a file write is about. Hidden from this token or missing: 404, as for any read.
-async fn open_item(conn: &mut SqliteConnection, identity: &Identity, id: i64) -> Result<Item> {
-    let item = visible_item(&mut *conn, id, identity).await?;
-    if item.trashed {
-        return Err(ApiError::bad(
-            "This item is in the trash. Restore it before changing its files.",
-        ));
+// What a file belongs to: an item or a note. Both keep their files the same way, a list on
+// their row and the bytes in a table of their own, and a file is always looked up together
+// with its holder.
+#[derive(Clone, Copy)]
+pub(crate) enum Holder {
+    Item(i64),
+    Note(i64),
+}
+
+impl Holder {
+    fn id(self) -> i64 {
+        match self {
+            Self::Item(id) | Self::Note(id) => id,
+        }
     }
-    Ok(item)
-}
 
-async fn store_list(
-    conn: &mut SqliteConnection,
-    identity: &Identity,
-    id: i64,
-    files: &[FileRef],
-) -> Result<Item> {
-    let seq = next_seq(conn).await?;
-    let item = sqlx::query_as::<_, Item>(concat!(
-        "UPDATE items SET files = ?, version = version + 1, seq = ?, updated_by = ?, \
-         updated_at = ",
-        now!(),
-        " WHERE id = ? RETURNING *"
-    ))
-    .bind(json!(files).to_string())
-    .bind(seq)
-    .bind(&identity.actor.id)
-    .bind(id)
-    .fetch_one(&mut *conn)
-    .await?;
-    Ok(item)
-}
+    fn kind(self) -> &'static str {
+        match self {
+            Self::Item(_) => "item",
+            Self::Note(_) => "note",
+        }
+    }
 
-fn written(item: &Item) -> Written {
-    Written {
-        resource: "item",
-        id: item.id.to_string(),
-        body: json!(item),
+    fn about(self) -> About {
+        match self {
+            Self::Item(id) => About::Item(id),
+            Self::Note(id) => About::Note(id),
+        }
+    }
+
+    fn select_data(self) -> &'static str {
+        match self {
+            Self::Item(_) => "SELECT data FROM item_files WHERE id = ? AND item_id = ?",
+            Self::Note(_) => "SELECT data FROM note_files WHERE id = ? AND note_id = ?",
+        }
+    }
+
+    // The holder's files, through the hidden filter, and whether it is in the trash.
+    async fn files(
+        self,
+        conn: &mut SqliteConnection,
+        identity: &Identity,
+    ) -> Result<(Vec<FileRef>, bool)> {
+        Ok(match self {
+            Self::Item(id) => {
+                let item = visible_item(&mut *conn, id, identity).await?;
+                (item.files.0, item.trashed)
+            }
+            Self::Note(id) => {
+                let note = visible_note(&mut *conn, id, identity).await?;
+                (note.files, note.trashed)
+            }
+        })
+    }
+
+    // The files of the holder a write is about. Hidden from this token or missing: 404, as for
+    // any read.
+    async fn open(self, conn: &mut SqliteConnection, identity: &Identity) -> Result<Vec<FileRef>> {
+        let (files, trashed) = self.files(conn, identity).await?;
+        if trashed {
+            return Err(ApiError::bad(format!(
+                "This {} is in the trash. Restore it before changing its files.",
+                self.kind()
+            )));
+        }
+        Ok(files)
+    }
+
+    async fn store(
+        self,
+        conn: &mut SqliteConnection,
+        identity: &Identity,
+        files: &[FileRef],
+    ) -> Result<Written> {
+        let seq = next_seq(conn).await?;
+        let list = json!(files).to_string();
+        let body = match self {
+            Self::Item(id) => json!(
+                sqlx::query_as::<_, Item>(concat!(
+                    "UPDATE items SET files = ?, version = version + 1, seq = ?, updated_by = ?, \
+                     updated_at = ",
+                    now!(),
+                    " WHERE id = ? RETURNING *"
+                ))
+                .bind(list)
+                .bind(seq)
+                .bind(&identity.actor.id)
+                .bind(id)
+                .fetch_one(&mut *conn)
+                .await?
+            ),
+            Self::Note(id) => json!(
+                sqlx::query_as::<_, Note>(concat!(
+                    "UPDATE notes SET files = ?, version = version + 1, seq = ?, updated_by = ?, \
+                     updated_at = ",
+                    now!(),
+                    " WHERE id = ? RETURNING *"
+                ))
+                .bind(list)
+                .bind(seq)
+                .bind(&identity.actor.id)
+                .bind(id)
+                .fetch_one(&mut *conn)
+                .await?
+            ),
+        };
+        Ok(Written {
+            resource: self.kind(),
+            id: self.id().to_string(),
+            body,
+        })
     }
 }
 
 pub(crate) async fn add(
     conn: &mut SqliteConnection,
     identity: &Identity,
-    id: i64,
+    holder: Holder,
     upload: Upload,
 ) -> Result<Written> {
-    let mut files = open_item(conn, identity, id).await?.files.0;
-    if files.len() >= PER_ITEM {
-        return Err(ApiError::bad("An item can hold at most 40 files."));
+    let mut files = holder.open(conn, identity).await?;
+    if files.len() >= PER_HOLDER {
+        return Err(ApiError::bad(match holder {
+            Holder::Item(_) => "An item can hold at most 40 files.",
+            Holder::Note(_) => "A note can hold at most 40 files.",
+        }));
     }
     // Read in the transaction, so a limit lowered a moment ago already counts.
     let limit = settings::read(conn).await?.file_limit_mb;
@@ -297,12 +376,15 @@ pub(crate) async fn add(
         return Err(too_large(limit));
     }
     let bytes = upload.data.len() as i64;
-    let file: i64 =
-        sqlx::query_scalar("INSERT INTO item_files(item_id, data) VALUES (?, ?) RETURNING id")
-            .bind(id)
-            .bind(upload.data)
-            .fetch_one(&mut *conn)
-            .await?;
+    let insert = match holder {
+        Holder::Item(_) => "INSERT INTO item_files(item_id, data) VALUES (?, ?) RETURNING id",
+        Holder::Note(_) => "INSERT INTO note_files(note_id, data) VALUES (?, ?) RETURNING id",
+    };
+    let file: i64 = sqlx::query_scalar(insert)
+        .bind(holder.id())
+        .bind(upload.data)
+        .fetch_one(&mut *conn)
+        .await?;
     files.push(FileRef {
         id: file,
         name: upload.name.clone(),
@@ -313,18 +395,19 @@ pub(crate) async fn add(
         width: upload.size.map(|(width, _)| width),
         height: upload.size.map(|(_, height)| height),
     });
-    let item = store_list(conn, identity, id, &files).await?;
+    let written = holder.store(conn, identity, &files).await?;
     record(
         conn,
-        About::Item(id),
+        holder.about(),
         &identity.actor.id,
         "file_added",
         json!({"file_id": file, "name": upload.name, "bytes": bytes}),
     )
     .await?;
-    Ok(written(&item))
+    Ok(written)
 }
 
+// The item route, which the old image route shares.
 pub(crate) async fn remove(
     conn: &mut SqliteConnection,
     identity: &Identity,
@@ -332,42 +415,73 @@ pub(crate) async fn remove(
     file: i64,
     fields: Map<String, Value>,
 ) -> Result<Written> {
+    remove_from(conn, identity, Holder::Item(id), file, fields).await
+}
+
+pub(crate) async fn remove_from(
+    conn: &mut SqliteConnection,
+    identity: &Identity,
+    holder: Holder,
+    file: i64,
+    fields: Map<String, Value>,
+) -> Result<Written> {
     if !fields.is_empty() {
         return Err(ApiError::bad("Removing a file takes no fields."));
     }
-    let mut files = open_item(conn, identity, id).await?.files.0;
-    // The file has to be one of this item's. Its ID under another item is not found.
+    let mut files = holder.open(conn, identity).await?;
+    // The file has to be one of this holder's. Its ID under another is not found.
     let Some(at) = files.iter().position(|entry| entry.id == file) else {
         return Err(ApiError::missing());
     };
     let gone = files.remove(at);
-    sqlx::query("DELETE FROM item_files WHERE id = ? AND item_id = ?")
+    let delete = match holder {
+        Holder::Item(_) => "DELETE FROM item_files WHERE id = ? AND item_id = ?",
+        Holder::Note(_) => "DELETE FROM note_files WHERE id = ? AND note_id = ?",
+    };
+    sqlx::query(delete)
         .bind(file)
-        .bind(id)
+        .bind(holder.id())
         .execute(&mut *conn)
         .await?;
-    let item = store_list(conn, identity, id, &files).await?;
+    let written = holder.store(conn, identity, &files).await?;
     record(
         conn,
-        About::Item(id),
+        holder.about(),
         &identity.actor.id,
         "file_removed",
         json!({"file_id": file, "name": gone.name, "sha256": gone.sha256}),
     )
     .await?;
-    Ok(written(&item))
+    Ok(written)
 }
 
-// The bytes of one file. The item decides who may see it, and the file is looked up under that
-// item: an agent cannot reach the file of a hidden item through one it may see. A file can hold
-// anything, a web page too, so it is sent as a download that a browser must not run.
+// `GET /api/items/<id>/files/<file>`, which the old image route shares.
 pub async fn download(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Path((id, file)): Path<(String, String)>,
 ) -> Result<Response> {
     identity.require("read")?;
-    let (id, file) = (item_id(&id)?, item_id(&file)?);
+    let holder = Holder::Item(item_id(&id)?);
+    serve(state, identity, holder, item_id(&file)?).await
+}
+
+// `GET /api/notes/<id>/files/<file>`.
+pub async fn download_from_note(
+    State(state): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Path((id, file)): Path<(String, String)>,
+) -> Result<Response> {
+    identity.require("read")?;
+    let holder = Holder::Note(item_id(&id)?);
+    serve(state, identity, holder, item_id(&file)?).await
+}
+
+// The bytes of one file. The holder decides who may see it, and the file is looked up under
+// that holder: an agent cannot reach the file of a hidden item or note through one it may see.
+// A file can hold anything, a web page too, so it is sent as a download that a browser must not
+// run.
+async fn serve(state: AppState, identity: Identity, holder: Holder, file: i64) -> Result<Response> {
     // Taken before the file is read and held by the body below, so a few files at a time are
     // in memory, however many clients ask or however slowly they read.
     let permit = state
@@ -377,17 +491,16 @@ pub async fn download(
         .await
         .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "Try again.".into()))?;
     let mut tx = state.db.begin().await?;
-    let item = visible_item(&mut *tx, id, &identity).await?;
-    let Some(entry) = item.files.0.iter().find(|entry| entry.id == file) else {
+    let (files, _) = holder.files(&mut tx, &identity).await?;
+    let Some(entry) = files.into_iter().find(|entry| entry.id == file) else {
         return Err(ApiError::missing());
     };
-    let data: Vec<u8> =
-        sqlx::query_scalar("SELECT data FROM item_files WHERE id = ? AND item_id = ?")
-            .bind(file)
-            .bind(id)
-            .fetch_optional(&mut *tx)
-            .await?
-            .ok_or_else(ApiError::missing)?;
+    let data: Vec<u8> = sqlx::query_scalar(holder.select_data())
+        .bind(file)
+        .bind(holder.id())
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(ApiError::missing)?;
     drop(tx);
     let length = HeaderValue::from(data.len());
     // The permit lives with the bytes: every chunk shares them, and a chunk may still wait in

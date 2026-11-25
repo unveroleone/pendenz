@@ -3,7 +3,8 @@ use crate::{
     auth::{Actor, Identity, hash},
     comments,
     error::{ApiError, Result},
-    files, images,
+    files::{self, Holder},
+    images,
     model::{
         AGENT_SOURCES, Activity, Comment, HUMAN_SOURCES, Item, ItemInput, Project, STAGES,
         STATUSES, bound_key,
@@ -1098,7 +1099,7 @@ pub(crate) async fn commit(
         // The old image route stores a file too.
         ["items", id, "images"] | ["items", id, "files"] => {
             let upload = file.ok_or_else(ApiError::missing)?;
-            files::add(&mut tx, identity, item_id(id)?, upload).await?
+            files::add(&mut tx, identity, Holder::Item(item_id(id)?), upload).await?
         }
         ["items", id, "images", image] => {
             images::remove(&mut tx, identity, item_id(id)?, item_id(image)?, fields).await?
@@ -1113,6 +1114,14 @@ pub(crate) async fn commit(
         ["projects", id] => update_project(&mut tx, identity, id, fields).await?,
         ["notes"] => notes::create(&mut tx, identity, fields).await?,
         ["notes", id] => notes::update(&mut tx, identity, item_id(id)?, fields).await?,
+        ["notes", id, "files"] => {
+            let upload = file.ok_or_else(ApiError::missing)?;
+            files::add(&mut tx, identity, Holder::Note(item_id(id)?), upload).await?
+        }
+        ["notes", id, "files", file] => {
+            let holder = Holder::Note(item_id(id)?);
+            files::remove_from(&mut tx, identity, holder, item_id(file)?, fields).await?
+        }
         _ => return Err(ApiError::missing()),
     };
     sqlx::query(

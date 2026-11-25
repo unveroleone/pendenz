@@ -11,7 +11,7 @@
         "protocolVersion": "2025-06-18",
         "serverInfo": {
           "name": "pendenz",
-          "version": "0.5.6"
+          "version": "0.6.0"
         }
       }
     },
@@ -29,7 +29,7 @@
         "protocolVersion": "2025-11-25",
         "serverInfo": {
           "name": "pendenz",
-          "version": "0.5.6"
+          "version": "0.6.0"
         }
       }
     },
@@ -3728,6 +3728,7 @@
             "body": "## Wifi\n\nThe password is on the router 🔑. yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
             "created_at": "<time>",
             "created_by": "bot",
+            "files": [],
             "hidden_from_agents": false,
             "id": 1,
             "locked": false,
@@ -3752,6 +3753,7 @@
             "body": "Bank\n\nPIN 1234",
             "created_at": "<time>",
             "created_by": "bot",
+            "files": [],
             "hidden_from_agents": false,
             "id": 2,
             "locked": true,
@@ -4921,7 +4923,7 @@
           "_meta": {
             "io.modelcontextprotocol/serverInfo": {
               "name": "pendenz",
-              "version": "0.5.6"
+              "version": "0.6.0"
             }
           },
           "cacheScope": "private",
