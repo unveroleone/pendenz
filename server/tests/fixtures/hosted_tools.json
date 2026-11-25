@@ -70,7 +70,7 @@
             "description": "Triage the owner's new Pendenz items and carry each one through questions, a brief, the work and closing it, with the exact tool calls. Use when items wait in stage new, when the owner answers a question about an item or says to start one, and when the work on an item is finished.",
             "mimeType": "text/markdown",
             "name": "agent-loop/SKILL.md",
-            "size": 10849,
+            "size": 11258,
             "uri": "skill://pendenz/agent-loop/SKILL.md"
           }
         ]
