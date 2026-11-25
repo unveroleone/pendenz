@@ -169,7 +169,7 @@ The notes are for the person who updates: what they will notice and what they ha
 ### The share extension
 
 - The share extension is `apple/PendenzShare/`, for iPhone and iPad only: its embed and its dependency carry an iOS platform filter, so the Mac app has no appex. The drop format is in `apple/ShareDrops/`, a folder that joins the app and the extension, not the widget extension; the extension does not get `apple/Shared/`, which holds App Intents.
-- The extension holds no token and makes no request. It leaves a drop in the app group, and `SharedDropsIntake` moves it into the outbox with `Store.addShared`, in one save with its pictures. Keep the deletion of the drop in the same main-actor turn as that save, before any `await`: otherwise a sync can send the item while its drop still waits to be queued again.
+- The extension holds no token and makes no request. It leaves a drop in the app group, and `SharedDropsIntake` moves it into the outbox with `Store.addShared`, in one save with its pictures and its receipt (`StoredShare`). Keep the deletion of the drop in the same main-actor turn as that save, before any `await`: otherwise a sync can send the item while its drop still waits to be queued again.
 - A real device needs the app group turned on for `<id>.share` in the developer portal, as for the widget. To try it in the Simulator, launch the app once (with `-apiURL` or paired) so it writes `Pairing.json`, then share from Safari or Photos; the drop lies in `xcrun simctl get_app_container <udid> <bundle id> group.<bundle id>` under `Shared/` until the app opens.
 
 ### Siri, Shortcuts, Spotlight and the control
