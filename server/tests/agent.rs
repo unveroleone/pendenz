@@ -2143,8 +2143,17 @@ async fn agent_loop() {
     );
     assert_eq!(ready["agent_stage"], "ready", "{ready}");
 
-    // The start claims the item with the version just read; a stale version is refused.
+    // The owner's yes, then the start claims the item with the version just read. A stale
+    // version is refused as a conflict.
+    owner
+        .call(
+            "add_comment",
+            json!({"id": id, "body": "Yes, start.", "key": "owner-yes"}),
+        )
+        .await;
     let item = read_item(&agent, &id).await;
+    let yes = item["comments"].as_array().unwrap().last().unwrap().clone();
+    assert_eq!(yes["author_id"], human, "{item}");
     let stale = agent
         .call(
             "update_item",
@@ -2152,6 +2161,7 @@ async fn agent_loop() {
         )
         .await;
     assert_eq!(stale["isError"], true, "{stale}");
+    assert!(stale.to_string().contains("409"), "{stale}");
     let started = json(
         agent
             .call(
@@ -2164,6 +2174,21 @@ async fn agent_loop() {
         (&started["agent_stage"], &started["status"]),
         (&json!("running"), &json!("doing")),
         "{started}"
+    );
+
+    // An edit by the owner while it runs keeps it running: only a fresh read shows it.
+    let item = read_item(&agent, &id).await;
+    owner
+        .call(
+            "update_item",
+            json!({"id": id, "version": version(&item), "key": "owner-edit", "changes": {"description": "Only the weekly one."}}),
+        )
+        .await;
+    let item = read_item(&agent, &id).await;
+    assert_eq!(item["item"]["agent_stage"], "running", "{item}");
+    assert_eq!(
+        item["item"]["description"], "Only the weekly one.",
+        "{item}"
     );
 
     // The result, then closed in one write.
@@ -2201,6 +2226,7 @@ async fn agent_loop() {
             "Questions:\n1. Weekly only?",
             "Weekly only.",
             "Brief v1: Draft the weekly digest.",
+            "Yes, start.",
             "Result: The draft is in a note."
         ]
     );
