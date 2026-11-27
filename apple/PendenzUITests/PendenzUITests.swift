@@ -287,10 +287,7 @@ final class PendenzUITests: XCTestCase {
         // Below the line of text, so the cursor goes to its end: a tap on the link would open it.
         notes.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)).tap()
         notes.typeText(" and apple.com")
-        let typed = notes.links.element(boundBy: 1)
-        XCTAssertTrue(typed.waitForExistence(timeout: 5), "A typed address becomes a link after a pause.")
-        // Closes the item, which saves the description. Closed, it does not open again on the
-        // next launch.
+        // Closes the item, which saves the description.
         app.buttons["Done"].firstMatch.tap()
         XCTAssertTrue(notes.waitForNonExistence(timeout: 5))
 
@@ -302,6 +299,15 @@ final class PendenzUITests: XCTestCase {
             if stored != expected { Thread.sleep(forTimeInterval: 0.5) }
         }
         XCTAssertEqual(stored, expected, "The server keeps the text as typed, without the links.")
+
+        // The typed address is a link too. Checked on the reopened item: while the editor has
+        // the focus, the accessibility tree lists a new link only once editing ends.
+        item.tap()
+        XCTAssertTrue(notes.waitForExistence(timeout: 5))
+        XCTAssertTrue(notes.links.element(boundBy: 1).waitForExistence(timeout: 5), "A typed address becomes a link.")
+        // Closed, the item does not open again on the next launch.
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(notes.waitForNonExistence(timeout: 5))
     }
 
     private func description(of title: String, on server: String) throws -> String? {
