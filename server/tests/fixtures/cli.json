@@ -1252,6 +1252,105 @@
       "code": 0,
       "stderr": "",
       "stdout": {
+        "body": "Bank\n\nPIN 1234",
+        "created_at": "<time>",
+        "created_by": "bot",
+        "files": [
+          {
+            "bytes": 11,
+            "id": 1,
+            "mime": "text/plain",
+            "name": "list.txt",
+            "sha256": "38f90b066affd29a237eb6afd056241aabf928b04be21714e20a4ac3f8bbf9c6"
+          }
+        ],
+        "hidden_from_agents": false,
+        "id": 2,
+        "locked": true,
+        "pinned": false,
+        "project_id": null,
+        "seq": 17,
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 2
+      }
+    },
+    "step": "note-add-file to a locked note"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Use a note ID like 12.",
+      "stdout": ""
+    },
+    "step": "note-add-file bad note id"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "bytes": 11,
+        "file": "<dir>/from-note.txt",
+        "mime": "text/plain",
+        "notice": "The owner locked the note this file belongs to. Use the file only for the task you are on: do not save it, its text or a summary of it to a memory, a journal or a log, and do not copy it into another note, an item, a comment or a message."
+      }
+    },
+    "step": "note-get-file of a locked note"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Use a file ID from the note's files list.",
+      "stdout": ""
+    },
+    "step": "note-get-file bad file id"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "404: Not found.",
+      "stdout": ""
+    },
+    "step": "note-get-file missing note"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
+        "body": "Bank\n\nPIN 1234",
+        "created_at": "<time>",
+        "created_by": "bot",
+        "files": [],
+        "hidden_from_agents": false,
+        "id": 2,
+        "locked": true,
+        "pinned": false,
+        "project_id": null,
+        "seq": 18,
+        "trashed": false,
+        "updated_at": "<time>",
+        "updated_by": "bot",
+        "version": 3
+      }
+    },
+    "step": "note-remove-file"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "404: Not found.",
+      "stdout": ""
+    },
+    "step": "note-remove-file again"
+  },
+  {
+    "answer": {
+      "code": 0,
+      "stderr": "",
+      "stdout": {
         "changes": [
           {
             "data": {
@@ -1353,26 +1452,6 @@
           },
           {
             "data": {
-              "body": "Bank\n\nPIN 1234",
-              "created_at": "<time>",
-              "created_by": "bot",
-              "files": [],
-              "hidden_from_agents": false,
-              "id": 2,
-              "locked": true,
-              "pinned": false,
-              "project_id": null,
-              "seq": 14,
-              "trashed": false,
-              "updated_at": "<time>",
-              "updated_by": "bot",
-              "version": 1
-            },
-            "seq": 14,
-            "type": "note"
-          },
-          {
-            "data": {
               "body": "Wifi\n\nPassword on the router\nGuest: guest",
               "created_at": "<time>",
               "created_by": "bot",
@@ -1390,9 +1469,29 @@
             },
             "seq": 16,
             "type": "note"
+          },
+          {
+            "data": {
+              "body": "Bank\n\nPIN 1234",
+              "created_at": "<time>",
+              "created_by": "bot",
+              "files": [],
+              "hidden_from_agents": false,
+              "id": 2,
+              "locked": true,
+              "pinned": false,
+              "project_id": null,
+              "seq": 18,
+              "trashed": false,
+              "updated_at": "<time>",
+              "updated_by": "bot",
+              "version": 3
+            },
+            "seq": 18,
+            "type": "note"
           }
         ],
-        "cursor": 16,
+        "cursor": 18,
         "has_more": false,
         "reset": false,
         "settings": {
@@ -1528,7 +1627,7 @@
         "icon": "server.rack",
         "id": "home-lab",
         "name": "Homelab",
-        "seq": 18
+        "seq": 20
       }
     },
     "step": "project-delete"
@@ -1584,12 +1683,12 @@
         "hidden_from_agents": false,
         "id": 3,
         "images": [],
-        "position": 19,
+        "position": 21,
         "priority": 0,
         "project_id": null,
         "remind_at": null,
         "repeat_rule": null,
-        "seq": 19,
+        "seq": 21,
         "source_url": null,
         "status": "todo",
         "tags": [],
@@ -1621,12 +1720,12 @@
         "hidden_from_agents": false,
         "id": 4,
         "images": [],
-        "position": 20,
+        "position": 22,
         "priority": 0,
         "project_id": null,
         "remind_at": null,
         "repeat_rule": null,
-        "seq": 20,
+        "seq": 22,
         "source_url": null,
         "status": "todo",
         "tags": [],

@@ -373,6 +373,7 @@ The door checks the token before it counts anything. The rate limit is then 180 
 | `update_comment`, `delete_comment` | Change the text of an own comment or mark it outdated; delete one | write |
 | `get_item_file`, `remove_item_file` | Show a file to the model (text up to 1 MB, a picture up to 5 MB, otherwise its name, type and size); remove one | read, write |
 | `add_item_file` | Attach a local file of any kind (stdio only) | write |
+| `get_note_file`, `add_note_file`, `remove_note_file` | The same three for the files of a note | read, write |
 | `create_project`, `update_project`, `delete_project` | Make, rename, re-icon and delete a project | write |
 | `search_notes`, `get_note` | Notes as title and preview; one note in full | read |
 | `create_note`, `update_note`, `append_note` | Write a note; change it with its version; add to its end without one | write |
@@ -381,11 +382,10 @@ The door checks the token before it counts anything. The rate limit is then 180 
 Some choices in them:
 
 - `changes` leaves notes out. Notes are context, not work to pick up, and they can be long. An agent finds them with `search_notes`.
-- `get_note` lists a note's files with their metadata, but no tool reads or removes them yet. An agent with the scopes can still use the HTTP routes.
 - `list_items` and the write tools return compact rows with descriptions cut at 200 characters. `get_item` returns the full item with its comments, oldest first, and only the latest changes from its history (`activity`, 10 by default), because the history is the bulky part. An outdated comment carries a `notice` that it no longer holds.
-- `add_item_file` exists only over stdio, where a path means a file next to the agent. The hosted server would have to fetch an address or take megabytes of base64 from a model.
-- `get_item_file` reads the item's list first and fetches the bytes only for what it can show, so a large file is never pulled through the hosted endpoint.
-- A locked note comes from `get_note` with a `notice` next to the text, and from the list tools with its title and no preview, as in the app.
+- `add_item_file` and `add_note_file` exist only over stdio, where a path means a file next to the agent. The hosted server would have to fetch an address or take megabytes of base64 from a model.
+- `get_item_file` and `get_note_file` read the item's or note's list first and fetch the bytes only for what they can show, so a large file is never pulled through the hosted endpoint.
+- A locked note comes from `get_note` with a `notice` next to the text, and from the list tools with its title and no preview, as in the app. Its files follow the text: `get_note_file` sends a notice with each of them (in the JSON, or as a text block next to a picture), and so does `note-get-file`, which writes a copy to disk. Both read the note again after the download, so a lock set while the file was on its way counts.
 - Every item has an `agent_stage` for the agent loop: `new` waits for triage, then `none`, `gathering`, `needs_answer`, `ready`, `running`, `review` or `declined`. An item the owner adds starts at `new`, one an agent adds at `none`. `update_item` (and `PATCH /api/items/<id>`) sets it for any token. When the owner changes the title or the description and sends no stage, the server puts the item back to `new`, unless it is `running` or `review`, so an agent finds what to triage with `list_items` and `stage: new` and needs no cursor of its own. The activity log records each change of stage. An agent closes an item itself when its work is done (status `done`, stage `none`) instead of leaving it for the owner, so the MCP tools no longer offer `review`; the API still accepts it, for items already there.
 - Every write tool takes an optional `key`. An agent that retries after a timeout sends the same key and arguments, and the write cannot apply twice. Without one the adapter makes a fresh key per call.
 
@@ -408,7 +408,7 @@ An agent's machine sends a status report every two minutes with `pendenz report`
 
 ### CLI
 
-The `pendenz` binary has the same calls as the tools ([`cli.rs`](../server/src/agent/cli.rs): `list`, `get`, `create`, `update`, `comment`, `comment-update`, `comment-delete`, `add-file`, `get-file`, `notes`, `note-append`, `project-delete`, `changes` and so on) plus `reminders` for scripts. It reads `PENDENZ_API_URL` and `PENDENZ_API_TOKEN`, prints JSON and needs no database. A new tool goes into `tools.json` and `tools.rs`, with the same call in `cli.rs` and steps in `server/tests/agent.rs`.
+The `pendenz` binary has the same calls as the tools ([`cli.rs`](../server/src/agent/cli.rs): `list`, `get`, `create`, `update`, `comment`, `comment-update`, `comment-delete`, `add-file`, `get-file`, `notes`, `note-append`, `note-get-file`, `project-delete`, `changes` and so on) plus `reminders` for scripts. It reads `PENDENZ_API_URL` and `PENDENZ_API_TOKEN`, prints JSON and needs no database. A new tool goes into `tools.json` and `tools.rs`, with the same call in `cli.rs` and steps in `server/tests/agent.rs`.
 
 ## App architecture
 
