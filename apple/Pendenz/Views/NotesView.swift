@@ -470,14 +470,16 @@ struct NoteEditorView: View {
         }
         .task(id: text) {
             try? await Task.sleep(for: Self.pause)
-            guard !Task.isCancelled else { return }
-            save()
-            // An address typed or changed since the links were made gets its link now. Only
-            // then, because each new value is a step for undo, and not while text is selected:
-            // a new value would take the selection that "Turn Selection into Item" reads.
-            if selectedText == nil, Links.places(in: linked) != Links.places(in: text) {
-                linked = Links.marked(text)
-            }
+            if !Task.isCancelled { save() }
+        }
+        .task(id: LinkPass(text: text, isSelecting: selectedText != nil)) {
+            // An address typed or changed since the links were made gets its link after the
+            // same pause. Only then, because each new value is a step for undo, and not while
+            // text is selected: a new value would take the selection that "Turn Selection into
+            // Item" reads. Clearing the selection starts the pass again.
+            try? await Task.sleep(for: Self.pause)
+            guard !Task.isCancelled, selectedText == nil else { return }
+            if Links.places(in: linked) != Links.places(in: text) { linked = Links.marked(text) }
         }
         .onChange(of: note?.body) { old, new in
             // An edit from another device shows up, unless something was typed here since
@@ -835,4 +837,11 @@ private struct NoteTitle: ViewModifier {
             content
         }
     }
+}
+
+// What starts the note editor's pass over its links: a change of the text, or a selection
+// that begins or ends.
+private struct LinkPass: Equatable {
+    let text: String
+    let isSelecting: Bool
 }
