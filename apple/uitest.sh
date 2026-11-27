@@ -101,6 +101,7 @@ seed items unused-item '{"title": "Project item", "project_id": "unused-project"
 seed items trashed '{"title": "Trashed item", "trashed": true}'
 seed notes trashed-note '{"body": "Trashed note", "trashed": true}'
 seed items paragraphs '{"title": "Paragraphs"}'
+seed items links '{"title": "Links", "description": "Docs at https://example.com/docs"}'
 # For the search. Its ID goes to the test, so the order of the seeds does not matter.
 searched="$(curl -fs -X POST "$local_url/api/items" -H 'Content-Type: application/json' \
     -H 'Idempotency-Key: seed-search' \
