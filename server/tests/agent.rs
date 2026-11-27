@@ -2124,6 +2124,10 @@ async fn cli() {
             vec!["note-get-file", "2", "1", "--out", &from_note],
         ),
         (
+            "note-get-file bad file id",
+            vec!["note-get-file", "2", "x", "--out", &from_note],
+        ),
+        (
             "note-get-file missing note",
             vec!["note-get-file", "99", "1", "--out", &from_note],
         ),

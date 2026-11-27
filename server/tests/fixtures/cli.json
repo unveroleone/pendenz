@@ -808,7 +808,7 @@
   {
     "answer": {
       "code": 1,
-      "stderr": "Use a file ID from the files list of the item or note.",
+      "stderr": "Use a file ID from the item's files list.",
       "stdout": ""
     },
     "step": "get-file bad file id"
@@ -1298,6 +1298,14 @@
       }
     },
     "step": "note-get-file of a locked note"
+  },
+  {
+    "answer": {
+      "code": 1,
+      "stderr": "Use a file ID from the note's files list.",
+      "stdout": ""
+    },
+    "step": "note-get-file bad file id"
   },
   {
     "answer": {

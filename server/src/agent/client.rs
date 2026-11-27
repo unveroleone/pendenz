@@ -520,7 +520,7 @@ pub fn file_id(value: Option<&Value>) -> Result<String, String> {
     if positive(text) {
         Ok(text.to_owned())
     } else {
-        Err("Use a file ID from the files list of the item or note.".into())
+        Err("Use a file ID from the item's files list.".into())
     }
 }
 

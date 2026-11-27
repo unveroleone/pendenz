@@ -304,11 +304,21 @@ async fn add_file(client: &Client, note: bool, mut rest: Rest) -> Result<Value, 
         .json())
 }
 
+fn file(note: bool, rest: &mut Rest) -> Result<String, String> {
+    file_id(shift(&mut rest.args).as_ref()).map_err(|error| {
+        if note {
+            "Use a file ID from the note's files list.".into()
+        } else {
+            error
+        }
+    })
+}
+
 // The copy a file of a locked note becomes on disk carries the lock's rule, as the MCP tool's
-// answer does, so the note is read first.
+// answer does. The note is read before and after the download, so a lock set in between counts.
 async fn get_file(client: &Client, note: bool, mut rest: Rest) -> Result<Value, String> {
     let holder = holder(note, &mut rest)?;
-    let file = file_id(shift(&mut rest.args).as_ref())?;
+    let file = file(note, &mut rest)?;
     let opts = options(&rest.args)?;
     let Some(out) = opts.get("out").and_then(Value::as_str) else {
         return Err("Pass --out with the path to write.".into());
@@ -325,6 +335,7 @@ async fn get_file(client: &Client, note: bool, mut rest: Rest) -> Result<Value, 
         Reply::Binary { mime, data } => (mime, data),
         Reply::Json(_) => return Err("The API answered without the file.".into()),
     };
+    let locked = locked || note && client.get(&holder).await?["note"]["locked"] == true;
     std::fs::write(out, &data).map_err(|error| format!("Could not write {out}: {error}"))?;
     let mut answer = json!({"file": out, "mime": mime, "bytes": data.len()});
     if locked {
@@ -335,7 +346,7 @@ async fn get_file(client: &Client, note: bool, mut rest: Rest) -> Result<Value, 
 
 async fn remove_file(client: &Client, note: bool, mut rest: Rest) -> Result<Value, String> {
     let holder = holder(note, &mut rest)?;
-    let file = file_id(shift(&mut rest.args).as_ref())?;
+    let file = file(note, &mut rest)?;
     let opts = options(&rest.args)?;
     Ok(client
         .request(

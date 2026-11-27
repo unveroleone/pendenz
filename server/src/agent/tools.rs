@@ -567,7 +567,7 @@ async fn show_file(client: &Client, holder: &Holder, args: &Value) -> Result<Ans
     let file = file_id(args.get("file"))?;
     let detail = client.get(&format!("{}?activity=0", holder.path)).await?;
     let row = &detail[if holder.note { "note" } else { "item" }];
-    let notice = (holder.note && row["locked"] == true).then_some(LOCKED_FILE_NOTICE);
+    let mut notice = (holder.note && row["locked"] == true).then_some(LOCKED_FILE_NOTICE);
     let Some(meta) = row["files"]
         .as_array()
         .and_then(|files| {
@@ -587,16 +587,22 @@ async fn show_file(client: &Client, holder: &Holder, args: &Value) -> Result<Ans
             .iter()
             .any(|kind| mime.contains(kind));
     let picture = ["image/png", "image/jpeg", "image/gif", "image/webp"].contains(&mime);
-    let answer = |mut value: Value| {
+    let answer = |mut value: Value, notice: Option<&str>| {
         if let Some(notice) = notice {
             value["notice"] = notice.into();
         }
         Ok(Answer::Json(value))
     };
-    let not_shown = |reason: &str| answer(json!({"file": meta, "shown": false, "reason": reason}));
+    let not_shown = |reason: &str, notice| {
+        answer(
+            json!({"file": meta, "shown": false, "reason": reason}),
+            notice,
+        )
+    };
     if !(textual && bytes <= SHOWN_TEXT || picture && bytes <= SHOWN_IMAGE) {
         return not_shown(
             "Only text files up to 1 MB and PNG, JPEG, GIF or WebP images up to 5 MB can be shown here.",
+            notice,
         );
     }
     let call = Call {
@@ -610,6 +616,11 @@ async fn show_file(client: &Client, holder: &Holder, args: &Value) -> Result<Ans
         Reply::Binary { data, .. } => data,
         Reply::Json(_) => return Err("The API answered without the file.".into()),
     };
+    // A note the owner locked while its file was on the way is private too, so ask again.
+    if holder.note && notice.is_none() && client.get(&holder.path).await?["note"]["locked"] == true
+    {
+        notice = Some(LOCKED_FILE_NOTICE);
+    }
     if picture {
         // The bytes decide, not the type the uploader named.
         let found = if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
@@ -621,14 +632,14 @@ async fn show_file(client: &Client, holder: &Holder, args: &Value) -> Result<Ans
         } else if data.len() > 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
             "image/webp"
         } else {
-            return not_shown("The file is not the image its type says.");
+            return not_shown("The file is not the image its type says.", notice);
         };
         // A small file can announce a huge picture, as on upload: the same cap on its pixels.
         let pixels = imagesize::blob_size(&data)
             .map(|size| (size.width as u64).saturating_mul(size.height as u64))
             .unwrap_or(u64::MAX);
         if pixels > SHOWN_PIXELS {
-            return not_shown("The image has too many pixels to be shown here.");
+            return not_shown("The image has too many pixels to be shown here.", notice);
         }
         return Ok(Answer::Image {
             mime: found.into(),
@@ -637,8 +648,8 @@ async fn show_file(client: &Client, holder: &Holder, args: &Value) -> Result<Ans
         });
     }
     match String::from_utf8(data) {
-        Ok(text) => answer(json!({"file": meta, "text": text})),
-        Err(_) => not_shown("The file is not UTF-8 text."),
+        Ok(text) => answer(json!({"file": meta, "text": text}), notice),
+        Err(_) => not_shown("The file is not UTF-8 text.", notice),
     }
 }
 
