@@ -3,6 +3,20 @@
     <channel>
         <title>Pendenz</title>
         <item>
+            <title>0.6.0</title>
+            <pubDate>Fri, 27 Nov 2026 14:13:47 +0100</pubDate>
+            <sparkle:version>83</sparkle:version>
+            <sparkle:shortVersionString>0.6.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>27.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[Download `Pendenz-0.6.0.dmg` below, open it and drag Pendenz into Applications. It needs macOS 27. A copy you already have updates itself.
+
+- Quick capture from anywhere: Pendenz has an item in the menu bar, and ⌃⌥P opens one line of quick add over any app. Return adds the item to the inbox and you are back where you were. Both can be changed or switched off in Settings, General.
+- Notes can hold pictures and files: from the photo library, a file or the clipboard, or dropped onto a note. This needs a server on 0.6.0.
+- Links in notes and in an item's description open with a click, also while you edit the text.
+]]></description>
+            <enclosure url="https://github.com/unveroleone/pendenz/releases/download/v0.6.0/Pendenz-0.6.0.dmg" length="4271296" type="application/octet-stream" sparkle:edSignature="N9AtvLdOArPMaGR2FfDxrRImo6bA1g9WES4XVztsEbD/D24/HncCKgqdvoabUngFQDwH7dLBURpprJJh0pnGCg=="/>
+        </item>
+        <item>
             <title>0.5.6</title>
             <pubDate>Sun, 22 Nov 2026 14:31:50 +0100</pubDate>
             <sparkle:version>74</sparkle:version>
