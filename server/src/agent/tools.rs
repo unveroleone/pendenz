@@ -7,9 +7,12 @@
 // choose another one, and a name that is not a symbol draws as nothing.
 //
 // A tool with readOnlyHint needs the read scope, every other one the write scope.
-// add_item_file takes a path on the agent's machine, so only the stdio server offers it.
+// add_item_file and add_note_file take a path on the agent's machine, so only the stdio server
+// offers them.
 use super::{
-    client::{Call, Client, Reply, comment_id, file_body, file_id, item_id, project_id, query},
+    client::{
+        Call, Client, Reply, comment_id, file_body, file_id, item_id, note_id, project_id, query,
+    },
     schema::{self, js_space, js_trim, utf16_len},
 };
 use axum::http::Method;
@@ -20,8 +23,8 @@ use std::sync::OnceLock;
 pub const INSTRUCTIONS: &str = include_str!("instructions.txt");
 
 // Only offered where a path means a file next to the agent.
-const FILE_TOOLS: [&str; 1] = ["add_item_file"];
-// What get_item_file shows to a model. Anything larger, or of another kind, is described only.
+const FILE_TOOLS: [&str; 2] = ["add_item_file", "add_note_file"];
+// What get_item_file and get_note_file show to a model. Anything larger, or of another kind, is described only.
 const SHOWN_TEXT: i64 = 1_000_000;
 const SHOWN_IMAGE: i64 = 5 * 1024 * 1024;
 const SHOWN_PIXELS: u64 = 40_000_000;
@@ -107,11 +110,17 @@ pub async fn call(
         Ok(Answer::Json(value)) => {
             json!({"content": [{"type": "text", "text": value.to_string()}]})
         }
-        Ok(Answer::Image { mime, data }) => json!({"content": [{
-            "type": "image",
-            "data": STANDARD.encode(data),
-            "mimeType": mime,
-        }]}),
+        Ok(Answer::Image { mime, data, notice }) => {
+            let mut content = vec![json!({
+                "type": "image",
+                "data": STANDARD.encode(data),
+                "mimeType": mime,
+            })];
+            if let Some(notice) = notice {
+                content.push(json!({"type": "text", "text": notice}));
+            }
+            json!({ "content": content })
+        }
         Err(message) => failure(message),
     }
 }
@@ -147,7 +156,46 @@ fn trim(name: &str, args: &mut Value) {
 
 enum Answer {
     Json(Value),
-    Image { mime: String, data: Vec<u8> },
+    Image {
+        mime: String,
+        data: Vec<u8>,
+        notice: Option<&'static str>,
+    },
+}
+
+// What a file tool is about: an item or a note, as its API path and as named in messages.
+struct Holder {
+    path: String,
+    label: String,
+    note: bool,
+}
+
+impl Holder {
+    fn of(tool: &str, args: &Value) -> Result<Self, String> {
+        Ok(if tool.ends_with("_note_file") {
+            let id = note_id(args.get("id"))?;
+            Holder {
+                path: format!("/notes/{id}"),
+                label: format!("Note {id}"),
+                note: true,
+            }
+        } else {
+            let id = item_id(args.get("id"))?;
+            Holder {
+                path: format!("/items/{id}"),
+                label: format!("Item P-{id}"),
+                note: false,
+            }
+        })
+    }
+
+    fn row(&self, value: &Value) -> Value {
+        if self.note {
+            compact_note(value)
+        } else {
+            compact(value, false)
+        }
+    }
 }
 
 fn key(args: &Value) -> Option<&str> {
@@ -237,27 +285,29 @@ async fn run(client: &Client, name: &str, args: Value) -> Result<Answer, String>
             .request(&comment_path(&args)?, write(Method::DELETE, json!({})))
             .await?
             .json(),
-        "get_item_file" => return show_file(client, &args).await,
-        "add_item_file" => {
-            let path = format!("/items/{}/files", item_id(args.get("id"))?);
+        "get_item_file" | "get_note_file" => {
+            return show_file(client, &Holder::of(name, &args)?, &args).await;
+        }
+        "add_item_file" | "add_note_file" => {
+            let holder = Holder::of(name, &args)?;
             let file = file_body(args["path"].as_str().unwrap_or(""))?;
             let updated = client
-                .request(&path, Call::upload(file, key(&args)))
+                .request(
+                    &format!("{}/files", holder.path),
+                    Call::upload(file, key(&args)),
+                )
                 .await?
                 .json();
-            compact(&updated, false)
+            holder.row(&updated)
         }
-        "remove_item_file" => {
-            let path = format!(
-                "/items/{}/files/{}",
-                item_id(args.get("id"))?,
-                file_id(args.get("file"))?
-            );
+        "remove_item_file" | "remove_note_file" => {
+            let holder = Holder::of(name, &args)?;
+            let path = format!("{}/files/{}", holder.path, file_id(args.get("file"))?);
             let updated = client
                 .request(&path, write(Method::DELETE, json!({})))
                 .await?
                 .json();
-            compact(&updated, false)
+            holder.row(&updated)
         }
         "create_project" => {
             let mut body = json!({"name": args["name"]});
@@ -434,6 +484,8 @@ const NOTE_PREVIEW: usize = 200;
 // Sent with the text of a locked note, so the rule is next to the text it is about.
 const OUTDATED_NOTICE: &str = "Marked outdated: this comment no longer holds. Do not rely on it.";
 const LOCKED_NOTICE: &str = "The owner locked this note. Use its text only for the task you are on: do not save it or a summary of it to a memory, a journal or a log, and do not copy it into another note, an item, a comment or a message.";
+// The same rule for a file of a locked note, which the CLI sends with the copy it writes too.
+pub(super) const LOCKED_FILE_NOTICE: &str = "The owner locked the note this file belongs to. Use the file only for the task you are on: do not save it, its text or a summary of it to a memory, a journal or a log, and do not copy it into another note, an item, a comment or a message.";
 
 // A list row for an agent: enough to pick the right item, without full descriptions.
 fn compact(item: &Value, with_position: bool) -> Value {
@@ -508,13 +560,15 @@ fn compact(item: &Value, with_position: bool) -> Value {
     Value::Object(row)
 }
 
-// One file of an item, shown to the model when it can read it: text as text, a picture as an
-// image. The item's list is read first, so nothing larger than that is ever fetched.
-async fn show_file(client: &Client, args: &Value) -> Result<Answer, String> {
-    let id = item_id(args.get("id"))?;
+// One file of an item or a note, shown to the model when it can read it: text as text, a
+// picture as an image. The holder's list is read first, so nothing larger than that is ever
+// fetched. A file of a locked note carries the lock's rule in every answer, as its text does.
+async fn show_file(client: &Client, holder: &Holder, args: &Value) -> Result<Answer, String> {
     let file = file_id(args.get("file"))?;
-    let detail = client.get(&format!("/items/{id}?activity=0")).await?;
-    let Some(meta) = detail["item"]["files"]
+    let detail = client.get(&format!("{}?activity=0", holder.path)).await?;
+    let row = &detail[if holder.note { "note" } else { "item" }];
+    let notice = (holder.note && row["locked"] == true).then_some(LOCKED_FILE_NOTICE);
+    let Some(meta) = row["files"]
         .as_array()
         .and_then(|files| {
             files
@@ -523,7 +577,7 @@ async fn show_file(client: &Client, args: &Value) -> Result<Answer, String> {
         })
         .cloned()
     else {
-        return Err(format!("404: Item P-{id} has no file {file}."));
+        return Err(format!("404: {} has no file {file}.", holder.label));
     };
     let mime = meta["mime"].as_str().unwrap_or("");
     let bytes = meta["bytes"].as_i64().unwrap_or(i64::MAX);
@@ -533,11 +587,13 @@ async fn show_file(client: &Client, args: &Value) -> Result<Answer, String> {
             .iter()
             .any(|kind| mime.contains(kind));
     let picture = ["image/png", "image/jpeg", "image/gif", "image/webp"].contains(&mime);
-    let not_shown = |reason: &str| {
-        Ok(Answer::Json(
-            json!({"file": meta, "shown": false, "reason": reason}),
-        ))
+    let answer = |mut value: Value| {
+        if let Some(notice) = notice {
+            value["notice"] = notice.into();
+        }
+        Ok(Answer::Json(value))
     };
+    let not_shown = |reason: &str| answer(json!({"file": meta, "shown": false, "reason": reason}));
     if !(textual && bytes <= SHOWN_TEXT || picture && bytes <= SHOWN_IMAGE) {
         return not_shown(
             "Only text files up to 1 MB and PNG, JPEG, GIF or WebP images up to 5 MB can be shown here.",
@@ -548,7 +604,7 @@ async fn show_file(client: &Client, args: &Value) -> Result<Answer, String> {
         ..Call::default()
     };
     let data = match client
-        .request(&format!("/items/{id}/files/{file}"), call)
+        .request(&format!("{}/files/{file}", holder.path), call)
         .await?
     {
         Reply::Binary { data, .. } => data,
@@ -577,10 +633,11 @@ async fn show_file(client: &Client, args: &Value) -> Result<Answer, String> {
         return Ok(Answer::Image {
             mime: found.into(),
             data,
+            notice,
         });
     }
     match String::from_utf8(data) {
-        Ok(text) => Ok(Answer::Json(json!({"file": meta, "text": text}))),
+        Ok(text) => answer(json!({"file": meta, "text": text})),
         Err(_) => not_shown("The file is not UTF-8 text."),
     }
 }

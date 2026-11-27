@@ -615,6 +615,7 @@ async fn hosted_tools() {
         ),
         ("add_comment", json!({"id": 1, "body": "  "})),
         ("get_item_file", json!({"id": 1, "file": "abc"})),
+        ("get_note_file", json!({"id": "P-1", "file": 1})),
         ("create_project", json!({"name": "x", "icon": "rocket"})),
         ("create_note", json!({"note": {"body": ""}})),
         (
@@ -1239,6 +1240,108 @@ async fn hosted_tools() {
         bot.call("get_note", json!({"id": 99})).await,
     );
 
+    // Files of notes. Note files count on their own, so note 2 holds a file 4 as item 2 does,
+    // with other bytes: a tool that went to the item's route would show the item's file.
+    for (note, name, mime, data) in [
+        (1, "Router.txt", "text/plain", b"SSID home\n".to_vec()),
+        (
+            1,
+            "Router.pdf",
+            "application/pdf",
+            b"%PDF-1.7 not really".to_vec(),
+        ),
+        (2, "Card.png", "image/png", PNG.to_vec()),
+        (2, "Codes.txt", "text/plain", b"PUK 5678\n".to_vec()),
+        (4, "Hidden.txt", "text/plain", b"hidden\n".to_vec()),
+    ] {
+        let response = server
+            .upload_to(
+                &server.owner,
+                &format!("/notes/{note}"),
+                (name, mime, data),
+                &format!("note-{name}"),
+                None,
+            )
+            .await;
+        assert!(response.status().is_success());
+    }
+    assert_eq!(secret_note["id"], 4, "the hidden note is note 4");
+    t.add(
+        "get note with files",
+        bot.call("get_note", json!({"id": 1})).await,
+    );
+    let text = t.add(
+        "get a note's text file",
+        bot.call("get_note_file", json!({"id": 1, "file": 1})).await,
+    );
+    assert!(text.to_string().contains("SSID home"), "{text}");
+    t.add(
+        "get a note file that cannot be shown",
+        bot.call("get_note_file", json!({"id": "1", "file": "2"}))
+            .await,
+    );
+    t.add(
+        "get a file of another note",
+        bot.call("get_note_file", json!({"id": 1, "file": 3})).await,
+    );
+    let picture = bot.call("get_note_file", json!({"id": 2, "file": 3})).await;
+    assert_eq!(picture["content"][0]["data"], png_base64());
+    assert!(
+        picture["content"][1]["text"]
+            .as_str()
+            .is_some_and(|notice| notice.starts_with("The owner locked")),
+        "a locked note's picture carries the notice: {picture}"
+    );
+    t.add("get a locked note's picture", picture);
+    let codes = t.add(
+        "get a locked note's text file",
+        bot.call("get_note_file", json!({"id": 2, "file": 4})).await,
+    );
+    let codes = codes.to_string();
+    assert!(
+        codes.contains("PUK 5678") && codes.contains("The owner locked"),
+        "{codes}"
+    );
+    t.add(
+        "get a hidden note's file",
+        bot.call("get_note_file", json!({"id": 4, "file": 5})).await,
+    );
+    t.add(
+        "remove a hidden note's file",
+        bot.call("remove_note_file", json!({"id": 4, "file": 5}))
+            .await,
+    );
+    let hidden_files = server.api(&server.owner, "GET", "/notes/4", None).await;
+    assert_eq!(
+        hidden_files["note"]["files"].as_array().map(Vec::len),
+        Some(1),
+        "the hidden note keeps its file"
+    );
+    t.add(
+        "hosted has no add_note_file",
+        bot.call("add_note_file", json!({"id": 1, "path": "/tmp/x"}))
+            .await,
+    );
+    t.add(
+        "remove a note file",
+        bot.call(
+            "remove_note_file",
+            json!({"id": 1, "file": 2, "key": "rnf1"}),
+        )
+        .await,
+    );
+    t.add(
+        "remove a note file again",
+        bot.call("remove_note_file", json!({"id": 1, "file": 2}))
+            .await,
+    );
+    t.add(
+        "writer removes a note file",
+        writer
+            .call("remove_note_file", json!({"id": 1, "file": 1}))
+            .await,
+    );
+
     // The changes feed leaves notes out.
     let all = t.add(
         "changes",
@@ -1621,6 +1724,69 @@ async fn stdio_server() {
         )
         .await,
     );
+
+    // Files of notes, from the agent's machine too. A hidden note takes none.
+    t.add(
+        "create note",
+        mcp.call("create_note", json!({"note": {"body": "Letters"}}))
+            .await,
+    );
+    t.add(
+        "add a picture to a note",
+        mcp.call(
+            "add_note_file",
+            json!({"id": 1, "path": png.display().to_string(), "key": "nimg1"}),
+        )
+        .await,
+    );
+    t.add(
+        "add a picture to a note again with the key",
+        mcp.call(
+            "add_note_file",
+            json!({"id": "1", "path": png.display().to_string(), "key": "nimg1"}),
+        )
+        .await,
+    );
+    let image = mcp.call("get_note_file", json!({"id": 1, "file": 1})).await;
+    assert_eq!(image["content"][0]["data"], png_base64());
+    assert_eq!(image["content"].as_array().map(Vec::len), Some(1));
+    t.add(
+        "add a file to a missing note",
+        mcp.call(
+            "add_note_file",
+            json!({"id": 99, "path": letter.display().to_string()}),
+        )
+        .await,
+    );
+    let hidden = server
+        .api(
+            &server.owner,
+            "POST",
+            "/notes",
+            Some(json!({"body": "Hidden", "hidden_from_agents": true})),
+        )
+        .await;
+    t.add(
+        "add a file to a hidden note",
+        mcp.call(
+            "add_note_file",
+            json!({"id": hidden["id"].clone(), "path": letter.display().to_string()}),
+        )
+        .await,
+    );
+    let hidden = server
+        .api(
+            &server.owner,
+            "GET",
+            &format!("/notes/{}", hidden["id"]),
+            None,
+        )
+        .await;
+    assert_eq!(
+        hidden["note"]["files"],
+        json!([]),
+        "the hidden note took no file"
+    );
     t.add(
         "workspace",
         mcp.call("workspace", json!({})).await["content"][0]["json"]["actor"].clone(),
@@ -1736,6 +1902,7 @@ async fn cli() {
     std::fs::write(&txt, "Milk\nBread\n").unwrap();
     let txt = txt.display().to_string();
     let saved = dir.join("saved.txt").display().to_string();
+    let from_note = dir.join("from-note.txt").display().to_string();
 
     let steps: Vec<(&str, Vec<&str>)> = vec![
         ("workspace", vec!["workspace"]),
@@ -1945,6 +2112,27 @@ async fn cli() {
         ),
         ("note-append empty", vec!["note-append", "1"]),
         (
+            "note-add-file to a locked note",
+            vec!["note-add-file", "2", &txt, "--key", "nf1"],
+        ),
+        (
+            "note-add-file bad note id",
+            vec!["note-add-file", "P-2", &txt],
+        ),
+        (
+            "note-get-file of a locked note",
+            vec!["note-get-file", "2", "1", "--out", &from_note],
+        ),
+        (
+            "note-get-file missing note",
+            vec!["note-get-file", "99", "1", "--out", &from_note],
+        ),
+        (
+            "note-remove-file",
+            vec!["note-remove-file", "2", "1", "--key", "nrf1"],
+        ),
+        ("note-remove-file again", vec!["note-remove-file", "2", "1"]),
+        (
             "changes",
             vec!["changes", "--cursor", "0", "--limit", "500"],
         ),
@@ -1978,6 +2166,7 @@ async fn cli() {
         t.add(label, server.cli(&token, &args).record());
     }
     assert_eq!(std::fs::read(&out).unwrap(), PNG);
+    assert_eq!(std::fs::read(&from_note).unwrap(), b"Milk\nBread\n");
 
     // The connection rules of the client.
     t.add(
@@ -2046,7 +2235,13 @@ async fn cli() {
     );
     let help = run_cli(&server.url(), &token, &["--help"], &[]);
     assert_eq!(help.code, 0);
-    for command in ["workspace", "note-append", "get-file", "reminders"] {
+    for command in [
+        "workspace",
+        "note-append",
+        "get-file",
+        "note-get-file",
+        "reminders",
+    ] {
         assert!(help.stdout.contains(command), "help lists {command}");
     }
     t.finish();
