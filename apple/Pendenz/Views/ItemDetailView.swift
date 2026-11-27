@@ -14,6 +14,9 @@ struct ItemDetailView: View {
     @FocusState private var focus: Field?
     @State private var title = ""
     @State private var notes = ""
+    // The description as the editor and the folded text show it: its characters with a link on
+    // each address. `notes` is what is read and saved.
+    @State private var linkedNotes = AttributedString()
     @State private var lines: [ChecklistLine] = []
     @State private var newLine = ""
     // A long description shows its start until "More" opens it.
@@ -187,6 +190,17 @@ struct ItemDetailView: View {
         .onChange(of: item.description) { _, text in
             if focus != .notes { notes = text }
         }
+        .onChange(of: notes, initial: true) {
+            // Set from outside the editor: the item opened, or an edit from another device.
+            if String(linkedNotes.characters) != notes { linkedNotes = Links.marked(notes) }
+        }
+        .task(id: notes) {
+            // A pause in typing, as notes wait before they save. An address typed or changed
+            // since gets its link now, and only then: each new value is a step for undo.
+            try? await Task.sleep(for: .milliseconds(1500))
+            guard !Task.isCancelled else { return }
+            if Links.places(in: linkedNotes) != Links.places(in: notes) { linkedNotes = Links.marked(notes) }
+        }
         .onChange(of: item.checklist) { _, checklist in
             if !isEditingLines { lines = checklist }
         }
@@ -202,7 +216,8 @@ struct ItemDetailView: View {
     // A text editor, not a text field: Return starts a new line on every platform, where a field
     // on the Mac ends the editing.
     private var notesEditor: some View {
-        TextEditor(text: $notes)
+        TextEditor(text: editorNotes)
+            .linkTextEditor()
             .font(.body)
             .scrollContentBackground(.hidden)
             // The form scrolls, the editor grows. One that scrolls itself comes in at a few
@@ -233,36 +248,65 @@ struct ItemDetailView: View {
             .accessibilityLabel("Notes")
     }
 
+    // The editor writes its characters to `notes`, which everything else reads and saves.
+    private var editorNotes: Binding<AttributedString> {
+        Binding {
+            linkedNotes
+        } set: { new in
+            linkedNotes = Links.checked(new) ?? new
+            let plain = String(new.characters)
+            if plain != notes { notes = plain }
+        }
+    }
+
     // A long description is read as text: six lines and "More", or all of it and "Less". A tap
     // on the six lines opens all of it, a tap on all of it swaps in the editor and starts
-    // editing. Text, not the editor, and not straight from six lines to the editor: an editor
-    // that joins the form keeps the height of the row it replaces and scrolls inside.
+    // editing, and a tap on a link opens the link. Text, not the editor, and not straight from
+    // six lines to the editor: an editor that joins the form keeps the height of the row it
+    // replaces and scrolls inside.
     private var notesText: some View {
         // One row: a sibling would be a row of its own in the form.
         VStack(alignment: .leading, spacing: 6) {
-            // A button, so the keyboard and VoiceOver reach the editor as a tap does.
-            Button {
-                if notesFold.cutsOff, !showsAllNotes {
-                    withAnimation { showsAllNotes = true }
-                } else {
-                    editNotes()
-                }
-            } label: {
-                Text(notes)
-                    .lineLimit(showsAllNotes ? nil : 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(.rect)
-                    .background { notesMeasure }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Notes")
-            .accessibilityValue(notes)
-            .accessibilityHint(notesFold.cutsOff && !showsAllNotes ? "Shows all of the notes" : "Edits the notes")
+            foldedNotes
             // Only when six lines hide something: in a wide window a long text can fit.
             if notesFold.cutsOff {
                 Button(showsAllNotes ? "Less" : "More") { withAnimation { showsAllNotes.toggle() } }
                     .notesToggle()
             }
+        }
+        .attributedTextFormattingDefinition(LinkTextFormatting())
+    }
+
+    // Not a button: a button takes the tap from the links in its label, and VoiceOver would
+    // not reach them. The actions give VoiceOver and the keyboard what a tap does.
+    private var foldedNotes: some View {
+        Text(linkedNotes)
+            .lineLimit(showsAllNotes ? nil : 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect)
+            .background { notesMeasure }
+            .onTapGesture { tapNotes() }
+            // Return or Space does what the tap does, for a keyboard that moves the focus.
+            .focusable(interactions: .activate)
+            .onKeyPress(keys: [.return, .space]) { _ in
+                tapNotes()
+                return .handled
+            }
+            // Read as the text itself, so VoiceOver's rotor reaches its links.
+            .accessibilityHint(foldedNotesHint)
+            .accessibilityAction { tapNotes() }
+            .accessibilityAction(named: "Edit") { editNotes() }
+    }
+
+    private var foldedNotesHint: String {
+        notesFold.cutsOff && !showsAllNotes ? "Shows all of the notes" : "Edits the notes"
+    }
+
+    private func tapNotes() {
+        if notesFold.cutsOff, !showsAllNotes {
+            withAnimation { showsAllNotes = true }
+        } else {
+            editNotes()
         }
     }
 
@@ -270,11 +314,11 @@ struct ItemDetailView: View {
     // measured out of sight. They tell whether six lines cut anything off.
     private var notesMeasure: some View {
         ZStack(alignment: .topLeading) {
-            Text(notes)
+            Text(linkedNotes)
                 .lineLimit(6)
                 .fixedSize(horizontal: false, vertical: true)
                 .onGeometryChange(for: CGFloat.self, of: \.size.height) { notesFold.six = $0 }
-            Text(notes)
+            Text(linkedNotes)
                 .fixedSize(horizontal: false, vertical: true)
                 .onGeometryChange(for: CGFloat.self, of: \.size.height) { notesFold.full = $0 }
         }

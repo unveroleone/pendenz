@@ -350,7 +350,9 @@ struct NoteEditorView: View {
     // False while the note that was asked for is not in the store yet, right after launch.
     // Its text is then not on screen, and nothing may be saved or trashed in its name.
     @State private var isLoaded = false
-    @State private var selection: TextSelection?
+    // The text as the editor holds it: the characters of `text` with a link on each address.
+    @State private var linked = AttributedString()
+    @State private var selection = AttributedTextSelection()
     // The note being edited. Missing for a new note until its first character is typed.
     @State private var currentID: Int?
     // Why a note could not be locked, said in an alert.
@@ -407,7 +409,8 @@ struct NoteEditorView: View {
             if isGated {
                 lockedPlaceholder
             } else {
-                TextEditor(text: $text, selection: $selection)
+                TextEditor(text: editorText, selection: $selection)
+                    .linkTextEditor()
                     .disabled(!isLoaded)
                     .focused($isFocused)
                     .font(.body)
@@ -456,10 +459,27 @@ struct NoteEditorView: View {
         .onChange(of: navigation.isWritingNote, initial: true) { _, isWriting in
             if isWriting { isFocused = true }
         }
-        .onChange(of: text) { createIfNeeded() }
+        .onChange(of: text, initial: true) {
+            // Set from outside the editor: another note, the first sync, another device. The
+            // selection belonged to the text that was there.
+            if String(linked.characters) != text {
+                linked = Links.marked(text)
+                selection = AttributedTextSelection()
+            }
+            createIfNeeded()
+        }
         .task(id: text) {
             try? await Task.sleep(for: Self.pause)
             if !Task.isCancelled { save() }
+        }
+        .task(id: LinkPass(text: text, isSelecting: selectedText != nil)) {
+            // An address typed or changed since the links were made gets its link after the
+            // same pause. Only then, because each new value is a step for undo, and not while
+            // text is selected: a new value would take the selection that "Turn Selection into
+            // Item" reads. Clearing the selection starts the pass again.
+            try? await Task.sleep(for: Self.pause)
+            guard !Task.isCancelled, selectedText == nil else { return }
+            if Links.places(in: linked) != Links.places(in: text) { linked = Links.marked(text) }
         }
         .onChange(of: note?.body) { old, new in
             // An edit from another device shows up, unless something was typed here since
@@ -658,11 +678,21 @@ struct NoteEditorView: View {
         }
     }
 
+    // The editor writes its characters to `text`, which everything else reads and saves.
+    private var editorText: Binding<AttributedString> {
+        Binding {
+            linked
+        } set: { new in
+            linked = Links.checked(new) ?? new
+            let plain = String(new.characters)
+            if plain != text { text = plain }
+        }
+    }
+
     // The marked part of the text, when there is one.
     private var selectedText: String? {
-        guard let selection, case .selection(let range) = selection.indices, !range.isEmpty,
-              range.upperBound <= text.endIndex else { return nil }
-        let piece = String(text[range])
+        guard case .ranges(let ranges) = selection.indices(in: linked) else { return nil }
+        let piece = ranges.ranges.map { String(linked[$0].characters) }.joined()
         return piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : piece
     }
 
@@ -685,7 +715,7 @@ struct NoteEditorView: View {
         text = note?.body ?? ""
         // A new note has nothing to load.
         isLoaded = id == nil || note != nil
-        selection = nil
+        selection = AttributedTextSelection()
         if id != nil { navigation.isWritingNote = false }
         // Opening a locked note is the wish to read it, so the question comes by itself.
         if note?.locked == true, !lock.isOpen { unlock() }
@@ -807,4 +837,11 @@ private struct NoteTitle: ViewModifier {
             content
         }
     }
+}
+
+// What starts the note editor's pass over its links: a change of the text, or a selection
+// that begins or ends.
+private struct LinkPass: Equatable {
+    let text: String
+    let isSelecting: Bool
 }

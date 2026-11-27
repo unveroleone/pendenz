@@ -264,6 +264,46 @@ final class PendenzUITests: XCTestCase {
         XCTAssertTrue(reopened.waitForNonExistence(timeout: 5))
     }
 
+    // An address in a description is a link, one typed in becomes one, and the server keeps
+    // the text as typed.
+    func testDescriptionLinks() throws {
+        try XCTSkipIf(isSidebarLayout, "Runs on the iPhone layout.")
+        let server = try value("PENDENZ_LOCAL")
+        let app = try launch(tab: "tasks")
+        openInbox(app)
+        let item = row(app, "Links")
+        XCTAssertTrue(item.waitForExistence(timeout: 10))
+        item.tap()
+        let notes = app.textViews["Notes"]
+        XCTAssertTrue(notes.waitForExistence(timeout: 5))
+        let link = notes.links.firstMatch
+        XCTAssertTrue(link.waitForExistence(timeout: 5), "The address is a link.")
+        // A tap on it opens it in Safari, while the description stays as it was.
+        link.tap()
+        let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
+        XCTAssertTrue(safari.wait(for: .runningForeground, timeout: 10), "The link opens in Safari.")
+        app.activate()
+        XCTAssertTrue(notes.waitForExistence(timeout: 5))
+        // Below the line of text, so the cursor goes to its end: a tap on the link would open it.
+        notes.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)).tap()
+        notes.typeText(" and apple.com")
+        let typed = notes.links.element(boundBy: 1)
+        XCTAssertTrue(typed.waitForExistence(timeout: 5), "A typed address becomes a link after a pause.")
+        // Closes the item, which saves the description. Closed, it does not open again on the
+        // next launch.
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(notes.waitForNonExistence(timeout: 5))
+
+        let expected = "Docs at https://example.com/docs and apple.com"
+        var stored: String?
+        let deadline = Date.now.addingTimeInterval(15)
+        while stored != expected, Date.now < deadline {
+            stored = try description(of: "Links", on: server)
+            if stored != expected { Thread.sleep(forTimeInterval: 0.5) }
+        }
+        XCTAssertEqual(stored, expected, "The server keeps the text as typed, without the links.")
+    }
+
     private func description(of title: String, on server: String) throws -> String? {
         try items(titled: title, on: server).first?["description"] as? String
     }

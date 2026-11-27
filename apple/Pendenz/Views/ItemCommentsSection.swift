@@ -218,7 +218,7 @@ private struct CommentRow: View {
         }
         for run in text.runs {
             guard let link = run.link else { continue }
-            if let scheme = link.scheme?.lowercased(), Self.linkSchemes.contains(scheme) {
+            if Links.opens(link) {
                 // The tint is black or white, so a link is told apart by its line.
                 text[run.range].underlineStyle = .single
             } else {
@@ -229,8 +229,6 @@ private struct CommentRow: View {
         }
         return text
     }
-
-    private static let linkSchemes: Set<String> = ["http", "https", "mailto"]
 }
 
 // Changes the text of a comment. Saving an empty text is not offered; deleting is.
