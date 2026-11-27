@@ -460,8 +460,12 @@ struct NoteEditorView: View {
             if isWriting { isFocused = true }
         }
         .onChange(of: text, initial: true) {
-            // Set from outside the editor: another note, the first sync, another device.
-            if String(linked.characters) != text { linked = Links.marked(text) }
+            // Set from outside the editor: another note, the first sync, another device. The
+            // selection belonged to the text that was there.
+            if String(linked.characters) != text {
+                linked = Links.marked(text)
+                selection = AttributedTextSelection()
+            }
             createIfNeeded()
         }
         .task(id: text) {
@@ -469,8 +473,11 @@ struct NoteEditorView: View {
             guard !Task.isCancelled else { return }
             save()
             // An address typed or changed since the links were made gets its link now. Only
-            // then, because each new value is a step for undo.
-            if Links.places(in: linked) != Links.places(in: text) { linked = Links.marked(text) }
+            // then, because each new value is a step for undo, and not while text is selected:
+            // a new value would take the selection that "Turn Selection into Item" reads.
+            if selectedText == nil, Links.places(in: linked) != Links.places(in: text) {
+                linked = Links.marked(text)
+            }
         }
         .onChange(of: note?.body) { old, new in
             // An edit from another device shows up, unless something was typed here since
@@ -674,7 +681,7 @@ struct NoteEditorView: View {
         Binding {
             linked
         } set: { new in
-            linked = new
+            linked = Links.checked(new) ?? new
             let plain = String(new.characters)
             if plain != text { text = plain }
         }

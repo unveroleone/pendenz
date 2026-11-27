@@ -276,7 +276,14 @@ final class PendenzUITests: XCTestCase {
         item.tap()
         let notes = app.textViews["Notes"]
         XCTAssertTrue(notes.waitForExistence(timeout: 5))
-        XCTAssertTrue(notes.links.firstMatch.waitForExistence(timeout: 5), "The address is a link.")
+        let link = notes.links.firstMatch
+        XCTAssertTrue(link.waitForExistence(timeout: 5), "The address is a link.")
+        // A tap on it opens it in Safari, while the description stays as it was.
+        link.tap()
+        let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
+        XCTAssertTrue(safari.wait(for: .runningForeground, timeout: 10), "The link opens in Safari.")
+        app.activate()
+        XCTAssertTrue(notes.waitForExistence(timeout: 5))
         // Below the line of text, so the cursor goes to its end: a tap on the link would open it.
         notes.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)).tap()
         notes.typeText(" and apple.com")

@@ -253,7 +253,7 @@ struct ItemDetailView: View {
         Binding {
             linkedNotes
         } set: { new in
-            linkedNotes = new
+            linkedNotes = Links.checked(new) ?? new
             let plain = String(new.characters)
             if plain != notes { notes = plain }
         }
@@ -286,6 +286,12 @@ struct ItemDetailView: View {
             .contentShape(.rect)
             .background { notesMeasure }
             .onTapGesture { tapNotes() }
+            // Return or Space does what the tap does, for a keyboard that moves the focus.
+            .focusable(interactions: .activate)
+            .onKeyPress(keys: [.return, .space]) { _ in
+                tapNotes()
+                return .handled
+            }
             .accessibilityLabel("Notes")
             .accessibilityValue(notes)
             .accessibilityAddTraits(.isButton)

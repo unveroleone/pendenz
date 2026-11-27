@@ -25,26 +25,48 @@ enum Links {
         return text
     }
 
-    // Where the links of an edited text are and where they lead. When this differs from what
-    // the text itself holds, an address was typed, changed or pasted with another destination
-    // since the links were made.
+    // A text from the editor with only the links its own characters back: a link whose text is
+    // not exactly that address, such as a pasted "click here" or a typed letter inside an
+    // address, loses its link until the next marking. Nil when every link holds, which is
+    // almost always, so the editor's value is only replaced when something had to go.
+    static func checked(_ text: AttributedString) -> AttributedString? {
+        var cleaned = text
+        var changed = false
+        for (link, range) in text.runs[\.link] {
+            guard let link else { continue }
+            let shown = String(text[range].characters)
+            let matches = found(in: shown)
+            let holds = matches.count == 1 && matches[0].1 == link
+                && matches[0].0 == shown.startIndex ..< shown.endIndex
+            if !holds {
+                cleaned[range].link = nil
+                changed = true
+            }
+        }
+        return changed ? cleaned : nil
+    }
+
+    // Where the links of an edited text are and where they lead, in Unicode scalars. When this
+    // differs from what the text itself holds, an address was typed or changed since the links
+    // were made.
     static func places(in text: AttributedString) -> [LinkPlace] {
-        let characters = text.characters
+        let scalars = text.unicodeScalars
         return text.runs[\.link].compactMap { link, range in
             guard let link else { return nil }
             return LinkPlace(
-                start: characters.distance(from: characters.startIndex, to: range.lowerBound),
-                length: characters.distance(from: range.lowerBound, to: range.upperBound),
+                start: scalars.distance(from: scalars.startIndex, to: range.lowerBound),
+                length: scalars.distance(from: range.lowerBound, to: range.upperBound),
                 url: link,
             )
         }
     }
 
     static func places(in plain: String) -> [LinkPlace] {
-        found(in: plain).map { range, url in
+        let scalars = plain.unicodeScalars
+        return found(in: plain).map { range, url in
             LinkPlace(
-                start: plain.distance(from: plain.startIndex, to: range.lowerBound),
-                length: plain.distance(from: range.lowerBound, to: range.upperBound),
+                start: scalars.distance(from: scalars.startIndex, to: range.lowerBound),
+                length: scalars.distance(from: range.lowerBound, to: range.upperBound),
                 url: url,
             )
         }
@@ -61,7 +83,7 @@ enum Links {
     private static let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 }
 
-// One link in a text, counted in characters.
+// One link in a text, counted in Unicode scalars.
 struct LinkPlace: Equatable {
     let start: Int
     let length: Int
