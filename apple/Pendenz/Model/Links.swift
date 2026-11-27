@@ -117,13 +117,15 @@ private struct LinkLine: AttributedTextValueConstraint {
     }
 }
 
-// A link keeps the color of the text. The Mac would draw it in the system's blue.
+// All of the text, links included, in the primary color. The Mac would draw a link in the
+// system's blue, and in a form it draws text without a color of its own in black, also in
+// dark mode.
 private struct LinkInk: AttributedTextValueConstraint {
     typealias Scope = LinkTextScope
     typealias AttributeKey = AttributeScopes.SwiftUIAttributes.ForegroundColorAttribute
 
     func constrain(_ container: inout Attributes) {
-        container.foregroundColor = container.link == nil ? nil : .primary
+        container.foregroundColor = .primary
     }
 }
 

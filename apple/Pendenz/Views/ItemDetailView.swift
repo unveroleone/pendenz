@@ -277,8 +277,8 @@ struct ItemDetailView: View {
         .attributedTextFormattingDefinition(LinkTextFormatting())
     }
 
-    // Not a button: a button takes the tap from the links in its label. The actions give
-    // VoiceOver and the keyboard what a tap does.
+    // Not a button: a button takes the tap from the links in its label, and VoiceOver would
+    // not reach them. The actions give VoiceOver and the keyboard what a tap does.
     private var foldedNotes: some View {
         Text(linkedNotes)
             .lineLimit(showsAllNotes ? nil : 6)
@@ -292,9 +292,7 @@ struct ItemDetailView: View {
                 tapNotes()
                 return .handled
             }
-            .accessibilityLabel("Notes")
-            .accessibilityValue(notes)
-            .accessibilityAddTraits(.isButton)
+            // Read as the text itself, so VoiceOver's rotor reaches its links.
             .accessibilityHint(foldedNotesHint)
             .accessibilityAction { tapNotes() }
             .accessibilityAction(named: "Edit") { editNotes() }

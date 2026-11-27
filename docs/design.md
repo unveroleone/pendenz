@@ -64,7 +64,7 @@ The inbox and each project have a manual order through `position` on the item, h
 
 A note is context. An item is something to do. Notes do not have a status, a date or a reminder, and agents do not pick up work from them.
 
-A note is a plain markdown text of up to 100,000 characters, stored as typed (only `\r\n` becomes `\n`). It has no title field: the first line is the title. It can belong to a project, be pinned, be hidden from agents and be locked, and it can carry pictures and files as an item does (see "Files"). There are no folders and no rich text. The app shows the markdown as typed and does not render it.
+A note is a plain markdown text of up to 100,000 characters, stored as typed (only `\r\n` becomes `\n`). It has no title field: the first line is the title. It can belong to a project, be pinned, be hidden from agents and be locked, and it can carry pictures and files as an item does (see "Files"). There are no folders and no rich text. The app shows the markdown as typed and does not render it. Addresses in a note or an item's description open with a tap or a click, as in Apple's Notes, also while the text is edited: the app finds them in the text as typed (`http`, `https` and `mailto` only), and nothing of that reaches what is saved or synced. In `[label](https://…)` the address is the link and the label stays plain text.
 
 A note can be turned into an item in the app, as a whole or from selected text. The first line is read the way quick add reads it and becomes the title.
 
